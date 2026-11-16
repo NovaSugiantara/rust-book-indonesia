@@ -190,7 +190,7 @@ Program sekarang punya alur lengkap dari header sampai total:
 5. Menghitung diskon dengan `if`.
 6. Mencetak subtotal, diskon, dan total.
 
-Yang belum ada: input harga dari kasir, nama item, dan daftar barang yang panjangnya bebas. Bab 5 akan memperkenalkan struct untuk mengelompokkan data item. Bab 8 akan memperkenalkan `Vec` untuk daftar yang bisa bertambah.
+Yang belum ada: input harga dari kasir, nama item, dan daftar barang yang panjangnya bebas. Bab 5 akan memperkenalkan struct untuk mengelompokkan data item. Bab 8 akan memperkenalkan `Vec` untuk daftar yang bisa bertambah. Setelah Bab 21 dan capstone, alur yang sama akan dipanggil dari layanan HTTP, bukan hanya dari terminal.
 
 :::caution[Hati-hati]
 Array `daftar_harga` dan `daftar_jumlah` harus punya panjang yang sama. Kalau salah satu lebih pendek, indeks bisa melewati batas dan program panic. Loop `for i in 0..jumlah_barang` juga bergantung pada `jumlah_barang` yang sudah divalidasi maksimal 3.

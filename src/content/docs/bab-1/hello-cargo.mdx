@@ -9,6 +9,10 @@ import RustPlayground from '../../../components/RustPlayground.astro';
 
 Cargo adalah build system dan package manager Rust. Kalau `rustc` adalah compiler yang mengubah satu file, Cargo adalah alat yang mengatur seluruh proyek: mengompilasi kode, mengunduh library yang dibutuhkan, dan menjalankan test. Hampir semua proyek Rust memakai Cargo, termasuk proyek yang akan kita buat nanti.
 
+:::note[Kalau di bahasa lain]
+`cargo` menggabungkan beberapa peran yang biasanya terpisah. Di JavaScript dan TypeScript, tugas serupa dipegang `npm`, `pnpm`, atau `yarn` ditambah script build. Di PHP ada `composer`. Di Go ada `go mod` dan `go build`. File `Cargo.toml` kurang lebih sepadan dengan `package.json`, `composer.json`, atau `go.mod`. Crates.io adalah registry crate Rust, padanan npm registry atau Packagist.
+:::
+
 Program `Hello, world!` tadi tidak punya dependency. Cargo tetap berguna karena ia menyimpan konfigurasi proyek dan menyederhanakan perintah build. Begitu proyek bertambah besar, perbedaan antara memakai `rustc` langsung dan Cargo akan terasa jelas.
 
 Cargo ikut terpasang saat kamu memakai `rustup`. Pastikan ia tersedia:

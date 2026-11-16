@@ -40,6 +40,10 @@ Rentang nilai mengikuti jumlah bit. `i8` dapat menyimpan −128 sampai 127. `u8`
 
 Kalau kamu tidak menentukan tipe, integer default-nya `i32`. Tipe `isize` dan `usize` terutama dipakai untuk indeks collection.
 
+:::note[Kalau di bahasa lain]
+Di JavaScript, semua angka memakai tipe `number` yang berbasis floating point IEEE-754. Rust memisahkan integer dan floating point, serta memberi ukuran bit yang eksplisit. Go juga punya tipe integer eksplisit. Python punya `int` dengan presisi arbitrer dan `float` terpisah. Perbedaan ini memengaruhi overflow dan ketepatan nilai, jadi pilih tipe dengan sadar.
+:::
+
 Literal integer bisa ditulis dalam beberapa bentuk:
 
 | Bentuk | Contoh |

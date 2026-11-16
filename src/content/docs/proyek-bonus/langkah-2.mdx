@@ -1,0 +1,237 @@
+---
+title: 'Langkah 2: store dan worker'
+description: 'Trait Store, implementasi memory dan SQLite, serta worker klik dengan channel.'
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Handler HTTP tidak boleh peduli apakah data disimpan di memori atau SQLite. Karena itu kita membuat trait `Store`, lalu membagikan implementasinya sebagai trait object.
+
+<StudyCase
+  title="Penyimpanan dan pekerja latar belakang"
+  intro="Membuat dua implementasi Store, worker async untuk klik, dan worker thread untuk audit."
+>
+  <StudyCaseStep
+    title="Satu trait, dua backend"
+    goal="Membuat trait Store yang bisa dipakai oleh MemoryStore dan SqliteStore."
+  >
+    Trait `Store` punya associated type `Error` dan method async. `async_trait` membuat trait ini tetap bisa dipakai sebagai `Arc<dyn Store>`.
+
+    ```rust
+    #[async_trait]
+    pub trait Store: Send + Sync {
+        type Error: std::error::Error + Send + Sync + 'static;
+
+        async fn insert_link(&self, link: Link) -> Result<(), Self::Error>;
+        async fn get_link(&self, code: &ShortCode) -> Result<Option<Link>, Self::Error>;
+        async fn increment_clicks(&self, code: &ShortCode) -> Result<u64, Self::Error>;
+        async fn list_links(&self) -> Result<Vec<Link>, Self::Error>;
+    }
+    ```
+
+    Implementasi memory memakai `tokio::sync::RwLock<HashMap<...>>`. Pembacaan bisa berjalan bersamaan, sedangkan penulisan memakai lock eksklusif.
+
+    ```rust
+    pub struct MemoryStore {
+        links: RwLock<HashMap<String, Link>>,
+    }
+
+    impl MemoryStore {
+        pub fn new() -> Self {
+            Self::default()
+        }
+    }
+
+    #[async_trait]
+    impl Store for MemoryStore {
+        type Error = AppError;
+
+        async fn insert_link(&self, link: Link) -> Result<(), AppError> {
+            let mut links = self.links.write().await;
+
+            if links.contains_key(link.code.as_str()) {
+                return Err(AppError::Conflict("kode sudah dipakai".to_string()));
+            }
+
+            links.insert(link.code.to_string(), link);
+            Ok(())
+        }
+
+        async fn get_link(&self, code: &ShortCode) -> Result<Option<Link>, AppError> {
+            Ok(self.links.read().await.get(code.as_str()).cloned())
+        }
+
+        async fn increment_clicks(&self, code: &ShortCode) -> Result<u64, AppError> {
+            let mut links = self.links.write().await;
+            let Some(link) = links.get_mut(code.as_str()) else {
+                return Err(AppError::NotFound);
+            };
+
+            link.clicks += 1;
+            Ok(link.clicks)
+        }
+
+        async fn list_links(&self) -> Result<Vec<Link>, AppError> {
+            let mut links: Vec<Link> = self.links.read().await.values().cloned().collect();
+            links.sort_by_key(|link| std::cmp::Reverse(link.clicks));
+            Ok(links)
+        }
+    }
+    ```
+
+    Implementasi SQLite memakai `sqlx`. Koneksi membuka pool, membuat tabel kalau belum ada, lalu setiap operasi mengembalikan `Result`.
+
+    ```rust
+    pub struct SqliteStore {
+        pool: SqlitePool,
+    }
+
+    impl SqliteStore {
+        pub async fn connect(url: &str) -> Result<Self, AppError> {
+            let options = SqliteConnectOptions::from_str(url)?.create_if_missing(true);
+            let max_connections = if url.contains(":memory:") { 1 } else { 5 };
+            let pool = SqlitePoolOptions::new()
+                .max_connections(max_connections)
+                .connect_with(options)
+                .await?;
+
+            sqlx::query(
+                "CREATE TABLE IF NOT EXISTS links (
+                    code TEXT PRIMARY KEY,
+                    target TEXT NOT NULL,
+                    clicks INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'active'
+                )",
+            )
+            .execute(&pool)
+            .await?;
+
+            Ok(Self { pool })
+        }
+
+        pub fn pool(&self) -> &SqlitePool {
+            &self.pool
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      Tulis trait dari kebutuhan handler, bukan dari detail database. Handler hanya perlu insert, get, increment, dan list.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Kedua implementasi ada di `proyek-bonus/src/store.rs`. `AppState` menyimpan `Arc<dyn Store<Error = AppError>>`, jadi handler tidak perlu generic atas tipe store.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Worker klik dan audit
+
+Klik tidak ditulis langsung dari handler. Handler mengirim kode ke channel, lalu worker yang menulis ke store. Ini memisahkan jalur request cepat dari pekerjaan penyimpanan.
+
+```rust
+pub fn spawn_click_worker(
+    store: Arc<dyn Store<Error = AppError>>,
+    mut receiver: mpsc::Receiver<String>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        while let Some(value) = receiver.recv().await {
+            let Ok(code) = ShortCode::parse(&value) else {
+                continue;
+            };
+
+            if let Err(error) = store.increment_clicks(&code).await {
+                eprintln!("gagal menyimpan klik {code}: {error}");
+            }
+        }
+    })
+}
+```
+
+Audit memakai `std::thread` karena hanya menulis buffer pendek dan tidak perlu async. Thread itu mengambil pesan dari receiver Tokio dengan `blocking_recv`.
+
+```rust
+pub struct AuditGuard {
+    sender: Option<mpsc::Sender<String>>,
+    handle: Option<JoinHandle<()>>,
+    buffer: Arc<Mutex<Vec<String>>>,
+}
+
+impl Drop for AuditGuard {
+    fn drop(&mut self) {
+        self.sender.take();
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+```
+
+`Drop` menutup channel dan menunggu thread selesai. Inilah graceful shutdown di level worker: tidak ada thread yang ditinggal begitu saja.
+
+:::note[Kalau di bahasa lain]
+`trait Store` mirip interface atau abstract class. Bedanya, implementasi bisa dipilih saat runtime sebagai trait object. Worker dengan channel mirip job queue: Express atau Laravel biasanya memakai Redis atau queue eksternal, sedangkan di sini kita memakai channel dan task di dalam proses yang sama.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa AppState menyimpan Arc<dyn Store> dan bukan tipe SqliteStore langsung?',
+      options: [
+        'Supaya handler tidak terikat pada satu backend penyimpanan',
+        'Supaya SQLite tidak perlu membuat tabel',
+        'Supaya semua request berjalan di satu thread',
+        'Supaya error tidak perlu ditangani',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Trait object memungkinkan memory atau SQLite dipilih saat runtime.',
+        'Salah. SqliteStore tetap membuat tabel saat connect.',
+        'Salah. Tokio dapat menjalankan banyak task.',
+        'Salah. Error tetap dikembalikan sebagai nilai.',
+      ],
+      explanation:
+        'Handler hanya memanggil method trait. Implementasi bisa diganti tanpa mengubah handler.',
+    },
+    {
+      question: 'Apa peran channel pada alur klik?',
+      options: [
+        'Mengirim kode dari handler ke worker yang menyimpan klik',
+        'Menyimpan tabel SQLite',
+        'Mengubah response HTTP menjadi JSON',
+        'Menggantikan trait Store',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Handler mengirim pesan, worker mengonsumsi pesan.',
+        'Salah. Tabel dibuat oleh SqliteStore.',
+        'Salah. JSON ditangani serde dan axum.',
+        'Salah. Channel dan Store punya peran berbeda.',
+      ],
+      explanation:
+        'Channel membuat handler tidak menunggu pekerjaan penyimpanan selesai secara langsung.',
+    },
+    {
+      question: 'Mengapa audit memakai std::thread, bukan task Tokio?',
+      options: [
+        'Karena pekerjaannya blocking dan memakai blocking_recv',
+        'Karena std::thread lebih cepat untuk semua pekerjaan',
+        'Karena Tokio tidak bisa memakai channel',
+        'Karena Mutex hanya bekerja di std::thread',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Thread ini memang dirancang untuk menunggu secara blocking.',
+        'Salah. Pilihan thread di sini soal model blocking, bukan klaim performa.',
+        'Salah. Tokio punya mpsc dan banyak primitif lain.',
+        'Salah. Mutex bisa dipakai lintas thread.',
+      ],
+      explanation:
+        'Jangan memanggil blocking_recv di dalam task async karena bisa menahan thread runtime.',
+    },
+  ]}
+/>

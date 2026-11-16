@@ -11,6 +11,10 @@ Variabel Rust immutable secara default. Artinya, setelah sebuah nilai diikat ke 
 
 Kamu tetap bisa membuat variabel mutable dengan menambahkan `mut`. Bedanya, perubahan nilai menjadi keputusan yang terlihat jelas di kode.
 
+:::note[Kalau di bahasa lain]
+Di JavaScript, `const` mencegah nama diikat ulang, tetapi isi object yang dirujuk masih bisa diubah. Di Rust, `let` tanpa `mut` mencegah perubahan nilai lewat binding pada contoh ini. `let mut` lebih dekat dengan `let` di JavaScript. PHP dan Python tidak punya pembatas mutability variabel seperti ini, meskipun keduanya punya konstanta untuk nilai tertentu.
+:::
+
 ## Variabel immutable
 
 Kode berikut sengaja salah. Variabel `x` diberi nilai 5, lalu dicoba diisi 6 tanpa `mut`.

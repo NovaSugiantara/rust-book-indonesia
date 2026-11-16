@@ -4,13 +4,13 @@ description: Panduan Rust berbahasa Indonesia dengan contoh yang bisa dijalankan
 template: splash
 hero:
   title: Rust dari Nol
-  tagline: Belajar Rust dalam bahasa Indonesia, dari instalasi sampai proyek yang benar-benar jalan.
+  tagline: Jalur belajar Rust untuk web developer, dari CLI pertama sampai layanan backend.
   actions:
     - text: Mulai Bab 1
       link: bab-1/
       icon: right-arrow
-    - text: Lihat progres
-      link: '#progres-belajarmu'
+    - text: Lihat peta belajar
+      link: '#peta-belajar'
       variant: minimal
 ---
 
@@ -18,15 +18,38 @@ import Progress from '../../components/Progress.astro';
 
 ## Untuk siapa situs ini
 
-Situs ini dibuat untuk kamu yang ingin belajar Rust dengan urutan yang jelas. Kamu tidak perlu sudah menguasai Rust, tetapi kamu perlu nyaman membuka terminal dan mengetik perintah sederhana.
+Situs ini dibuat untuk fullstack atau backend web developer yang ingin memahami Rust dengan urutan yang jelas. Kamu sudah menulis kode di JavaScript/TypeScript, PHP, Go, atau Python, dan sudah terbiasa dengan HTTP, database, serta REST.
 
-Materi ini cocok kalau kamu:
+Kamu tidak perlu sudah menguasai Rust. Kamu perlu nyaman memakai terminal, Git, package manager, dan membaca pesan error. Materi ini tidak menjelaskan dasar pemrograman dari nol. Fokusnya adalah cara Rust bekerja dan bagaimana memakai Rust untuk layanan backend.
 
-- baru pertama kali memakai bahasa dengan compiler yang ketat;
-- sudah menulis kode di bahasa lain dan ingin memahami cara Rust mengatur memory;
-- pernah membaca sebagian buku Rust, lalu berhenti karena istilahnya terasa padat.
+Yang akan kamu latih:
 
-Kalau kamu sama sekali belum pernah menulis kode, tetap bisa mulai. Halaman awal menjelaskan setiap perintah dan setiap potong kode, bukan hanya hasil akhirnya.
+- ownership, borrow, dan cara Rust mengatur memory tanpa garbage collector;
+- struct, enum, trait, generic, dan lifetime untuk memodelkan data serta abstraksi;
+- error handling sebagai nilai, bukan exception;
+- test, iterator, smart pointer, thread, dan async;
+- satu studi kasus yang tumbuh dari CLI sampai server, lalu capstone API.
+
+## Peta belajar
+
+<ul class="home-cards">
+  <li>
+    <h3>Fondasi, Bab 1-3</h3>
+    <p>Instalasi, Cargo, input terminal, tipe data, fungsi, dan control flow. Kasir Warung lahir sebagai CLI.</p>
+  </li>
+  <li>
+    <h3>Rust untuk backend, Bab 4-21</h3>
+    <p>Ownership, struct, enum, error handling, trait, test, iterator, smart pointer, thread, async, dan web server manual.</p>
+  </li>
+  <li>
+    <h3>Capstone, setelah Bab 21</h3>
+    <p>Materi tambahan di luar Rust Book. Kasir Warung menjadi REST API dengan axum, Tokio, dan SQLite.</p>
+  </li>
+</ul>
+
+Status saat ini: Bab 1 sampai Bab 3 sudah tersedia. Bab 4 sampai Bab 21 dan capstone masih disusun. Baca [ringkasan Capstone](capstone/) dan [perbandingan framework](capstone/framework/) untuk melihat arah akhirnya, tanpa mengklaim kode yang belum ada.
+
+Ada juga [Proyek Bonus: URL shortener](proyek-bonus/), contoh jadi di luar jalur bab yang memakai konsep dari seluruh Rust Book. Kode lengkapnya ada di folder `proyek-bonus/` di repositori.
 
 ## Cara satu bab disusun
 
@@ -47,7 +70,7 @@ Bab yang sudah ditulis mengikuti pola yang sama. Kamu membaca penjelasan singkat
   </li>
   <li>
     <h3>Studi kasus</h3>
-    <p>Kasir Warung, sebuah CLI (program baris perintah) kecil yang mulai dari struk sederhana lalu bertambah kemampuan di bab berikutnya.</p>
+    <p>Kasir Warung, dimulai sebagai CLI (program baris perintah) dan tumbuh menjadi layanan backend di akhir jalur.</p>
   </li>
 </ul>
 

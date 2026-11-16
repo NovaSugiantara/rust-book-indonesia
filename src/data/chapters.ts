@@ -75,4 +75,17 @@ export const chapters: Chapter[] = [
   { number: 21, title: 'Proyek akhir: web server multithread', slug: 'bab-21', pages: [{ label: 'Ringkasan bab', slug: 'bab-21' }] },
 ];
 
+export const capstonePages: ChapterPage[] = [
+  { label: 'Ringkasan Capstone', slug: 'capstone' },
+  { label: 'Memilih framework', slug: 'capstone/framework' },
+];
+
+export const bonusPages: ChapterPage[] = [
+  { label: 'Pengantar proyek', slug: 'proyek-bonus' },
+  { label: 'Langkah 1: model dan error', slug: 'proyek-bonus/langkah-1' },
+  { label: 'Langkah 2: store dan worker', slug: 'proyek-bonus/langkah-2' },
+  { label: 'Langkah 3: HTTP API', slug: 'proyek-bonus/langkah-3' },
+  { label: 'Langkah 4: test dan release', slug: 'proyek-bonus/langkah-4' },
+];
+
 export const totalPages = chapters.reduce((total, chapter) => total + chapter.pages.length, 0);

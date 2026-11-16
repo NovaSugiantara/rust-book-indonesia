@@ -89,6 +89,8 @@ Jumlah barang: 2
 
 Program menolak `dua` karena `parse` gagal. Program menolak `10` karena angkanya di luar rentang. Setelah `2`, program keluar dari loop dan mencetak jumlah barang.
 
+Nanti, saat input datang dari HTTP, validasi yang sama harus menghasilkan response 4xx, bukan panic. Ini alasan kita berlatih memisahkan input salah dari error program sejak sekarang.
+
 ## Versi playground
 
 Playground tidak bisa membaca input, jadi contoh ini mensimulasikan urutan input `abc`, `0`, lalu `2`. Perhatikan bagaimana `continue` dan `break` mengatur alurnya.

@@ -1,0 +1,215 @@
+---
+title: 'Langkah 4: test dan release'
+description: 'Menguji endpoint, menjalankan server, dan membangun binary release.'
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Langkah terakhir membuktikan bahwa API bekerja tanpa harus membuka browser atau port jaringan. Setelah test, kita jalankan server dan membuat build release.
+
+<StudyCase
+  title="Menguji dan membangun layanan"
+  intro="Menguji create, redirect, dan statistik lewat router axum, lalu menyiapkan binary release."
+>
+  <StudyCaseStep
+    title="Test endpoint dengan router"
+    goal="Menguji alur create, redirect, dan statistik tanpa membuka port."
+  >
+    Integration test memakai `tower::ServiceExt::oneshot`. Request dibuat langsung ke router, jadi test tidak bergantung pada port atau server eksternal.
+
+    ```rust
+    #[tokio::test]
+    async fn create_redirect_and_read_stats() {
+        let (state, _click_rx, _audit_rx) = test_state();
+        let app = routes::router(state.clone());
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/links")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({
+                    "target": "https://example.com/promo",
+                    "custom_code": "promo"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = body_json(response).await;
+        assert_eq!(body["short_url"], "http://localhost:3000/promo");
+
+        let request = Request::builder()
+            .uri("/promo")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            response.headers()["location"].to_str().unwrap(),
+            "https://example.com/promo"
+        );
+
+        let code = ShortCode::parse("promo").unwrap();
+        state.store.increment_clicks(&code).await.unwrap();
+
+        let request = Request::builder()
+            .uri("/api/stats/promo")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        assert_eq!(body["clicks"], 1);
+        assert_eq!(body["code"], "promo");
+    }
+    ```
+
+    <Fragment slot="hint">
+      Uji jalur bahagia dulu: create, redirect, lalu stats. Setelah itu tambahkan test input salah supaya error response ikut terbukti.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Kode lengkap ada di `proyek-bonus/tests/api.rs`. Ada dua integration test: satu untuk alur lengkap, satu untuk target URL yang salah.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Menjalankan dan menguji
+
+Dari folder `proyek-bonus`:
+
+```console
+$ cargo test
+$ cargo clippy --all-targets -- -D warnings
+$ cargo build --release
+```
+
+Hasil test proyek ini: 12 unit test, 2 integration test, dan 1 doc test. Doc test berasal dari contoh pada `ShortCode`.
+
+Jalankan server:
+
+```console
+$ cargo run
+Shortener berjalan di http://127.0.0.1:3000
+Store: sqlite
+```
+
+Buat link dan lihat redirect:
+
+```console
+$ curl -i -X POST http://127.0.0.1:3000/api/links \
+  -H 'Content-Type: application/json' \
+  -d '{"target":"https://example.com/promo","custom_code":"promo"}'
+
+HTTP/1.1 201 Created
+{"short_url":"http://127.0.0.1:3000/promo","code":"promo","target":"https://example.com/promo"}
+
+$ curl -i http://127.0.0.1:3000/promo
+
+HTTP/1.1 307 Temporary Redirect
+location: https://example.com/promo
+```
+
+Setelah dua klik, statistiknya:
+
+```console
+$ curl http://127.0.0.1:3000/api/stats/promo
+{"clicks":2,"code":"promo","label":"2 klik, sepi"}
+```
+
+## Release dan shutdown
+
+Profil release memakai LTO tipis dan satu codegen unit. Ini memperlama build, tetapi menghasilkan binary akhir yang lebih ramping.
+
+```toml
+[profile.release]
+lto = "thin"
+codegen-units = 1
+```
+
+Saat Ctrl+C ditekan, server berhenti dengan rapi. State di-drop, channel klik ditutup, dan `AuditGuard` menunggu thread audit selesai.
+
+```rust
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+
+    drop(state);
+    click_worker.abort();
+    drop(audit_guard);
+
+    Ok(())
+}
+```
+
+Urutan shutdown penting. Kalau guard di-drop sebelum state, masih ada sender yang membuat thread audit menunggu selamanya.
+
+:::note[Kalau di bahasa lain]
+Di Node, test endpoint sering memakai supertest. Di Go, `httptest` membuat request langsung ke handler. Di Laravel, feature test memanggil route tanpa server HTTP terpisah. Di Rust, `tower::ServiceExt::oneshot` memberi peran yang mirip: request masuk ke router, response diperiksa, tanpa port jaringan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa integration test memakai oneshot dan bukan membuka port 3000?',
+      options: [
+        'Supaya test langsung memanggil router tanpa server jaringan',
+        'Supaya SQLite tidak dibuat',
+        'Supaya handler tidak perlu membaca request',
+        'Supaya test selalu berjalan di production',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. oneshot mengirim satu request ke service/router secara langsung.',
+        'Salah. Store tetap dipakai; test memakai MemoryStore.',
+        'Salah. Handler tetap membaca request.',
+        'Salah. Test berjalan di proses test.',
+      ],
+      explanation:
+        'Test tanpa port lebih cepat dan tidak bentrok dengan server lain.',
+    },
+    {
+      question: 'Apa yang diuji pada test alur lengkap?',
+      options: [
+        'Create link, redirect dengan Location, dan statistik klik',
+        'Hanya halaman HTML',
+        'Hanya koneksi database production',
+        'Hanya perintah cargo build',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ketiga langkah diperiksa status dan body-nya.',
+        'Salah. Proyek ini API JSON, bukan halaman HTML.',
+        'Salah. Test memakai MemoryStore.',
+        'Salah. Build diuji terpisah.',
+      ],
+      explanation:
+        'Test meniru alur pemakaian nyata dan memastikan response sesuai kontrak.',
+    },
+    {
+      question: 'Mengapa AuditGuard di-drop setelah state pada shutdown?',
+      options: [
+        'Supaya semua sender channel sudah hilang dan thread audit bisa selesai',
+        'Supaya binary release lebih kecil',
+        'Supaya handler bisa menerima request baru',
+        'Supaya SQLite menghapus tabel',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Thread menunggu channel ditutup sebelum join selesai.',
+        'Salah. Urutan shutdown tidak mengubah ukuran binary.',
+        'Salah. Server sudah berhenti menerima request.',
+        'Salah. Tabel tidak dihapus saat shutdown.',
+      ],
+      explanation:
+        'Drop pada guard menutup sender dan join thread. Sender dari state harus sudah hilang lebih dulu.',
+    },
+  ]}
+/>

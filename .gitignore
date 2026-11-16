@@ -7,3 +7,9 @@ dist/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# Proyek bonus Rust
+/proyek-bonus/target/
+/proyek-bonus/*.db
+/proyek-bonus/*.db-shm
+/proyek-bonus/*.db-wal

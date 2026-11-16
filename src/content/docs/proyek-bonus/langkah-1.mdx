@@ -1,0 +1,224 @@
+---
+title: 'Langkah 1: model dan error'
+description: 'Membuat model Link, newtype ShortCode, dan AppError untuk URL shortener.'
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Langkah pertama menentukan bentuk data dan error sebelum ada HTTP. Kalau modelnya jelas, handler HTTP nanti hanya mengubah request menjadi tipe Rust dan mengembalikan response.
+
+<StudyCase
+  title="Model URL shortener"
+  intro="Membuat kode pendek yang tervalidasi, status link, dan error aplikasi yang bisa menjadi response HTTP."
+>
+  <StudyCaseStep
+    title="Tentukan model dan validasi kode"
+    goal="Membuat ShortCode, LinkStatus, dan Link dengan tipe yang tidak bisa asal diisi."
+  >
+    Kode pendek tidak boleh diperlakukan sebagai `String` biasa. Kita membuat newtype `ShortCode` supaya validasi hanya terjadi di satu tempat. Kode yang sudah lolos validasi tidak bisa tertukar dengan target URL atau nama pengguna.
+
+    ```rust
+    pub struct ShortCode(String);
+
+    impl ShortCode {
+        pub fn parse(input: &str) -> Result<Self, AppError> {
+            let value = input.trim();
+
+            if !(MIN_LENGTH..=MAX_LENGTH).contains(&value.len()) {
+                return Err(crate::bad_request!(
+                    "kode harus {MIN_LENGTH} sampai {MAX_LENGTH} karakter"
+                ));
+            }
+
+            if !value
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric())
+            {
+                return Err(crate::bad_request!(
+                    "kode hanya boleh berisi huruf dan angka"
+                ));
+            }
+
+            Ok(Self(value.to_string()))
+        }
+
+        pub fn generate() -> Self {
+            let mut rng = rand::rng();
+            let code = (0..GENERATED_LENGTH)
+                .map(|_| {
+                    let index = rng.random_range(0..ALPHABET.len());
+                    ALPHABET[index] as char
+                })
+                .collect();
+
+            Self(code)
+        }
+
+        pub fn as_str(&self) -> &str {
+            &self.0
+        }
+    }
+    ```
+
+    `Deref<Target = str>` membuat `ShortCode` bisa dipakai sebagai `&str` saat membaca, tanpa membuka jalan untuk mengubah isinya dari luar module.
+
+    Status link adalah enum, bukan boolean, karena nanti bisa bertambah nilai seperti `Expired` tanpa mengubah tipe field.
+
+    ```rust
+    pub enum LinkStatus {
+        Active,
+        Disabled,
+    }
+
+    impl LinkStatus {
+        pub fn can_redirect(self) -> bool {
+            matches!(self, Self::Active)
+        }
+
+        pub fn as_str(self) -> &'static str {
+            match self {
+                Self::Active => "active",
+                Self::Disabled => "disabled",
+            }
+        }
+
+        pub fn from_db(value: &str) -> Result<Self, AppError> {
+            match value {
+                "active" => Ok(Self::Active),
+                "disabled" => Ok(Self::Disabled),
+                other => Err(AppError::Internal(format!("status tidak dikenal: {other}"))),
+            }
+        }
+    }
+
+    pub struct Link {
+        pub code: ShortCode,
+        pub target: String,
+        pub clicks: u64,
+        pub status: LinkStatus,
+    }
+
+    impl Link {
+        pub fn new(code: ShortCode, target: String) -> Self {
+            Self {
+                code,
+                target,
+                clicks: 0,
+                status: LinkStatus::Active,
+            }
+        }
+
+        pub fn can_redirect(&self) -> bool {
+            self.status.can_redirect()
+        }
+
+        pub fn with_status(mut self, status: LinkStatus) -> Self {
+            self.status = status;
+            self
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      Mulai dari pertanyaan: data apa yang tidak boleh salah tipe? Kode pendek, target URL, jumlah klik, dan status. Setiap jawaban menjadi tipe atau field.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Kode lengkap ada di `proyek-bonus/src/model.rs` dan `proyek-bonus/src/shortcode.rs`. Perhatikan bahwa `ShortCode::parse` mengembalikan `Result`, bukan panic. Handler nanti yang mengubah error itu menjadi HTTP 400.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Error sebagai response
+
+`AppError` adalah enum yang mewakili kegagalan yang mungkin terjadi. Setiap varian dipetakan ke status HTTP, lalu `IntoResponse` mengubahnya menjadi JSON.
+
+```rust
+pub enum AppError {
+    BadRequest(String),
+    NotFound,
+    Conflict(String),
+    Gone,
+    Internal(String),
+    Database(sqlx::Error),
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let status = self.status();
+        let body = ErrorBody {
+            error: self.message(),
+        };
+        (status, Json(body)).into_response()
+    }
+}
+```
+
+Error database tidak membocorkan detail ke client. Pesan aslinya ditulis ke stderr, sedangkan response hanya berisi pesan umum. Ini penting untuk layanan yang menghadap publik.
+
+:::note[Kalau di bahasa lain]
+Di Express, error biasanya dilempar dan ditangkap middleware. Di Laravel, exception dipetakan ke response oleh handler global. Di Rust, error adalah nilai yang dikembalikan lewat `Result`. Implementasi `IntoResponse` berperan seperti error middleware, tetapi dipilih compiler saat tipe error dikembalikan dari handler.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa kode pendek dibuat sebagai newtype ShortCode, bukan String biasa?',
+      options: [
+        'Supaya validasi dan tipe kode tidak tertukar dengan String lain',
+        'Supaya kode otomatis tersimpan ke database',
+        'Supaya HTTP handler tidak perlu membaca request',
+        'Supaya Rust memakai garbage collector',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Newtype memberi identitas tipe dan memusatkan validasi.',
+        'Salah. Penyimpanan tetap tugas Store.',
+        'Salah. Handler tetap membaca request.',
+        'Salah. Rust tidak memakai garbage collector.',
+      ],
+      explanation:
+        'Dengan tipe khusus, fungsi yang butuh kode pendek tidak bisa diberi target URL secara tidak sengaja.',
+    },
+    {
+      question: 'Apa fungsi IntoResponse pada AppError?',
+      options: [
+        'Mengubah error menjadi response HTTP dengan status dan body',
+        'Mengubah error menjadi panic',
+        'Menulis error ke database',
+        'Membuat koneksi database baru',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. IntoResponse menentukan status dan body yang dikirim ke client.',
+        'Salah. Ini justru menghindari panic di handler.',
+        'Salah. Error database ditangani Store.',
+        'Salah. Koneksi dibuat oleh SqliteStore.',
+      ],
+      explanation:
+        'Handler bisa mengembalikan Result<_, AppError>, lalu axum memakai IntoResponse untuk membentuk response.',
+    },
+    {
+      question: 'Mengapa status link memakai enum LinkStatus?',
+      options: [
+        'Karena status punya kemungkinan nilai yang terbatas dan bisa diperluas dengan aman',
+        'Karena enum lebih cepat daripada integer',
+        'Karena enum otomatis menjadi JSON tanpa serde',
+        'Karena String tidak bisa disimpan di SQLite',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Enum membuat nilai yang valid terlihat jelas dan match menjadi lengkap.',
+        'Salah. Kecepatan bukan alasan utamanya.',
+        'Salah. Enum tetap perlu Serialize untuk JSON.',
+        'Salah. String bisa disimpan di SQLite.',
+      ],
+      explanation:
+        'Enum mencegah status seperti "aktif" dan "active" bercampur sebagai string bebas.',
+    },
+  ]}
+/>

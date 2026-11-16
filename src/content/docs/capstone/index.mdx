@@ -1,0 +1,64 @@
+---
+title: 'Capstone: Kasir Warung API'
+description: 'Rencana proyek akhir di luar Rust Book: REST API Kasir Warung dengan axum, tokio, dan SQLite.'
+---
+
+:::caution[Materi tambahan di luar Rust Book]
+Capstone ini bukan bagian dari 21 bab The Rust Programming Language. Isinya disusun dari dokumentasi resmi axum, tokio, dan sqlx. Halaman ini masih berupa rencana. Belum ada kode API yang ditulis.
+:::
+
+Setelah 21 bab, Kasir Warung masih berupa program CLI. Capstone mengubahnya menjadi layanan HTTP yang bisa menerima pesanan, menyimpan data, dan mengembalikan response JSON. Ini adalah latihan pertama menyusun layanan backend Rust yang utuh, bukan sekadar contoh satu file.
+
+Capstone tidak menggantikan Bab 21. Bab 21 membangun web server multithread dari nol supaya kamu melihat cara kerja listener, request, dan thread pool. Capstone memakai framework supaya kamu bisa fokus pada routing, state, error, database, dan test.
+
+## Prasyarat
+
+- Bab 1 sampai Bab 21 selesai, terutama Bab 9 (error handling), Bab 10 (trait), Bab 16 (threading), Bab 17 (async), Bab 18 (trait object), dan Bab 21 (web server).
+- Nyaman dengan HTTP, status code, JSON, dan database relasional.
+- Bisa menjalankan `cargo`, `sqlx`, dan server lokal dari terminal.
+
+## Yang akan dibangun
+
+Rencana permukaan API:
+
+| Method | Path | Fungsi |
+| --- | --- | --- |
+| `GET` | `/health` | Cek apakah layanan hidup |
+| `GET` | `/menu` | Daftar menu dan harga |
+| `POST` | `/orders` | Membuat pesanan baru |
+| `GET` | `/orders/{id}` | Detail satu pesanan |
+| `POST` | `/orders/{id}/pay` | Membayar pesanan |
+
+Endpoint di atas adalah rencana, bukan kontrak yang sudah jadi. Saat capstone ditulis, setiap endpoint harus punya contoh request dan response nyata.
+
+## Cakupan materi
+
+1. Menyiapkan proyek `kasir_warung_api` dengan axum 0.8 dan tokio.
+2. Routing, handler async, dan ekstraktor untuk JSON, path, dan query.
+3. Shared state dengan `Arc<AppState>` dan `State` extractor.
+4. Error aplikasi yang dikonversi menjadi response HTTP memakai `IntoResponse`.
+5. Database SQLite lewat `sqlx`, termasuk query async dan migrasi.
+6. Test endpoint tanpa membuka port jaringan.
+7. Menjalankan build debug, build release, dan menjalankan binary hasil build.
+
+## Versi yang dipakai saat rencana ini ditulis
+
+| Crate | Versi stabil | Dokumentasi |
+| --- | --- | --- |
+| axum | 0.8.9 | [docs.rs/axum](https://docs.rs/axum/0.8.9/axum/) |
+| tokio | 1.54.1 | [docs.rs/tokio](https://docs.rs/tokio/1.54.1/tokio/) |
+| sqlx | 0.9.0 | [docs.rs/sqlx](https://docs.rs/sqlx/0.9.0/sqlx/) |
+
+Versi bisa berubah. Sebelum menulis kode capstone, cek ulang crates.io dan docs.rs. Jangan menyalin API dari ingatan.
+
+## Urutan belajar yang disarankan
+
+1. Pahami dulu kenapa axum dipilih dibanding actix-web dan rocket di [halaman perbandingan framework](framework/).
+2. Siapkan proyek dan endpoint `/health`.
+3. Tambahkan menu dari database SQLite.
+4. Tambahkan pembuatan pesanan dan validasi input.
+5. Tambahkan pembayaran, state, dan error response.
+6. Tambahkan test endpoint.
+7. Jalankan build release dan dokumentasikan cara menjalankan layanan.
+
+Halaman rincian capstone akan ditulis setelah Bab 4 sampai Bab 21 selesai. Sampai saat itu, halaman ini menjadi batas cakupan yang disepakati.

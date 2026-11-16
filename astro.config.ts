@@ -1,15 +1,35 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-import { chapters } from './src/data/chapters';
+import { bonusPages, capstonePages, chapters } from './src/data/chapters';
 
-const sidebar = chapters.map((chapter) =>
-  chapter.number === 1
-    ? {
-        label: `${chapter.number}. ${chapter.title}`,
-        items: chapter.pages.map((page) => ({ label: page.label, link: `/${page.slug}/` })),
-      }
-    : { label: `${chapter.number}. ${chapter.title}`, link: `/${chapter.slug}/` }
-);
+const sidebar = [
+  ...chapters.map((chapter) =>
+    chapter.pages.length > 1
+      ? {
+          label: `${chapter.number}. ${chapter.title}`,
+          items: chapter.pages.map((page) => ({ label: page.label, link: `/${page.slug}/` })),
+        }
+      : { label: `${chapter.number}. ${chapter.title}`, link: `/${chapter.slug}/` }
+  ),
+  {
+    label: 'Capstone (di luar Rust Book)',
+    items: capstonePages.map((page) => ({
+      label: page.label,
+      link: `/${page.slug}/`,
+      ...(page.slug === 'capstone' ? { badge: { text: 'Segera hadir', variant: 'note' as const } } : {}),
+    })),
+  },
+  {
+    label: 'Proyek Bonus',
+    items: bonusPages.map((page) => ({
+      label: page.label,
+      link: `/${page.slug}/`,
+      ...(page.slug === 'proyek-bonus'
+        ? { badge: { text: 'Kode lengkap', variant: 'success' as const } }
+        : {}),
+    })),
+  },
+];
 
 export default defineConfig({
   // GitHub Pages project page. `base` sengaja tanpa trailing slash, sesuai aturan Astro;
@@ -32,6 +52,7 @@ export default defineConfig({
       customCss: ['./src/styles/custom.css'],
       components: {
         Footer: './src/components/Footer.astro',
+        Sidebar: './src/components/Sidebar.astro',
       },
       credits: true,
       pagination: true,

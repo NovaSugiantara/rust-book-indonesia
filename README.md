@@ -36,6 +36,8 @@ Aturan link internal saat menambah halaman:
 - Bab 1: instalasi, Hello World, Cargo, dan studi kasus Kasir Warung.
 - Bab 2: game tebak angka dengan input, crate rand, match, dan loop.
 - Bab 3: variabel, tipe data, fungsi, komentar, dan control flow.
+- Capstone: halaman rencana API Kasir Warung dengan axum, Tokio, dan SQLite, plus perbandingan axum, actix-web, dan rocket. Detail implementasi menyusul setelah Bab 21.
+- Proyek Bonus: URL shortener dengan statistik klik, kode lengkap di `proyek-bonus/`, halaman pengantar dan empat langkah di situs.
 - Komponen playground, kuis, studi kasus, dan penanda progres. Semuanya berjalan tanpa backend.
 
 ## Stack
@@ -54,7 +56,11 @@ src/
 ├── data/chapters.ts     Daftar bab untuk sidebar dan progres
 ├── scripts/progress.ts  Baca dan tulis progres di localStorage
 └── styles/custom.css    Warna aksen dan gaya halaman depan
+
+proyek-bonus/            Crate Rust terpisah: URL shortener dengan axum
 ```
+
+`proyek-bonus/` tidak ikut build Astro. Folder `target/` dan file database di dalamnya diabaikan Git.
 
 Panduan menulis bab, aturan gaya, dan keadaan studi kasus ada di [CONTRIBUTING.md](./CONTRIBUTING.md).
 

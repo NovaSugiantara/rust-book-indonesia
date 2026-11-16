@@ -1,0 +1,181 @@
+---
+title: 'Langkah 3: HTTP API'
+description: 'Merakit router axum, extractor, shared state, redirect, dan error response.'
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Sekarang model dan store disambungkan ke HTTP. axum mengubah request menjadi argumen handler lewat extractor. Handler mengembalikan tipe yang bisa menjadi response, termasuk `Result` dengan error aplikasi.
+
+<StudyCase
+  title="Merakit API axum"
+  intro="Membuat router, membagikan state, dan menangani create link serta redirect."
+>
+  <StudyCaseStep
+    title="Router, state, dan handler"
+    goal="Menyusun endpoint yang memakai State, Path, dan Json."
+  >
+    `AppState` adalah nilai yang dibagikan ke semua handler. Isinya trait object store, dua channel, buffer audit, dan base URL.
+
+    ```rust
+    #[derive(Clone)]
+    pub struct AppState {
+        pub store: Arc<dyn Store<Error = AppError>>,
+        pub click_tx: mpsc::Sender<String>,
+        pub audit_tx: mpsc::Sender<String>,
+        pub recent_clicks: Arc<Mutex<Vec<String>>>,
+        pub base_url: String,
+    }
+    ```
+
+    Router mendaftarkan path. Perhatikan path dinamis memakai `{code}` pada axum 0.8, bukan `:code` seperti versi lama.
+
+    ```rust
+    pub fn router(state: AppState) -> Router {
+        Router::new()
+            .route("/health", get(health))
+            .route("/api/links", get(list_links).post(create_link))
+            .route("/api/stats", get(all_stats))
+            .route("/api/stats/{code}", get(one_stats))
+            .route("/api/audit", get(audit))
+            .route("/{code}", get(redirect))
+            .with_state(state)
+    }
+    ```
+
+    Handler create menerima JSON, memvalidasi target, memilih kode kustom atau acak, lalu menyimpan link. `?` meneruskan error ke `IntoResponse`.
+
+    ```rust
+    async fn create_link(
+        State(state): State<AppState>,
+        Json(request): Json<CreateLink>,
+    ) -> Result<(StatusCode, Json<CreateResponse>), AppError> {
+        let target = normalize_target(&request.target, is_http_url)?;
+
+        let code = if let Some(value) = request.custom_code.as_deref() {
+            ShortCode::parse(value)?
+        } else {
+            ShortCode::generate()
+        };
+
+        let link = Link::new(code.clone(), target.clone());
+        state.store.insert_link(link).await?;
+
+        let response = CreateResponse {
+            short_url: state.short_url(&code),
+            code: code.to_string(),
+            target,
+        };
+
+        Ok((StatusCode::CREATED, Json(response)))
+    }
+    ```
+
+    Handler redirect mengambil kode dari path, mencari link, lalu mengirim klik ke worker sebelum mengembalikan `Redirect`. Kalau link tidak ada, `?` dan `let else` menghasilkan 404.
+
+    ```rust
+    async fn redirect(
+        State(state): State<AppState>,
+        Path(value): Path<String>,
+    ) -> Result<Redirect, AppError> {
+        let code = ShortCode::parse(&value)?;
+        let Some(link) = state.store.get_link(&code).await? else {
+            return Err(AppError::NotFound);
+        };
+
+        if !link.can_redirect() {
+            return Err(AppError::Gone);
+        }
+
+        state
+            .click_tx
+            .send(code.to_string())
+            .await
+            .map_err(|_| AppError::Internal("worker klik berhenti".to_string()))?;
+        let _ = state.audit_tx.try_send(code.to_string());
+
+        Ok(Redirect::temporary(&link.target))
+    }
+    ```
+
+    <Fragment slot="hint">
+      Urutkan dari yang paling dalam: state, router, handler create, handler redirect. Jangan menambahkan database langsung di handler; semua lewat `state.store`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Kode lengkap ada di `proyek-bonus/src/routes.rs`. `Redirect::temporary` mengembalikan 307, sehingga method dan body request dipertahankan. Untuk short link, 307 adalah pilihan yang jelas dan aman.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Extractor
+
+axum membaca request berdasarkan tipe argumen handler:
+
+- `State<AppState>` mengambil state yang dipasang di router.
+- `Json<CreateLink>` membaca body JSON dan melakukan deserialisasi.
+- `Path<String>` mengambil segmen path dinamis.
+
+Kalau deserialisasi JSON gagal, axum mengembalikan response error sebelum handler dipanggil. Kalau validasi aplikasi gagal, handler mengembalikan `AppError`.
+
+:::note[Kalau di bahasa lain]
+Di Express, `req.body`, `req.params`, dan `res` adalah objek yang kamu baca manual. Di Gin, binding dan context melakukan hal serupa. Di Laravel, route model binding dan dependency injection menyiapkan argumen controller. axum memakai tipe fungsi sebagai kontrak: `Json<T>` dan `Path<String>` sudah menjelaskan input yang diharapkan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa fungsi extractor Json<CreateLink> pada handler create?',
+      options: [
+        'Membaca body JSON dan mengubahnya menjadi struct CreateLink',
+        'Mengubah response menjadi HTML',
+        'Membuat tabel SQLite',
+        'Menjalankan worker audit',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Extractor melakukan deserialisasi body sebelum handler berjalan.',
+        'Salah. JSON response memakai Json<T> di nilai balik.',
+        'Salah. Tabel dibuat oleh SqliteStore.',
+        'Salah. Worker dijalankan di main.',
+      ],
+      explanation:
+        'Tipe argumen memberi tahu axum data apa yang harus diambil dari request.',
+    },
+    {
+      question: 'Status HTTP apa yang dikembalikan Redirect::temporary pada redirect?',
+      options: ['307', '301', '201', '404'],
+      answer: 0,
+      optionNotes: [
+        'Benar. 307 Temporary Redirect mempertahankan method dan body.',
+        'Salah. 301 adalah permanent redirect.',
+        'Salah. 201 berarti resource dibuat.',
+        'Salah. 404 berarti tidak ditemukan.',
+      ],
+      explanation:
+        'Short link biasanya memakai redirect sementara karena target bisa berubah.',
+    },
+    {
+      question: 'Mengapa handler create mengembalikan Result<..., AppError>?',
+      options: [
+        'Supaya error validasi dan store menjadi response HTTP lewat IntoResponse',
+        'Supaya error menjadi panic',
+        'Supaya axum mengabaikan response',
+        'Supaya body JSON tidak dibaca',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Tipe Err yang mengimplementasikan IntoResponse membentuk status dan body error.',
+        'Salah. Ini justru jalur tanpa panic.',
+        'Salah. Response tetap dikirim.',
+        'Salah. Json extractor tetap membaca body.',
+      ],
+      explanation:
+        'Handler tidak perlu menulis response error manual. Cukup kembalikan AppError.',
+    },
+  ]}
+/>

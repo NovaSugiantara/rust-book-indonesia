@@ -77,6 +77,10 @@ match guess.cmp(&secret_number) {
 
 `match` memeriksa nilai dari `cmp` dan menjalankan arm pertama yang cocok. Setiap arm terdiri dari pattern dan kode yang dijalankan. Di contoh ini, ketiga kemungkinan `Ordering` ditangani. `match` harus lengkap. Kalau ada varian yang belum ditangani, compiler akan memberi error.
 
+:::note[Kalau di bahasa lain]
+`match` terasa seperti `switch` atau `case`, tetapi compiler memaksa semua kemungkinan ditangani. `Result` juga bukan exception. Error dikembalikan sebagai nilai, bukan dilempar ke atas. Di JS, PHP, atau Python kamu mungkin memakai `try/catch`; di Rust, kegagalan yang bisa dipulihkan biasanya masuk ke `Result` dan diolah dengan `match` atau operator `?` di bab berikutnya.
+:::
+
 `secret_number` tidak diberi anotasi tipe secara eksplisit di kode game. Karena dibandingkan dengan `guess: u32` lewat `cmp`, Rust menyimpulkan bahwa `secret_number` juga `u32`. Ini contoh type inference yang bekerja saat informasinya cukup.
 
 ## Versi playground

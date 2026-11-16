@@ -1,0 +1,58 @@
+---
+title: 'Memilih framework: axum, actix-web, atau rocket'
+description: 'Perbandingan singkat tiga framework web Rust dan alasan capstone memakai axum.'
+---
+
+:::note[Di luar Rust Book]
+Halaman ini adalah bagian dari track Capstone, bukan bab The Rust Programming Language. Sumbernya dokumentasi resmi masing-masing framework dan docs.rs.
+:::
+
+Rust punya beberapa framework web yang matang. Tiga yang sering dipakai adalah axum, actix-web, dan rocket. Ketiganya bisa dipakai untuk API produksi. Perbedaannya ada pada gaya routing, middleware, dan ekosistem yang ingin kamu ikuti.
+
+Versi stabil saat halaman ini ditulis, 16 November 2026:
+
+| Framework | Versi stabil | Sumber resmi |
+| --- | --- | --- |
+| axum | 0.8.9 | [docs.rs/axum](https://docs.rs/axum/0.8.9/axum/) |
+| actix-web | 4.19.0 | [docs.rs/actix-web](https://docs.rs/actix-web/4.19.0/actix_web/) |
+| rocket | 0.5.2 | [Rocket guide v0.5](https://rocket.rs/guide/v0.5/) |
+
+Versi bisa berubah. Cek ulang sebelum memulai proyek baru.
+
+## Perbandingan singkat
+
+| Aspek | axum | actix-web | rocket |
+| --- | --- | --- | --- |
+| Ekosistem | Dibuat dan dipelihara tim tokio-rs, dibangun di atas hyper dan tower | Tim Actix, punya HTTP server sendiri, bisa dipakai bersama ekosistem Tokio | Proyek Rocket, memakai runtime Tokio pada v0.5 |
+| Routing | `Router` eksplisit, handler dengan extractor | `App` dengan route dan handler, extractor bertipe | Atribut seperti `#[get("/...")]`, request guard |
+| Middleware | Layer dari ekosistem tower | Middleware khusus Actix | Fairings |
+| Gaya | Sedikit "magic", banyak tipe eksplisit | Terstruktur, sejarahnya dari actor framework tetapi tidak lagi mewajibkan actor | Banyak fitur bawaan, konfigurasi dan makro |
+| Async | Memakai Tokio | Handler async, kompatibel dengan ekosistem Tokio | Handler async, runtime Tokio disiapkan framework |
+| Test | Bisa diuji lewat service/router | Utilitas test Actix | Built-in local testing |
+
+Tabel ini bukan peringkat. Tidak ada klaim performa di sini karena angka benchmark sangat bergantung pada beban kerja, versi, dan konfigurasi. Kalau performa menjadi syarat, ukur sendiri dengan beban kerja yang mirip produksi.
+
+## Kenapa capstone memakai axum
+
+1. **Satu runtime dengan Bab 17.** Bab 17 mengajarkan async Rust dan Tokio. axum dibangun untuk ekosistem Tokio, jadi konsep runtime, future, dan `async` yang sudah dipelajari tetap dipakai.
+2. **Jelas di level tipe.** `Router`, extractor, `State`, dan `IntoResponse` memperlihatkan alur request dan response tanpa banyak makro. Ini cocok setelah Bab 21, tempat kita membangun server HTTP manual.
+3. **Middleware dari tower.** axum memakai layer tower, ekosistem yang sama dengan hyper. Konsep layer ini berguna saat menambah logging, timeout, atau kompresi.
+4. **Error sebagai response.** Handler bisa mengembalikan `Result` dan tipe error yang mengimplementasikan `IntoResponse`. Ini menyambung langsung dengan `Result` di Bab 9 dan trait di Bab 10.
+5. **Dokumentasi dan contoh resmi.** axum menyediakan contoh JSON API, state, error, dan testing di repositori resminya.
+
+Alasan-alasan itu soal kesinambungan kurikulum, bukan berarti axum selalu pilihan terbaik untuk semua tim.
+
+## Kapan mempertimbangkan yang lain
+
+- Pilih **actix-web** kalau tim sudah memakainya, butuh middleware Actix yang sudah ada, atau ingin HTTP server bawaan framework.
+- Pilih **rocket** kalau kamu menyukai routing dengan atribut, request guard, fairing, dan fitur bawaan yang lebih banyak.
+- Pilih **axum** kalau kamu ingin tetap dekat dengan Tokio, hyper, dan tower, serta nyaman dengan routing dan extractor yang eksplisit.
+
+Tidak ada jawaban yang benar untuk semua proyek. Yang penting, keputusan framework ditulis alasannya dan diuji dengan kebutuhan aplikasi.
+
+## Aturan saat menulis capstone
+
+- Pakai versi yang tercatat di docs.rs dan cocokkan contoh kode dengan versi itu.
+- Jangan menyalin potongan kode dari blog lama tanpa memeriksa API-nya.
+- Jangan menulis klaim performa tanpa benchmark yang bisa dijalankan ulang.
+- Tautkan dokumentasi resmi di setiap halaman capstone yang memakai API framework.

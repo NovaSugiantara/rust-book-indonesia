@@ -1,0 +1,106 @@
+---
+import Default from '@astrojs/starlight/components/Sidebar.astro';
+---
+
+<Default />
+
+<script>
+  import { readProgress } from '../scripts/progress';
+
+  const checkIcon = `<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M9.55 17.05 4.5 12l1.4-1.4 3.65 3.65 8.55-8.55L19.5 7.1z"/></svg>`;
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+  function normalize(path: string): string {
+    return path.endsWith('/') ? path : `${path}/`;
+  }
+
+  function pathCandidates(pathname: string): string[] {
+    const full = normalize(pathname);
+    if (!base || !full.startsWith(`${base}/`)) return [full];
+    return [full, normalize(full.slice(base.length))];
+  }
+
+  function isDone(progress: Record<string, { completed?: boolean }>, pathname: string): boolean {
+    return pathCandidates(pathname).some((path) => progress[path]?.completed === true);
+  }
+
+  function clearMarker(node: Element | null) {
+    if (!node) return;
+    node.querySelectorAll('[data-sidebar-done], [data-sidebar-group], .sidebar-sr').forEach((item) => item.remove());
+  }
+
+  function completeMarker(): DocumentFragment {
+    const fragment = document.createDocumentFragment();
+    const icon = document.createElement('span');
+    icon.className = 'sidebar-done';
+    icon.dataset.sidebarDone = '';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = checkIcon;
+
+    const sr = document.createElement('span');
+    sr.className = 'sr-only sidebar-sr';
+    sr.textContent = 'selesai';
+
+    fragment.append(icon, sr);
+    return fragment;
+  }
+
+  function decorate() {
+    const root = document.querySelector('sl-sidebar-pane') ?? document.querySelector('.sidebar-content');
+    if (!root) return;
+
+    const progress = readProgress();
+
+    for (const link of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+      clearMarker(link);
+
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin) continue;
+
+      if (isDone(progress, url.pathname)) link.append(completeMarker());
+    }
+
+    for (const details of root.querySelectorAll<HTMLDetailsElement>('details')) {
+      const summary = details.querySelector<HTMLElement>(':scope > summary');
+      const list = details.querySelector<HTMLUListElement>(':scope > ul');
+      if (!summary || !list) continue;
+
+      const groupLabel = summary.querySelector<HTMLElement>('.group-label');
+      if (groupLabel) clearMarker(groupLabel);
+
+      const links = Array.from(list.querySelectorAll<HTMLAnchorElement>('a[href]')).filter((link) => {
+        const url = new URL(link.href, window.location.href);
+        return url.origin === window.location.origin;
+      });
+
+      let done = 0;
+      for (const link of links) {
+        const url = new URL(link.href, window.location.href);
+        if (isDone(progress, url.pathname)) done += 1;
+      }
+
+      if (!groupLabel || links.length === 0 || done === 0) continue;
+
+      if (done === links.length) {
+        groupLabel.append(completeMarker());
+        continue;
+      }
+
+      const count = document.createElement('span');
+      count.className = 'sidebar-group-count';
+      count.dataset.sidebarGroup = '';
+      count.setAttribute('aria-hidden', 'true');
+      count.textContent = `${done}/${links.length}`;
+
+      const sr = document.createElement('span');
+      sr.className = 'sr-only sidebar-sr';
+      sr.textContent = `${done} dari ${links.length} halaman selesai`;
+
+      groupLabel.append(count, sr);
+    }
+  }
+
+  decorate();
+  window.addEventListener('rustbook:progress', decorate);
+  window.addEventListener('storage', decorate);
+</script>

@@ -1,6 +1,108 @@
 # Panduan menulis bab
 
-Dokumen ini dipakai oleh penulis bab berikutnya. Isinya menjelaskan struktur file, komponen yang tersedia, aturan gaya, dan keadaan studi kasus Kasir Warung. Ikuti bagian yang relevan dengan babmu, lalu jalankan checklist di bagian akhir sebelum menganggap bab selesai.
+Dokumen ini dipakai oleh penulis bab berikutnya. Isinya menjelaskan pembaca sasaran, peta kurikulum, struktur file, komponen yang tersedia, aturan gaya, dan keadaan studi kasus Kasir Warung. Ikuti bagian yang relevan dengan babmu, lalu jalankan checklist di bagian akhir sebelum menganggap bab selesai.
+
+## Pembaca dan tujuan
+
+Pembaca utama situs ini adalah fullstack atau backend web developer yang sudah nyaman menulis kode di JavaScript/TypeScript, PHP, Go, atau Python. Mereka sudah memahami HTTP, database relasional, dan REST, tetapi belum tentu pernah memakai Rust.
+
+Tujuannya bukan sekadar bisa membuat CRUD. Pembaca harus keluar dengan pemahaman tentang:
+
+- aturan ownership dan borrow, serta kapan memilih `&str`, `String`, atau clone;
+- struct, enum, pattern matching, dan cara memodelkan data transaksi;
+- error handling dengan `Result`, `?`, dan response HTTP;
+- trait, generic, lifetime, dan trait object untuk abstraksi pembayaran;
+- test otomatis untuk logika dan endpoint;
+- iterator dan closure untuk laporan;
+- smart pointer, `Arc`, `Mutex`, `RwLock`, dan channel untuk state bersama;
+- thread dan async Rust, termasuk perbedaan keduanya;
+- web framework Rust dan cara membangun layanan backend yang bisa dijalankan.
+
+Situs ini tidak mengajarkan dasar pemrograman dari nol. Pembaca diasumsikan sudah bisa memakai terminal, Git, package manager, dan membaca pesan error. Materi Rust dimulai dari instalasi di Bab 1.
+
+The Rust Book tetap menjadi tulang punggung urutan materi. Konten situs adalah adaptasi, bukan terjemahan. Tambahan berupa studi kasus, capstone, dan proyek bonus harus selalu jelas statusnya dan tidak boleh mengarang fakta atau API.
+
+## Peta kurikulum dan studi kasus
+
+Kasir Warung dimulai sebagai CLI di Bab 1 dan tumbuh menjadi layanan backend. Setiap bab harus memakai konsep dari bab itu. Kalau buku tidak cocok dengan tema warung, adaptasi tema secukupnya, tetapi konsep bab tetap harus muncul.
+
+| Bab | Konsep utama dari buku | Peran di Kasir Warung |
+| --- | --- | --- |
+| 1 | Cargo, `rustc`, program pertama | Proyek `kasir_warung`, header struk CLI |
+| 2 | `std::io`, `rand`, `match`, `loop` | Input jumlah barang 1 sampai 3, validasi dengan loop dan match |
+| 3 | Variabel, tipe, fungsi, `if`, loop | `hitung_subtotal`, diskon, total dari array harga |
+| 4 | Ownership, borrow, slice | Nama item `String` dimiliki transaksi; fungsi menerima `&str` atau slice, clone hanya saat perlu |
+| 5 | Struct dan method | `MenuItem`, `ItemPesanan`, `Transaksi`, method subtotal dan total |
+| 6 | Enum, `Option`, `match` | `StatusPesanan`, status bayar, dan diskon opsional |
+| 7 | Package, crate, module | Pisahkan `menu`, `transaksi`, dan `laporan`; `lib.rs` plus `main.rs` |
+| 8 | `Vec`, `String`, `HashMap` | Daftar item pesanan, menu berdasarkan kode, nama item |
+| 9 | `panic!`, `Result`, `?` | Error validasi dan pembayaran sebagai nilai, bukan panic |
+| 10 | Generic, trait, lifetime | `trait PaymentMethod`, fungsi generik pembayaran, lifetime pada data pinjaman |
+| 11 | Test otomatis | Unit test subtotal dan diskon, integration test alur bayar, kasus error |
+| 12 | Proyek I/O CLI | CLI laporan harian dari file transaksi, argumen, modul, dan test |
+| 13 | Iterator dan closure | Rekap transaksi: filter status, map total, fold, kelompokkan metode bayar |
+| 14 | Cargo dan crates.io | Workspace `kasir-core` dan `kasir-cli`, profil release, paket siap dibagikan |
+| 15 | Smart pointer | `Rc<RefCell<MenuCache>>` untuk cache single-thread dan batasnya |
+| 16 | Thread, `Arc`, `Mutex`, channel | Worker memproses transaksi, state bersama, antrean lewat channel |
+| 17 | Async, `await`, future, stream | Pembayaran dan akses data async dengan Tokio, join beberapa tugas |
+| 18 | OOP dan trait object | `Box<dyn PaymentMethod>` untuk registry metode pembayaran |
+| 19 | Pattern dan matching | Parsing perintah atau request, destructuring enum, match guard |
+| 20 | Fitur lanjutan | Makro kecil untuk validasi atau error response, trait bound lanjutan |
+| 21 | Proyek akhir web server | Server TCP manual dengan thread pool, endpoint health dan transaksi |
+| Capstone | axum, Tokio, SQLite, `sqlx` | REST API Kasir Warung, state bersama, error HTTP, test endpoint, release |
+
+Aturan peta:
+
+- Jangan menulis bab 4 sampai 21 sebelum ada tugas khusus untuk bab itu.
+- Setiap bab yang menyentuh Kasir Warung harus meninggalkan kode yang bisa dijalankan dan output contoh yang benar.
+- Jangan memakai fitur dari bab yang belum diajarkan tanpa penjelasan singkat. Kalau terpaksa, jelaskan alasannya di callout.
+- Bab 4 dan 5 mengubah cara data transaksi disimpan. Jangan mempertahankan array harga dari Bab 3 kalau struct sudah tersedia.
+- Bab 9 mengganti panic pada input pengguna dengan `Result`. Ini titik perubahan gaya error dari CLI menjadi layanan.
+- Bab 16 dan 17 berbeda. Thread memakai `std::thread` dan sinkronisasi blocking; async memakai future dan executor. Jangan mencampur keduanya tanpa menjelaskan bedanya.
+- Bab 21 tetap membangun server dari nol. Capstone baru memakai framework.
+
+## Track Capstone
+
+Capstone adalah materi tambahan di luar 21 bab The Rust Book. Statusnya terpisah dari buku dan tidak boleh disamakan dengan Bab 21.
+
+Tujuan capstone adalah mengubah Kasir Warung menjadi layanan HTTP dengan axum dan Tokio, memakai SQLite lewat `sqlx`. Cakupan wajibnya:
+
+- routing, handler async, dan extractor `Path`, `Json`, `State`;
+- shared state dengan `Arc`;
+- error aplikasi yang dikonversi menjadi response HTTP memakai `IntoResponse`;
+- database async SQLite dengan `sqlx`, termasuk migrasi;
+- test endpoint tanpa membuka port jaringan;
+- konfigurasi lewat environment variable, graceful shutdown, `cargo build --release`, dan cara menjalankan binary.
+
+Halaman capstone:
+
+- `src/content/docs/capstone/index.mdx`: ringkasan, prasyarat, rencana endpoint, dan daftar versi.
+- `src/content/docs/capstone/framework.mdx`: perbandingan singkat axum, actix-web, dan rocket, plus alasan memilih axum.
+
+Halaman rincian endpoint dan database ditulis setelah Bab 4 sampai Bab 21 selesai. Selama belum ditulis, jangan menampilkan contoh kode framework yang seolah sudah jadi.
+
+Sumber resmi wajib untuk capstone:
+
+- [docs.rs/axum](https://docs.rs/axum/)
+- [docs.rs/tokio](https://docs.rs/tokio/)
+- [docs.rs/sqlx](https://docs.rs/sqlx/)
+- dokumentasi resmi framework yang sedang dipakai
+
+Per 16 November 2026, versi stabil yang dipakai dalam rencana adalah axum 0.8.9, tokio 1.54.1, dan sqlx 0.9.0. Cek ulang sebelum menulis kode. Jangan mengarang nama module, tipe, atau signature.
+
+Alasan memilih axum ada di halaman perbandingan. Ringkasnya: axum berada di ekosistem Tokio yang sama dengan Bab 17, memakai hyper dan tower, dan memperlihatkan routing serta extractor secara eksplisit. Itu alasan kurikulum, bukan klaim bahwa axum selalu lebih cepat atau lebih baik dari framework lain.
+
+## Proyek Bonus
+
+Proyek Bonus adalah URL shortener dengan statistik klik di folder `proyek-bonus/` di root repo. Ini bukan bagian dari 21 bab dan bukan Capstone. Tujuannya adalah contoh jadi yang memakai seluruh konsep Rust Book dalam satu layanan kecil.
+
+- Kode lengkap ada di `proyek-bonus/` dan tidak ikut build Astro.
+- Halaman situs ada di `src/content/docs/proyek-bonus/`: pengantar plus empat langkah.
+- `proyek-bonus/COVERAGE.md` adalah matriks konsep ke `file:baris`.
+- `proyek-bonus/scripts/check-coverage.mjs` memeriksa semua referensi file dan baris.
+- Versi crate mengikuti docs.rs dan crates.io. Saat ini axum 0.8.9, tokio 1.54.1, sqlx 0.9.0, async-trait 0.1.92, rand 0.10.4.
+- Kode yang membutuhkan server atau database tidak dipasang di RustPlayground. Tampilkan sebagai blok kode biasa beserta perintah `cargo run` dan `curl`.
+- Setiap halaman langkah memakai `StudyCase`, memiliki blok `Kalau di bahasa lain`, dan diakhiri kuis.
 
 ## Prasyarat
 
@@ -48,6 +150,15 @@ src/
 │   │   ├── komentar.mdx
 │   │   ├── control-flow.mdx
 │   │   └── studi-kasus.mdx
+│   ├── capstone/
+│   │   ├── index.mdx
+│   │   └── framework.mdx
+│   ├── proyek-bonus/
+│   │   ├── index.mdx
+│   │   ├── langkah-1.mdx
+│   │   ├── langkah-2.mdx
+│   │   ├── langkah-3.mdx
+│   │   └── langkah-4.mdx
 │   └── bab-4.mdx ... bab-21.mdx
 ├── data/chapters.ts
 ├── scripts/progress.ts
@@ -258,6 +369,8 @@ Aturan ini keras. Konten yang melanggar akan ditolak.
 13. Sebut nama file di atas blok kode kalau konteksnya penting. Gunakan prop `filename` pada RustPlayground.
 14. Tautan internal memakai path relatif, misalnya `[Instalasi](instalasi/)` dari halaman bab atau `[Bab 1](../bab-1/)` dari halaman lain. Jangan memakai `/bab-1/`, karena base GitHub Pages tidak ikut ditambahkan ke link absolut.
 15. Materi mengikuti urutan buku. Jangan memakai konsep dari bab yang jauh lebih depan tanpa menjelaskannya singkat.
+16. Setiap bab punya satu blok `:::note[Kalau di bahasa lain]` yang singkat. Bandingkan dengan JS/TS, Go, PHP, atau Python hanya kalau perbandingannya membantu. Contoh yang sah: ownership vs garbage collector, `Result` vs `try/catch`, trait vs interface, async Rust vs Promise atau goroutine, `cargo` vs npm/composer/go mod. Jangan memaksakan perbandingan dan jangan menulis klaim performa tanpa sumber.
+17. Materi capstone dan proyek bonus memakai dokumentasi resmi serta versi crate yang dicek ke docs.rs. Jangan menyalin API dari ingatan. Tautkan sumbernya di halaman terkait.
 
 ## Studi kasus Kasir Warung
 
@@ -459,6 +572,8 @@ Path halaman selalu diakhiri garis miring. Semua akses `localStorage` dibungkus 
 
 Event `rustbook:progress` dipancarkan setiap kali data berubah. Komponen yang menampilkan progres boleh mendengarkan event itu. Jangan menghapus kunci ini saat pengguna membuka halaman baru.
 
+`src/components/Sidebar.astro` adalah override Starlight yang menambahkan tanda selesai ke link sidebar. Script membaca kunci yang sama, menyesuaikan path dengan `import.meta.env.BASE_URL`, dan mendengarkan `rustbook:progress`. Grup bab menampilkan `2/5` saat sebagian selesai dan ikon centang saat semua halaman selesai. Kalau localStorage diblokir, sidebar tetap tampil normal tanpa tanda.
+
 ## Internasionalisasi
 
 Bahasa Indonesia adalah locale root. Halaman berbahasa Indonesia berada langsung di `src/content/docs/`. Bahasa Inggris dikonfigurasi sebagai locale kedua, tetapi belum punya konten terjemahan. Starlight memakai konten default sebagai fallback untuk `/en/`.
@@ -475,6 +590,7 @@ Sebelum menyatakan bab selesai:
 - [ ] Semua kode Rust sudah dicoba di playground. Kode yang sengaja gagal memakai `expectError`.
 - [ ] Setiap halaman punya `<ChapterCompletion />` di bagian paling bawah.
 - [ ] Ada minimal satu callout yang relevan, bukan callout tempelan.
+- [ ] Ada satu blok `Kalau di bahasa lain` yang singkat dan tidak memaksakan perbandingan.
 - [ ] Studi kasus dilanjutkan atau dijelaskan kenapa bab ini belum menyentuhnya.
 - [ ] Tidak ada em dash atau en dash di `src/content`.
 - [ ] Tidak ada emoji di heading atau callout.

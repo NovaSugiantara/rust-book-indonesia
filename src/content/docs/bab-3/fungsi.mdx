@@ -89,6 +89,10 @@ Blok kurung kurawal juga bisa menjadi expression:
 
 Baris `x + 1` tidak diakhiri titik koma. Tanpa titik koma, baris itu menjadi expression yang menghasilkan nilai untuk blok. Kalau ditambah titik koma, nilainya menjadi statement dan blok mengembalikan unit.
 
+:::note[Kalau di bahasa lain]
+Di JavaScript, `if` adalah statement, dan untuk menghasilkan nilai kamu biasanya memakai ternary seperti `condition ? 5 : 6`. Di Rust, `if` dan blok kurung kurawal adalah expression, jadi hasilnya bisa langsung dipakai di sisi kanan `let`. Ini bukan klaim soal kecepatan, hanya perbedaan bentuk bahasa.
+:::
+
 Statement tidak bisa dipakai sebagai nilai. Kode berikut sengaja salah:
 
 <RustPlayground
