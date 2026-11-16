@@ -13,3 +13,9 @@ dist/
 /proyek-bonus/*.db
 /proyek-bonus/*.db-shm
 /proyek-bonus/*.db-wal
+
+# Capstone Kasir Warung
+/capstone-kasir/target/
+/capstone-kasir/*.db
+/capstone-kasir/*.db-shm
+/capstone-kasir/*.db-wal

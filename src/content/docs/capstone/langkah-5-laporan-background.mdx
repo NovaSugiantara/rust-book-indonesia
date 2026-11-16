@@ -1,0 +1,245 @@
+---
+title: 'Langkah 5: Laporan dan background task'
+description: 'Menghitung laporan harian dengan iterator dan HashMap, lalu mencatat event lewat channel dan worker.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Laporan harian tidak menghitung ulang item pesanan. Ia membaca tabel pembayaran yang sudah tercatat, lalu meringkas total per metode. Notifikasi pembayaran diproses di luar request lewat channel.
+
+<StudyCase title="Capstone: laporan dan event" intro="Iterator untuk rekap, channel untuk worker, tracing untuk observability.">
+  <StudyCaseStep
+    title="Rekap dengan iterator dan HashMap"
+    goal="Menjumlahkan total per metode dari hasil query."
+  >
+    ```rust
+    pub fn rekap_per_metode<I>(rows: I) -> HashMap<String, u32>
+    where
+        I: IntoIterator<Item = (String, u32)>,
+    {
+        rows.into_iter()
+            .fold(HashMap::new(), |mut rekap, (metode, total)| {
+                *rekap.entry(metode).or_insert(0) += total;
+                rekap
+            })
+    }
+    ```
+
+    Fungsi ini tidak tahu database. Ia hanya menerima iterator pasangan metode dan total, sehingga mudah dites.
+
+    <Fragment slot="hint">
+      `entry(...).or_insert(0)` membuat nilai awal hanya jika metode belum ada.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Satu pass menghasilkan map total per metode.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Laporan harian dari payments"
+    goal="Mengambil pembayaran hari ini dan membentuk response."
+  >
+    ```rust
+    pub async fn daily_report(
+        pool: &SqlitePool,
+        tanggal: Option<&str>,
+    ) -> Result<ReportResponse, AppError> {
+        let rows = sqlx::query_as::<_, (String, i64)>(
+            "SELECT metode, total FROM payments \
+             WHERE date(paid_at) = COALESCE(date(?), date('now'))",
+        )
+        .bind(tanggal)
+        .fetch_all(pool)
+        .await?;
+
+        let jumlah_transaksi = rows.len() as u32;
+        let total: u32 = rows.iter().map(|(_, total)| *total as u32).sum();
+        let per_metode = rekap_per_metode(
+            rows.into_iter()
+                .map(|(metode, total)| (metode, total as u32)),
+        );
+
+        let tanggal = if let Some(tanggal) = tanggal {
+            tanggal.to_string()
+        } else {
+            sqlx::query_scalar::<_, String>("SELECT date('now')")
+                .fetch_one(pool)
+                .await?
+        };
+
+        Ok(ReportResponse {
+            tanggal,
+            total,
+            jumlah_transaksi,
+            per_metode,
+        })
+    }
+    ```
+
+    `COALESCE(date(?), date('now'))` memakai tanggal yang diminta, atau tanggal hari ini jika query tidak memberi `tanggal`.
+
+    <Fragment slot="hint">
+      Laporan hanya membaca `payments`, bukan semua order, agar pesanan yang belum dibayar tidak masuk omzet.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Response berisi total, jumlah transaksi, dan rincian per metode.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Worker notifikasi"
+    goal="Memindahkan pencatatan event keluar dari jalur request."
+  >
+    ```rust
+    pub fn spawn_worker(pool: SqlitePool, mut rx: mpsc::Receiver<Notifikasi>) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            while let Some(notifikasi) = rx.recv().await {
+                tracing::info!(
+                    order_id = notifikasi.order_id,
+                    pesan = %notifikasi.pesan,
+                    "notifikasi pembayaran"
+                );
+
+                if let Err(error) = sqlx::query(
+                    "INSERT INTO events (order_id, jenis, pesan) VALUES (?, 'pembayaran', ?)",
+                )
+                .bind(notifikasi.order_id)
+                .bind(&notifikasi.pesan)
+                .execute(&pool)
+                .await
+                {
+                    tracing::error!(error = %error, "gagal menyimpan event pembayaran");
+                }
+            }
+        })
+    }
+    ```
+
+    Handler pembayaran mengirim `Notifikasi` lewat `mpsc::Sender`. Worker menulis event dan log. Kalau worker berhenti, handler tetap menyelesaikan response dan hanya mencatat warning.
+
+    <Fragment slot="hint">
+      Gunakan channel dengan kapasitas terbatas agar antrean tidak tumbuh tanpa batas.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Request pembayaran tidak menunggu insert event selesai.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Shared state dan tracing"
+    goal="Menyatukan pool dan sender di Arc<AppState>."
+  >
+    ```rust
+    #[derive(Clone)]
+    pub struct AppState {
+        pub pool: SqlitePool,
+        pub notif_tx: mpsc::Sender<Notifikasi>,
+    }
+
+    pub type SharedState = Arc<AppState>;
+    ```
+
+    ```rust
+    let (notif_tx, notif_rx) = mpsc::channel(128);
+    let _worker = spawn_worker(pool.clone(), notif_rx);
+    let state: SharedState = Arc::new(AppState { pool, notif_tx });
+    ```
+
+    `tracing` dipakai untuk log startup, pembayaran, error database, dan shutdown. Level default `info`, bisa diubah lewat `RUST_LOG`.
+
+    <Fragment slot="hint">
+      Jangan menaruh data rahasia di log. Catat ID dan status, bukan isi payload sensitif.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Semua handler menerima state yang sama tanpa membuat koneksi database baru per request.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Coba laporan dan event
+
+```console
+$ curl -sS http://127.0.0.1:3000/api/reports/daily
+{"tanggal":"2026-11-16","total":32000,"jumlah_transaksi":1,"per_metode":{"qris":32000}}
+
+$ curl -sS http://127.0.0.1:3000/api/events
+[{"id":1,"order_id":1,"jenis":"pembayaran","pesan":"Pesanan 1 dibayar dengan qris sebesar Rp32000","created_at":"2026-11-16 16:40:29"}]
+```
+
+:::note[Kalau di bahasa lain]
+Express dan Gin menulis laporan langsung di handler atau service. Laravel memakai query builder dan job queue untuk pekerjaan latar. FastAPI memakai background task. Rust memakai iterator untuk rekap dan channel serta task Tokio untuk pekerjaan di luar request.
+:::
+
+:::tip[Tips]
+Untuk produksi, pertimbangkan worker terpisah atau message broker. Channel dalam proses hilang saat proses berhenti dan tidak menggantikan antrean persisten.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa laporan membaca tabel payments?',
+      options: [
+        'Agar hanya pembayaran yang benar-benar terjadi masuk omzet',
+        'Agar semua order masuk laporan',
+        'Agar harga menu berubah',
+        'Agar worker berhenti',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Order yang belum dibayar tidak dihitung.',
+        'Salah. Order baru tidak boleh masuk omzet.',
+        'Salah. Laporan tidak mengubah harga.',
+        'Salah. Worker terpisah.',
+      ],
+      explanation:
+        'Sumber laporan adalah fakta pembayaran, bukan niat pesanan.',
+    },
+    {
+      question: 'Apa keuntungan background worker untuk event?',
+      options: [
+        'Handler tidak menunggu pekerjaan pencatatan selesai',
+        'Handler menjadi sinkron',
+        'Database tidak diperlukan',
+        'Status tidak perlu diubah',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Request dan pekerjaan latar dipisahkan.',
+        'Salah. Handler tetap async.',
+        'Salah. Worker memakai database.',
+        'Salah. Status tetap diubah.',
+      ],
+      explanation:
+        'Channel memindahkan pekerjaan tambahan dari jalur response.',
+    },
+    {
+      question: 'Mengapa channel diberi kapasitas?',
+      options: [
+        'Agar antrean tidak tumbuh tanpa batas',
+        'Agar pesan menjadi JSON',
+        'Agar worker berjalan di thread OS baru',
+        'Agar database membuat tabel',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Kapasitas memberi backpressure.',
+        'Salah. Pesan adalah struct Rust.',
+        'Salah. Task Tokio tidak otomatis satu thread OS.',
+        'Salah. Tabel dibuat migrasi.',
+      ],
+      explanation:
+        'Antrean terbatas membantu mengendalikan beban.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

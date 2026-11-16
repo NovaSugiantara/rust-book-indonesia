@@ -1,0 +1,244 @@
+---
+title: 'Langkah 3: Pesanan dan validasi'
+description: 'Membuat pesanan dari item menu, menghitung total di server, dan menyimpan dalam transaksi database.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Pesanan tidak boleh menyimpan harga dari request. API membaca menu, memvalidasi item, menghitung total, lalu menyimpan order dan item dalam satu transaksi database.
+
+<StudyCase title="Capstone: membuat pesanan" intro="Validasi item, hitung total, dan simpan order secara atomik.">
+  <StudyCaseStep
+    title="Domain item dan total"
+    goal="Menjaga perhitungan tetap di kasir-core."
+  >
+    ```rust
+    pub struct ItemPesanan {
+        pub kode: String,
+        pub jumlah: u32,
+        pub harga: u32,
+    }
+
+    impl ItemPesanan {
+        pub fn new(kode: impl Into<String>, jumlah: u32, harga: u32) -> Result<Self, KasirError> {
+            if jumlah == 0 {
+                return Err(KasirError::InputTidakValid(
+                    "jumlah item harus lebih dari nol".to_string(),
+                ));
+            }
+
+            Ok(Self {
+                kode: kode.into(),
+                jumlah,
+                harga,
+            })
+        }
+
+        pub fn subtotal(&self) -> Result<u32, KasirError> {
+            self.harga.checked_mul(self.jumlah).ok_or_else(|| {
+                KasirError::InputTidakValid("subtotal item melebihi batas u32".to_string())
+            })
+        }
+    }
+    ```
+
+    `checked_mul` dan `checked_add` mencegah overflow yang tidak terdeteksi.
+
+    <Fragment slot="hint">
+      Total dihitung di server, bukan dikirim client. Client hanya mengirim kode dan jumlah.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Aturan jumlah dan overflow berada di domain yang bisa dites tanpa HTTP.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Validasi transaksi"
+    goal="Menolak pelanggan kosong dan pesanan tanpa item."
+  >
+    ```rust
+    impl Transaksi {
+        pub fn baru(pelanggan: impl Into<String>, items: Vec<ItemPesanan>) -> Result<Self, KasirError> {
+            let pelanggan = pelanggan.into();
+
+            if pelanggan.trim().is_empty() {
+                return Err(KasirError::InputTidakValid(
+                    "nama pelanggan tidak boleh kosong".to_string(),
+                ));
+            }
+
+            if items.is_empty() {
+                return Err(KasirError::InputTidakValid(
+                    "pesanan harus memiliki minimal satu item".to_string(),
+                ));
+            }
+
+            Ok(Self {
+                pelanggan,
+                items,
+                status: StatusPesanan::Baru,
+            })
+        }
+
+        pub fn total(&self) -> Result<u32, KasirError> {
+            self.items.iter().try_fold(0u32, |total, item| {
+                total
+                    .checked_add(item.subtotal()?)
+                    .ok_or_else(|| KasirError::InputTidakValid("total melebihi batas u32".to_string()))
+            })
+        }
+    }
+    ```
+
+    Status awal selalu `Baru`. Pembayaran adalah satu-satunya jalur menuju `Dibayar`.
+
+    <Fragment slot="hint">
+      Gunakan `try_fold` agar error subtotal langsung diteruskan.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Domain menolak pesanan kosong sebelum menyentuh database.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Simpan order dan item dalam satu transaksi"
+    goal="Mencegah order tersimpan tanpa item."
+  >
+    ```rust
+    let mut tx = pool.begin().await?;
+    let mut items = Vec::with_capacity(request.items.len());
+
+    for item in &request.items {
+        if item.jumlah == 0 {
+            return Err(AppError::BadRequest(
+                "jumlah item harus lebih dari nol".to_string(),
+            ));
+        }
+
+        let kode = normalize_kode(&item.kode);
+        let row = sqlx::query_as::<_, (String, i64, i64)>(
+            "SELECT nama, harga, aktif FROM menu WHERE kode = ?",
+        )
+        .bind(&kode)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("menu {kode} tidak ditemukan")))?;
+
+        if row.2 == 0 {
+            return Err(AppError::BadRequest(format!("menu {kode} sedang tidak aktif")));
+        }
+
+        items.push(ItemPesanan::new(kode, item.jumlah, row.1 as u32)?);
+    }
+
+    let transaksi = Transaksi::baru(request.pelanggan, items)?;
+    let total = transaksi.total()?;
+
+    let result = sqlx::query("INSERT INTO orders (pelanggan, status, total) VALUES (?, ?, ?)")
+        .bind(&transaksi.pelanggan)
+        .bind(transaksi.status.as_str())
+        .bind(i64::from(total))
+        .execute(&mut *tx)
+        .await?;
+
+    let order_id = result.last_insert_rowid();
+    ```
+
+    Setelah order dibuat, setiap item disimpan ke `order_items` dengan harga saat transaksi. `tx.commit()` hanya dipanggil setelah semua insert berhasil.
+
+    <Fragment slot="hint">
+      Error di tengah loop akan membuat `Transaction` di-drop dan rollback.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Order dan item konsisten, atau tidak tersimpan sama sekali.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Coba dengan curl
+
+```console
+$ curl -sS -X POST http://127.0.0.1:3000/api/orders \
+  -H 'content-type: application/json' \
+  -d '{"pelanggan":"Bu Sri","items":[{"kode":"KOPI","jumlah":2},{"kode":"ROTI","jumlah":1}]}'
+{"id":1,"pelanggan":"Bu Sri","status":"baru","total":32000,"metode":null,"created_at":"2026-11-16 16:40:29","paid_at":null,"items":[{"kode":"KOPI","jumlah":2,"harga":12000,"subtotal":24000},{"kode":"ROTI","jumlah":1,"harga":8000,"subtotal":8000}]}
+```
+
+Pesanan dengan item kosong atau menu tidak dikenal ditolak dengan JSON error dan status 4xx.
+
+:::note[Kalau di bahasa lain]
+Express dan FastAPI memvalidasi body dengan library schema, NestJS memakai DTO dan pipe, Gin memakai binding, Laravel memakai FormRequest. Rust memakai serde untuk bentuk JSON dan tipe domain untuk aturan bisnis.
+:::
+
+:::tip[Tips]
+Simpan harga satuan pada item pesanan. Dengan begitu, perubahan harga menu di masa depan tidak mengubah total pesanan lama.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa order dan item disimpan dalam satu transaksi?',
+      options: [
+        'Agar tidak ada order tanpa item saat insert gagal di tengah',
+        'Agar JSON lebih kecil',
+        'Agar route menjadi GET',
+        'Agar harga diambil dari client',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Semua insert berhasil atau rollback.',
+        'Salah. Ukuran JSON tidak terkait.',
+        'Salah. Route tetap POST.',
+        'Salah. Harga tetap dari database.',
+      ],
+      explanation:
+        'Transaksi database menjaga konsistensi antar tabel.',
+    },
+    {
+      question: 'Mengapa memakai checked_mul pada subtotal?',
+      options: [
+        'Untuk mencegah overflow saat harga dikali jumlah',
+        'Untuk mengubah u32 menjadi String',
+        'Untuk membuat query lebih cepat',
+        'Untuk menonaktifkan validasi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Hasil yang melebihi u32 menjadi error.',
+        'Salah. Tidak ada konversi String.',
+        'Salah. Ini bukan optimisasi query.',
+        'Salah. Justru menambah validasi.',
+      ],
+      explanation:
+        'Input pengguna tidak boleh menyebabkan panic overflow.',
+    },
+    {
+      question: 'Apa yang dikirim client saat membuat pesanan?',
+      options: [
+        'Pelanggan, kode menu, dan jumlah',
+        'Pelanggan dan total harga',
+        'Harga satuan setiap item',
+        'Status akhir pesanan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Harga dan total dihitung server.',
+        'Salah. Total tidak dipercaya dari client.',
+        'Salah. Harga diambil dari database.',
+        'Salah. Status awal ditentukan server.',
+      ],
+      explanation:
+        'Server memegang kendali atas harga dan status awal.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

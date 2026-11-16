@@ -1,0 +1,163 @@
+---
+title: 'Menjalankan dan deploy Capstone'
+description: 'Menjalankan API, menguji alur curl, graceful shutdown, dan batas deployment.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Capstone selesai ketika API bisa dijalankan, diuji, dan dijelaskan batasnya. Halaman ini merangkum perintah, alur curl, dan hal yang perlu ditambahkan sebelum produksi.
+
+## Menjalankan lokal
+
+```console
+$ cd capstone-kasir
+$ export BIND_ADDR=127.0.0.1:3000
+$ export DATABASE_URL=sqlite://kasir.db
+$ export RUST_LOG=info
+$ cargo run -p kasir-api
+```
+
+Migrasi dijalankan otomatis. Database SQLite dibuat jika belum ada.
+
+## Alur curl lengkap
+
+```console
+# menu
+$ curl -sS -X POST http://127.0.0.1:3000/api/menu \
+  -H 'content-type: application/json' \
+  -d '{"kode":"KOPI","nama":"Kopi","harga":12000}'
+$ curl -sS -X POST http://127.0.0.1:3000/api/menu \
+  -H 'content-type: application/json' \
+  -d '{"kode":"ROTI","nama":"Roti","harga":8000}'
+
+# pesanan
+$ curl -sS -X POST http://127.0.0.1:3000/api/orders \
+  -H 'content-type: application/json' \
+  -d '{"pelanggan":"Bu Sri","items":[{"kode":"KOPI","jumlah":2},{"kode":"ROTI","jumlah":1}]}'
+
+# pembayaran
+$ curl -sS -X POST http://127.0.0.1:3000/api/orders/1/pay \
+  -H 'content-type: application/json' \
+  -d '{"metode":"qris"}'
+
+# status
+$ curl -sS -X PATCH http://127.0.0.1:3000/api/orders/1/status \
+  -H 'content-type: application/json' \
+  -d '{"status":"diproses"}'
+
+# laporan
+$ curl -sS http://127.0.0.1:3000/api/reports/daily
+{"tanggal":"2026-11-16","total":32000,"jumlah_transaksi":1,"per_metode":{"qris":32000}}
+```
+
+Transisi ilegal menghasilkan 409 dan body JSON konsisten:
+
+```console
+$ curl -sS -i -X PATCH http://127.0.0.1:3000/api/orders/2/status \
+  -H 'content-type: application/json' \
+  -d '{"status":"selesai"}'
+HTTP/1.1 409 Conflict
+content-type: application/json
+
+{"error":"transisi baru ke selesai tidak diizinkan"}
+```
+
+## Release
+
+```console
+$ cargo build --release
+$ ./target/release/kasir-api
+```
+
+Binary release membaca environment yang sama dengan `cargo run`.
+
+## Graceful shutdown
+
+Server memakai `axum::serve(...).with_graceful_shutdown(shutdown_signal())`. Tekan Ctrl-C; listener berhenti menerima koneksi baru dan request yang sedang berjalan diberi kesempatan selesai.
+
+## Docker
+
+Dockerfile tidak disertakan karena tidak wajib. Untuk deployment sederhana, binary release dan volume SQLite sudah cukup. Jika memakai Docker, buat multi-stage build yang:
+
+1. membangun dengan `cargo build --release`,
+2. menyalin binary ke image runtime minimal,
+3. menyimpan file SQLite di volume, bukan di layer image,
+4. menjalankan binary dengan env `BIND_ADDR`, `DATABASE_URL`, dan `RUST_LOG`.
+
+## Checklist sebelum produksi
+
+- Tambahkan autentikasi dan otorisasi.
+- Batasi ukuran body dan jumlah request.
+- Tambahkan timeout dan retry untuk dependency eksternal.
+- Gunakan koneksi database yang sesuai beban dan backup SQLite.
+- Jalankan di belakang reverse proxy dengan TLS.
+- Pisahkan database produksi dari database lokal.
+- Tambahkan observability dan alert, bukan hanya log.
+- Uji graceful shutdown dengan request yang sedang berjalan.
+
+:::note[Kalau di bahasa lain]
+Deployment Express, NestJS, Gin, Laravel, dan FastAPI juga memerlukan env, migrasi, reverse proxy, dan manajemen database. Perbedaannya, Rust menghasilkan binary native yang bisa dijalankan tanpa runtime bahasa tambahan.
+:::
+
+:::tip[Tips]
+Jangan menganggap capstone ini siap produksi hanya karena test lulus. Keamanan, autentikasi, dan operasi database tetap harus dirancang.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang harus disimpan di volume saat memakai Docker?',
+      options: ['File database SQLite', 'Binary hasil build', 'File Cargo.toml', 'Source Rust'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Database harus bertahan di luar lifecycle container.',
+        'Salah. Binary ada di image.',
+        'Salah. Cargo.toml bagian build.',
+        'Salah. Source tidak perlu di runtime.',
+      ],
+      explanation:
+        'Volume menjaga data SQLite tetap ada saat container diganti.',
+    },
+    {
+      question: 'Apa fungsi graceful shutdown?',
+      options: [
+        'Berhenti menerima koneksi baru dan menyelesaikan request berjalan',
+        'Menghapus database',
+        'Membuat binary release',
+        'Mengubah status pesanan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Shutdown tidak memutus pekerjaan secara paksa.',
+        'Salah. Database tidak dihapus.',
+        'Salah. Build terpisah.',
+        'Salah. Status dikelola endpoint.',
+      ],
+      explanation:
+        'axum memakai future shutdown untuk memberi kesempatan cleanup.',
+    },
+    {
+      question: 'Mengapa capstone belum siap produksi?',
+      options: [
+        'Karena belum ada autentikasi, pembatasan request, dan operasi database produksi',
+        'Karena tidak bisa dijalankan',
+        'Karena tidak memakai JSON',
+        'Karena tidak punya endpoint health',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Fitur produksi di luar cakupan latihan.',
+        'Salah. API bisa dijalankan.',
+        'Salah. API memakai JSON.',
+        'Salah. Health tersedia.',
+      ],
+      explanation:
+        'Capstone adalah latihan arsitektur, bukan blueprint produksi lengkap.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

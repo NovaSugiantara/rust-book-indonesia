@@ -1,0 +1,235 @@
+---
+title: 'Langkah 2: CRUD menu'
+description: 'Membuat route menu dan query sqlx untuk daftar, detail, tambah, ubah, dan hapus menu.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Menu adalah sumber harga. Pesanan tidak boleh menerima harga dari client; harga harus dibaca dari database. Langkah ini membuat CRUD menu dan memastikan kode menu dinormalisasi.
+
+<StudyCase title="Capstone: menu dengan sqlx" intro="Menghubungkan route menu ke query SQLite dan memvalidasi input.">
+  <StudyCaseStep
+    title="Daftarkan route menu"
+    goal="Menyiapkan endpoint daftar, detail, tambah, ubah, dan hapus."
+  >
+    ```rust
+    pub fn router(state: SharedState) -> Router {
+        Router::new()
+            .route("/health", get(health))
+            .route("/api/menu", get(list_menu).post(create_menu))
+            .route(
+                "/api/menu/{kode}",
+                get(get_menu).put(update_menu).delete(delete_menu),
+            )
+            .route("/api/orders", post(create_order))
+            .route("/api/orders/{id}", get(get_order))
+            .route("/api/orders/{id}/pay", post(pay_order))
+            .route("/api/orders/{id}/status", patch(update_status))
+            .route("/api/reports/daily", get(daily_report))
+            .route("/api/events", get(list_events))
+            .with_state(state)
+    }
+    ```
+
+    axum 0.8 memakai path parameter `{kode}`, bukan `:kode`.
+
+    <Fragment slot="hint">
+      `with_state` menghubungkan handler ke `Arc<AppState>` lewat extractor `State`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Router memuat semua endpoint API dan health dalam satu tempat.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Query daftar dan detail"
+    goal="Mengembalikan menu sebagai JSON dengan tipe yang jelas."
+  >
+    ```rust
+    pub async fn list_menu(pool: &SqlitePool) -> Result<Vec<MenuResponse>, AppError> {
+        let rows = sqlx::query_as::<_, (String, String, i64, i64)>(
+            "SELECT kode, nama, harga, aktif FROM menu ORDER BY kode",
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(kode, nama, harga, aktif)| MenuResponse {
+                kode,
+                nama,
+                harga: harga as u32,
+                aktif: aktif != 0,
+            })
+            .collect())
+    }
+
+    pub async fn get_menu(pool: &SqlitePool, kode: &str) -> Result<MenuResponse, AppError> {
+        let kode = normalize_kode(kode);
+        let row = sqlx::query_as::<_, (String, String, i64, i64)>(
+            "SELECT kode, nama, harga, aktif FROM menu WHERE kode = ?",
+        )
+        .bind(&kode)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("menu {kode} tidak ditemukan")))?;
+
+        Ok(MenuResponse {
+            kode: row.0,
+            nama: row.1,
+            harga: row.2 as u32,
+            aktif: row.3 != 0,
+        })
+    }
+    ```
+
+    `fetch_optional` membedakan data tidak ditemukan dari error database. `ok_or_else` mengubah `None` menjadi `AppError::NotFound`.
+
+    <Fragment slot="hint">
+      Jangan memakai `unwrap` pada hasil query yang bergantung pada input pengguna.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Client menerima 200 dengan JSON atau 404 dengan body error yang konsisten.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Validasi dan simpan menu"
+    goal="Menolak kode, nama, atau harga yang tidak valid."
+  >
+    ```rust
+    pub async fn create_menu(
+        pool: &SqlitePool,
+        request: CreateMenuRequest,
+    ) -> Result<MenuResponse, AppError> {
+        let kode = normalize_kode(&request.kode);
+        let nama = request.nama.trim();
+
+        if kode.is_empty() {
+            return Err(AppError::BadRequest("kode menu tidak boleh kosong".to_string()));
+        }
+
+        if nama.is_empty() {
+            return Err(AppError::BadRequest("nama menu tidak boleh kosong".to_string()));
+        }
+
+        if request.harga == 0 {
+            return Err(AppError::BadRequest("harga menu harus lebih dari nol".to_string()));
+        }
+
+        let result = sqlx::query("INSERT INTO menu (kode, nama, harga, aktif) VALUES (?, ?, ?, 1)")
+            .bind(&kode)
+            .bind(nama)
+            .bind(i64::from(request.harga))
+            .execute(pool)
+            .await;
+
+        match result {
+            Ok(_) => get_menu(pool, &kode).await,
+            Err(sqlx::Error::Database(error)) if error.is_unique_violation() => Err(
+                AppError::Conflict(format!("menu {kode} sudah terdaftar")),
+            ),
+            Err(error) => Err(error.into()),
+        }
+    }
+    ```
+
+    Kode menu dinormalisasi menjadi huruf besar. `unique_violation` dipetakan ke 409, bukan 500.
+
+    <Fragment slot="hint">
+      `normalize_kode` melakukan `trim().to_uppercase()` agar `kopi` dan `KOPI` tidak menjadi dua menu berbeda.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Input salah menghasilkan 400, duplikat menghasilkan 409, dan data valid menghasilkan 201.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Coba dengan curl
+
+```console
+$ curl -sS -X POST http://127.0.0.1:3000/api/menu \
+  -H 'content-type: application/json' \
+  -d '{"kode":"KOPI","nama":"Kopi","harga":12000}'
+{"kode":"KOPI","nama":"Kopi","harga":12000,"aktif":true}
+
+$ curl -sS http://127.0.0.1:3000/api/menu
+[{"kode":"KOPI","nama":"Kopi","harga":12000,"aktif":true}]
+```
+
+:::note[Kalau di bahasa lain]
+Express memakai `app.get` dan `app.post`, NestJS memakai controller dan decorator, Gin memakai `c.JSON`, Laravel memakai resource controller, dan FastAPI memakai decorator route. axum memakai `Router` dan handler async dengan extractor bertipe.
+:::
+
+:::tip[Tips]
+Gunakan kode menu yang stabil dan mudah dibaca mesin, misalnya `KOPI`. Nama tampilan tetap disimpan terpisah di field `nama`.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa harga pesanan tidak diambil dari client?',
+      options: [
+        'Agar client tidak bisa mengubah harga sendiri',
+        'Agar JSON lebih kecil',
+        'Agar database tidak perlu query',
+        'Agar route menjadi sinkron',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Harga harus berasal dari sumber tepercaya.',
+        'Salah. Ukuran JSON bukan alasan utama.',
+        'Salah. Harga justru perlu query menu.',
+        'Salah. Handler tetap async.',
+      ],
+      explanation:
+        'Harga dari database mencegah manipulasi harga oleh client.',
+    },
+    {
+      question: 'Apa arti fetch_optional?',
+      options: [
+        'Mengembalikan Option, None jika tidak ada baris',
+        'Selalu panic jika tidak ada baris',
+        'Mengambil semua baris',
+        'Mengubah hasil menjadi JSON',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Tidak ada baris bukan error database.',
+        'Salah. fetch_one yang panic pada hasil kosong.',
+        'Salah. fetch_all mengambil semua.',
+        'Salah. JSON dibuat oleh axum.',
+      ],
+      explanation:
+        'Handler bisa memetakan None menjadi 404.',
+    },
+    {
+      question: 'Mengapa duplicate menu dipetakan ke 409?',
+      options: [
+        'Karena konflik dengan data yang sudah ada, bukan kesalahan server',
+        'Karena database selalu rusak',
+        'Karena client tidak mengirim JSON',
+        'Karena route tidak ditemukan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. 409 Conflict lebih tepat daripada 500.',
+        'Salah. Database tidak rusak.',
+        'Salah. JSON valid belum tentu unik.',
+        'Salah. Route sudah ditemukan.',
+      ],
+      explanation:
+        'Status code harus mencerminkan penyebab kegagalan.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

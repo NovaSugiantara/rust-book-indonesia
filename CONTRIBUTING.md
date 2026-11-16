@@ -76,8 +76,15 @@ Tujuan capstone adalah mengubah Kasir Warung menjadi layanan HTTP dengan axum da
 
 Halaman capstone:
 
-- `src/content/docs/capstone/index.mdx`: ringkasan, prasyarat, rencana endpoint, dan daftar versi.
+- `src/content/docs/capstone/index.mdx`: ringkasan, prasyarat, peta fitur ke bab, endpoint, dan versi.
 - `src/content/docs/capstone/framework.mdx`: perbandingan singkat axum, actix-web, dan rocket, plus alasan memilih axum.
+- `src/content/docs/capstone/langkah-1-persiapan.mdx`: workspace, konfigurasi env, migrasi, health.
+- `src/content/docs/capstone/langkah-2-menu.mdx`: CRUD menu dan query sqlx.
+- `src/content/docs/capstone/langkah-3-transaksi.mdx`: pesanan, validasi, dan transaksi database.
+- `src/content/docs/capstone/langkah-4-pembayaran-status.mdx`: `Box<dyn PaymentMethod>`, pembayaran, dan transisi status.
+- `src/content/docs/capstone/langkah-5-laporan-background.mdx`: rekap iterator, channel, worker, tracing.
+- `src/content/docs/capstone/langkah-6-test-release.mdx`: integration test, clippy, release.
+- `src/content/docs/capstone/menjalankan.mdx`: env, curl, graceful shutdown, deploy.
 
 Halaman rincian endpoint dan database ditulis setelah Bab 4 sampai Bab 21 selesai. Selama belum ditulis, jangan menampilkan contoh kode framework yang seolah sudah jadi.
 
@@ -91,6 +98,34 @@ Sumber resmi wajib untuk capstone:
 Per 16 November 2026, versi stabil yang dipakai dalam rencana adalah axum 0.8.9, tokio 1.54.1, dan sqlx 0.9.0. Cek ulang sebelum menulis kode. Jangan mengarang nama module, tipe, atau signature.
 
 Alasan memilih axum ada di halaman perbandingan. Ringkasnya: axum berada di ekosistem Tokio yang sama dengan Bab 17, memakai hyper dan tower, dan memperlihatkan routing serta extractor secara eksplisit. Itu alasan kurikulum, bukan klaim bahwa axum selalu lebih cepat atau lebih baik dari framework lain.
+
+## Keadaan Capstone
+
+Capstone sudah diimplementasikan di `capstone-kasir/` sebagai workspace `kasir-core` dan `kasir-api`.
+
+```text
+capstone-kasir/
+├── Cargo.toml
+├── Cargo.lock
+├── kasir-core/
+│   └── src/lib.rs
+└── kasir-api/
+    ├── migrations/0001_init.sql
+    ├── src/{main.rs,lib.rs,config.rs,error.rs,models.rs,routes.rs,state.rs,store.rs,worker.rs}
+    └── tests/api.rs
+```
+
+Kontrak capstone:
+
+- axum 0.8.9, tokio 1.54.1, sqlx 0.9.0, SQLite.
+- Endpoint health, CRUD menu, buat/detail pesanan, bayar, ubah status, laporan harian, dan events.
+- `Box<dyn PaymentMethod>` untuk pembayaran; pembayaran dan status memakai transaksi database.
+- `AppError` mengimplementasikan `IntoResponse` dengan JSON `{"error": "..."}`.
+- Migrasi sqlx, `Arc<AppState>`, channel notifikasi, worker Tokio, tracing, env config, dan graceful shutdown.
+- `cargo test` lulus 9 test (4 unit domain, 5 integration endpoint).
+- `cargo clippy --all-targets -- -D warnings` dan `cargo build --release` lulus.
+- Dockerfile tidak disertakan karena opsional; README menjelaskan batas deployment.
+- Halaman situs: ringkasan, framework, enam langkah, dan halaman menjalankan/deploy.
 
 ## Proyek Bonus
 

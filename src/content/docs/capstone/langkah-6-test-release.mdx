@@ -1,0 +1,211 @@
+---
+title: 'Langkah 6: Test dan release'
+description: 'Menguji endpoint tanpa membuka port jaringan, menjalankan clippy, dan membangun binary release.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Test endpoint memakai router axum langsung, tanpa listener TCP. Database test memakai SQLite in-memory dan migrasi yang sama dengan produksi.
+
+<StudyCase title="Capstone: kualitas dan release" intro="Integration test, clippy, dan binary release.">
+  <StudyCaseStep
+    title="Siapkan state test"
+    goal="Membuat database in-memory dan router yang bisa diuji."
+  >
+    ```rust
+    async fn test_state() -> SharedState {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("database test");
+
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrasi test");
+
+        let (notif_tx, _notif_rx) = mpsc::channel(16);
+        Arc::new(AppState { pool, notif_tx })
+    }
+    ```
+
+    `max_connections(1)` penting untuk SQLite in-memory: setiap koneksi baru bisa mendapat database kosong yang berbeda.
+
+    <Fragment slot="hint">
+      Gunakan migrasi yang sama dengan produksi agar test tidak menguji skema yang berbeda.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Test memiliki state terisolasi dan tidak bergantung pada database lokal.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Uji alur endpoint"
+    goal="Membuat menu, pesanan, pembayaran, status, dan laporan lewat router."
+  >
+    ```rust
+    #[tokio::test]
+    async fn alur_pesanan_bayar_status_dan_laporan() {
+        let state = test_state().await;
+        let app = router(state);
+
+        create_menu(&app, "KOPI", "Kopi", 12_000).await;
+        create_menu(&app, "ROTI", "Roti", 8_000).await;
+
+        let id = create_order(
+            &app,
+            "Bu Sri",
+            json!([{ "kode": "KOPI", "jumlah": 2 }, { "kode": "ROTI", "jumlah": 1 }]),
+        )
+        .await;
+
+        let response = post_json(&app, &format!("/api/orders/{id}/pay"), json!({ "metode": "qris" })).await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = patch_json(
+            &app,
+            &format!("/api/orders/{id}/status"),
+            json!({ "status": "diproses" }),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = patch_json(
+            &app,
+            &format!("/api/orders/{id}/status"),
+            json!({ "status": "selesai" }),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .oneshot(Request::builder().uri("/api/reports/daily").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(json_body(response).await["total"], 32_000);
+    }
+    ```
+
+    Test ilegal juga penting: transisi `baru` ke `selesai` harus 409, dan metode pembayaran tidak dikenal harus 400.
+
+    <Fragment slot="hint">
+      `tower::ServiceExt::oneshot` memanggil router seperti request HTTP tanpa membuka socket.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Alur utama dan jalur error diuji di proses yang sama.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Jalankan pemeriksaan"
+    goal="Memastikan test, lint, dan release build bersih."
+  >
+    ```console
+    $ cargo test
+    running 5 tests
+    test alur_pesanan_bayar_status_dan_laporan ... ok
+    test health_dan_menu_crud ... ok
+    test metode_pembayaran_tidak_dikenal_ditolak ... ok
+    test pesanan_tanpa_item_ditolak ... ok
+    test transisi_ilegal_menghasilkan_json_409 ... ok
+    test result: ok. 5 passed
+
+    running 4 tests
+    test result: ok. 4 passed
+    ```
+
+    ```console
+    $ cargo clippy --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s)
+
+    $ cargo build --release
+    Finished `release` profile [optimized] target(s)
+    ```
+
+    <Fragment slot="hint">
+      Jalankan clippy dengan `-D warnings` agar warning diperlakukan sebagai error di CI.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Kode lolos unit test, integration test, lint, dan build release.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+:::note[Kalau di bahasa lain]
+Express memakai Supertest, NestJS memakai TestingModule dan Supertest, Gin memakai httptest, Laravel memakai feature test, dan FastAPI memakai TestClient. Rust memakai router axum dengan `oneshot`, sehingga tidak perlu membuka port.
+:::
+
+:::tip[Tips]
+Tambahkan test untuk setiap aturan transisi dan setiap status error yang penting. Test endpoint lebih cepat dan lebih stabil daripada menguji lewat browser.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa test memakai max_connections(1) untuk SQLite in-memory?',
+      options: [
+        'Agar semua query memakai database in-memory yang sama',
+        'Agar query lebih cepat',
+        'Agar router tidak perlu state',
+        'Agar JSON tidak perlu serde',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Koneksi berbeda bisa berarti database berbeda.',
+        'Salah. Bukan klaim kecepatan.',
+        'Salah. Router tetap memakai state.',
+        'Salah. Serde tetap dipakai.',
+      ],
+      explanation:
+        'SQLite in-memory hidup per koneksi.',
+    },
+    {
+      question: 'Apa fungsi oneshot pada test?',
+      options: [
+        'Mengirim satu request ke router tanpa listener',
+        'Membuka port baru',
+        'Menjalankan migrasi',
+        'Membuat worker',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini ServiceExt dari tower.',
+        'Salah. Tidak membuka port.',
+        'Salah. Migrasi dijalankan terpisah.',
+        'Salah. Worker tidak terkait.',
+      ],
+      explanation:
+        'oneshot memungkinkan test endpoint di memori.',
+    },
+    {
+      question: 'Mengapa clippy memakai -D warnings?',
+      options: [
+        'Agar warning menggagalkan build CI',
+        'Agar test tidak berjalan',
+        'Agar release lebih kecil',
+        'Agar route berubah',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Warning diperlakukan sebagai error.',
+        'Salah. Test terpisah.',
+        'Salah. Bukan pengatur ukuran release.',
+        'Salah. Route tidak berubah.',
+      ],
+      explanation:
+        'CI menjadi lebih ketat terhadap kode yang berpotensi bermasalah.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

@@ -1,0 +1,296 @@
+---
+title: 'Langkah 4: Pembayaran dan status'
+description: 'Memilih PaymentMethod lewat trait object, menyimpan pembayaran dalam transaksi database, dan menegakkan transisi status.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Pembayaran menggabungkan trait object dari Bab 10 dan 18 dengan transaksi database. Status tidak boleh diubah sembarangan; setiap transisi punya aturan.
+
+<StudyCase title="Capstone: membayar pesanan" intro="Trait object memilih metode, transaksi database menyimpan status dan payment.">
+  <StudyCaseStep
+    title="Kontrak PaymentMethod"
+    goal="Memilih implementasi pembayaran saat runtime."
+  >
+    ```rust
+    pub trait PaymentMethod: Send + Sync {
+        fn kode(&self) -> &'static str;
+        fn bayar(&self, total: u32) -> Result<PaymentReceipt, KasirError>;
+    }
+
+    pub struct Tunai;
+    pub struct Qris;
+
+    impl PaymentMethod for Tunai {
+        fn kode(&self) -> &'static str {
+            "tunai"
+        }
+
+        fn bayar(&self, total: u32) -> Result<PaymentReceipt, KasirError> {
+            if total == 0 {
+                return Err(KasirError::PembayaranGagal(
+                    "total pembayaran tidak boleh nol".to_string(),
+                ));
+            }
+
+            Ok(PaymentReceipt {
+                metode: self.kode().to_string(),
+                total,
+            })
+        }
+    }
+
+    impl PaymentMethod for Qris {
+        fn kode(&self) -> &'static str {
+            "qris"
+        }
+
+        fn bayar(&self, total: u32) -> Result<PaymentReceipt, KasirError> {
+            if total == 0 {
+                return Err(KasirError::PembayaranGagal(
+                    "total pembayaran tidak boleh nol".to_string(),
+                ));
+            }
+
+            Ok(PaymentReceipt {
+                metode: self.kode().to_string(),
+                total,
+            })
+        }
+    }
+
+    pub fn metode_pembayaran(kode: &str) -> Option<Box<dyn PaymentMethod>> {
+        match kode.trim().to_lowercase().as_str() {
+            "tunai" => Some(Box::new(Tunai)),
+            "qris" => Some(Box::new(Qris)),
+            _ => None,
+        }
+    }
+    ```
+
+    `Box<dyn PaymentMethod>` memungkinkan API menambah metode tanpa mengubah signature handler. Metode yang tidak dikenal menjadi 400.
+
+    <Fragment slot="hint">
+      Trait ini object-safe karena method tidak mengembalikan `Self` dan tidak memiliki parameter generic.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Handler hanya memanggil kontrak `bayar`; detail metode berada di implementasi.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Bayar dalam transaksi database"
+    goal="Mengubah status dan mencatat payment secara atomik."
+  >
+    ```rust
+    pub async fn pay_order(
+        pool: &SqlitePool,
+        id: i64,
+        metode: &str,
+    ) -> Result<OrderResponse, AppError> {
+        let payment = metode_pembayaran(metode).ok_or_else(|| {
+            AppError::BadRequest(format!("metode pembayaran tidak dikenal: {metode}"))
+        })?;
+
+        let mut tx = pool.begin().await?;
+        let row = sqlx::query_as::<_, (String, i64)>(
+            "SELECT status, total FROM orders WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("pesanan {id} tidak ditemukan")))?;
+
+        let status = StatusPesanan::parse(&row.0)?;
+        if !status.bisa_dibayar() {
+            return Err(AppError::Conflict(format!(
+                "pesanan {id} berstatus {} dan tidak bisa dibayar",
+                status.as_str()
+            )));
+        }
+
+        let receipt = payment.bayar(row.1 as u32)?;
+        let updated = sqlx::query(
+            "UPDATE orders SET status = ?, metode = ?, paid_at = datetime('now') \
+             WHERE id = ? AND status = ?",
+        )
+        .bind(StatusPesanan::Dibayar.as_str())
+        .bind(&receipt.metode)
+        .bind(id)
+        .bind(StatusPesanan::Baru.as_str())
+        .execute(&mut *tx)
+        .await?;
+
+        if updated.rows_affected() == 0 {
+            return Err(AppError::Conflict(
+                "status pesanan berubah sebelum pembayaran disimpan".to_string(),
+            ));
+        }
+
+        sqlx::query("INSERT INTO payments (order_id, metode, total) VALUES (?, ?, ?)")
+            .bind(id)
+            .bind(&receipt.metode)
+            .bind(i64::from(receipt.total))
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        get_order(pool, id).await
+    }
+    ```
+
+    Update memakai `WHERE status = 'baru'` agar pembayaran kedua tidak menimpa data. Jika tidak ada baris yang berubah, request ditolak 409.
+
+    <Fragment slot="hint">
+      Panggil `payment.bayar` sebelum commit. Error pembayaran akan membuat transaksi database rollback.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Status `dibayar`, metode, dan baris payment tersimpan bersama.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Aturan transisi status"
+    goal="Menolak transisi yang tidak masuk akal."
+  >
+    ```rust
+    pub fn can_transition_to(self, target: Self) -> bool {
+        matches!(
+            (self, target),
+            (Self::Baru, Self::Dibatalkan)
+                | (Self::Dibayar, Self::Diproses)
+                | (Self::Diproses, Self::Selesai)
+        )
+    }
+    ```
+
+    `Baru -> Dibayar` sengaja tidak ada di sini karena harus lewat endpoint pembayaran. `Dibayar -> Dibatalkan` juga ditolak karena refund belum diimplementasikan.
+
+    ```rust
+    if target == StatusPesanan::Dibayar {
+        return Err(AppError::Conflict(
+            "status dibayar hanya lewat endpoint pembayaran".to_string(),
+        ));
+    }
+
+    let current = StatusPesanan::parse(&current_text)?;
+    if !current.can_transition_to(target) {
+        return Err(AppError::Conflict(format!(
+            "transisi {} ke {} tidak diizinkan",
+            current.as_str(),
+            target.as_str()
+        )));
+    }
+    ```
+
+    <Fragment slot="hint">
+      Semua status disimpan sebagai teks lowercase yang konsisten dengan `as_str`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Perubahan status ilegal menghasilkan 409 dan body JSON, bukan panic atau 500.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Coba dengan curl
+
+```console
+$ curl -sS -X POST http://127.0.0.1:3000/api/orders/1/pay \
+  -H 'content-type: application/json' \
+  -d '{"metode":"qris"}'
+{"id":1,"pelanggan":"Bu Sri","status":"dibayar","total":32000,"metode":"qris","items":[...]}
+
+$ curl -sS -X PATCH http://127.0.0.1:3000/api/orders/1/status \
+  -H 'content-type: application/json' \
+  -d '{"status":"diproses"}'
+{"id":1,"status":"diproses",...}
+```
+
+Transisi ilegal:
+
+```console
+$ curl -sS -i -X PATCH http://127.0.0.1:3000/api/orders/2/status \
+  -H 'content-type: application/json' \
+  -d '{"status":"selesai"}'
+HTTP/1.1 409 Conflict
+content-type: application/json
+
+{"error":"transisi baru ke selesai tidak diizinkan"}
+```
+
+:::note[Kalau di bahasa lain]
+Express dan NestJS biasanya memakai service layer untuk aturan status. Laravel memakai model dan policy. Gin memakai handler dan service. FastAPI memakai dependency dan exception handler. Rust menaruh aturan di enum dan memetakan error ke response lewat `IntoResponse`.
+:::
+
+:::tip[Tips]
+Tulis aturan transisi sebagai fungsi murni di domain. Handler cukup memanggil fungsi itu dan memetakan error ke status HTTP.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa Box<dyn PaymentMethod> dipakai?',
+      options: [
+        'Agar metode pembayaran dipilih saat runtime tanpa mengubah handler',
+        'Agar semua pembayaran menjadi gratis',
+        'Agar database tidak perlu transaksi',
+        'Agar status tidak perlu divalidasi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Trait object mengabstraksi implementasi.',
+        'Salah. Pembayaran tetap dihitung.',
+        'Salah. Transaksi database tetap dipakai.',
+        'Salah. Status tetap divalidasi.',
+      ],
+      explanation:
+        'Handler memanggil kontrak yang sama untuk Tunai dan Qris.',
+    },
+    {
+      question: 'Mengapa update status memakai WHERE status = ?',
+      options: [
+        'Agar perubahan bersyarat dan tidak menimpa status yang sudah berubah',
+        'Agar query lebih pendek',
+        'Agar JSON berubah',
+        'Agar pembayaran menjadi async',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini mencegah race condition pada status.',
+        'Salah. Bukan soal panjang query.',
+        'Salah. JSON bukan tujuan.',
+        'Salah. Async tidak ditentukan WHERE.',
+      ],
+      explanation:
+        'Zero rows affected berarti status tidak sesuai dan request ditolak.',
+    },
+    {
+      question: 'Mengapa Baru ke Selesai ditolak?',
+      options: [
+        'Karena pesanan harus dibayar dan diproses lebih dulu',
+        'Karena status selesai tidak ada',
+        'Karena database tidak mendukung teks',
+        'Karena handler belum async',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Aturan transisi menjaga urutan bisnis.',
+        'Salah. Status selesai ada.',
+        'Salah. Database menyimpan teks.',
+        'Salah. Handler sudah async.',
+      ],
+      explanation:
+        'Transisi ilegal menghasilkan 409 dengan JSON error.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

@@ -1,0 +1,248 @@
+---
+title: 'Langkah 1: Workspace dan health'
+description: 'Menyiapkan workspace capstone-kasir, konfigurasi environment, migrasi sqlx, dan endpoint health.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Langkah pertama adalah menyiapkan workspace yang bisa dibangun dan dijalankan. Domain inti dipisahkan dari API agar aturan bisnis bisa dites tanpa server.
+
+<StudyCase title="Capstone: fondasi API" intro="Membuat workspace, koneksi SQLite, migrasi, dan endpoint health.">
+  <StudyCaseStep
+    title="Buat workspace"
+    goal="Memisahkan domain kasir-core dari binary kasir-api."
+  >
+    ```toml
+    [workspace]
+    members = ["kasir-core", "kasir-api"]
+    resolver = "3"
+
+    [workspace.package]
+    edition = "2024"
+    license = "MIT OR Apache-2.0"
+    ```
+
+    Struktur ini melanjutkan pemisahan library dan binary dari Bab 14. `kasir-core` tidak bergantung pada axum atau sqlx.
+
+    <Fragment slot="hint">
+      Tambahkan `capstone-kasir/target/` dan file `*.db` ke `.gitignore` agar build dan database lokal tidak masuk repositori.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Workspace memiliki satu lockfile dan satu folder target di root.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Konfigurasi environment"
+    goal="Membaca alamat bind dan URL database dari environment."
+  >
+    ```rust
+    use std::env;
+
+    #[derive(Debug, Clone)]
+    pub struct Config {
+        pub bind_addr: String,
+        pub database_url: String,
+    }
+
+    impl Config {
+        pub fn from_env() -> Result<Self, String> {
+            let bind_addr = env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
+            let database_url =
+                env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://kasir.db".to_string());
+
+            if bind_addr.trim().is_empty() {
+                return Err("BIND_ADDR tidak boleh kosong".to_string());
+            }
+
+            if database_url.trim().is_empty() {
+                return Err("DATABASE_URL tidak boleh kosong".to_string());
+            }
+
+            Ok(Self {
+                bind_addr,
+                database_url,
+            })
+        }
+    }
+    ```
+
+    Nilai default cocok untuk pengembangan lokal. Di deployment, set env secara eksplisit.
+
+    <Fragment slot="hint">
+      Jangan menaruh password atau URL produksi di source code. Gunakan environment atau secret manager.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Semua konfigurasi dibaca di satu tempat sebelum server dijalankan.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Migrasi SQLite"
+    goal="Membuat skema awal dengan sqlx migration."
+  >
+    ```sql
+    CREATE TABLE IF NOT EXISTS menu (
+        kode TEXT PRIMARY KEY,
+        nama TEXT NOT NULL,
+        harga INTEGER NOT NULL CHECK (harga > 0),
+        aktif INTEGER NOT NULL DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pelanggan TEXT NOT NULL,
+        status TEXT NOT NULL,
+        total INTEGER NOT NULL CHECK (total >= 0),
+        metode TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        paid_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+        kode TEXT NOT NULL,
+        jumlah INTEGER NOT NULL CHECK (jumlah > 0),
+        harga INTEGER NOT NULL CHECK (harga > 0)
+    );
+
+    CREATE TABLE IF NOT EXISTS payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+        metode TEXT NOT NULL,
+        total INTEGER NOT NULL CHECK (total > 0),
+        paid_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        jenis TEXT NOT NULL,
+        pesan TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+    CREATE INDEX IF NOT EXISTS idx_payments_paid_at ON payments(paid_at);
+    CREATE INDEX IF NOT EXISTS idx_events_order_id ON events(order_id);
+    ```
+
+    File disimpan di `kasir-api/migrations/0001_init.sql`. `sqlx::migrate!("./migrations")` menjalankan migrasi saat startup.
+
+    <Fragment slot="hint">
+      Migrasi yang sudah dijalankan jangan diubah isinya. Buat file migrasi baru untuk perubahan skema.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Database kosong bisa dibuat ulang dan skema selalu konsisten.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Jalankan server dan cek health"
+    goal="Memastikan koneksi, migrasi, dan router berjalan."
+  >
+    ```rust
+    let options = SqliteConnectOptions::from_str(&config.database_url)?
+        .create_if_missing(true)
+        .foreign_keys(true);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect_with(options)
+        .await?;
+
+    sqlx::migrate!("./migrations").run(&pool).await?;
+    ```
+
+    ```console
+    $ export BIND_ADDR=127.0.0.1:3000
+    $ export DATABASE_URL=sqlite://kasir.db
+    $ cargo run -p kasir-api
+    ```
+
+    ```console
+    $ curl -sS http://127.0.0.1:3000/health
+    {"service":"kasir-warung","status":"ok"}
+    ```
+
+    <Fragment slot="hint">
+      Jika port sudah dipakai, ubah `BIND_ADDR`. Jika database tidak bisa dibuka, periksa izin folder dan URL SQLite.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Server siap menerima request dan skema database sudah dibuat.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+:::note[Kalau di bahasa lain]
+Express dan NestJS membaca konfigurasi dari `process.env`, Gin dari `os.Getenv`, Laravel dari `.env`, dan FastAPI dari environment atau `pydantic-settings`. Rust memakai `std::env` dan serde untuk konfigurasi terstruktur.
+:::
+
+:::tip[Tips]
+Buat database terpisah untuk pengembangan dan test. Jangan memakai database produksi saat menjalankan eksperimen lokal.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa domain dipisahkan ke kasir-core?',
+      options: [
+        'Agar aturan bisnis bisa diuji tanpa server dan database',
+        'Agar axum tidak perlu dependency',
+        'Agar database otomatis dibuat',
+        'Agar semua handler menjadi sinkron',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Domain tidak bergantung pada framework.',
+        'Salah. axum tetap dipakai di kasir-api.',
+        'Salah. Database dibuat oleh migrasi.',
+        'Salah. Handler tetap async.',
+      ],
+      explanation:
+        'Pemisahan ini memudahkan unit test dan menjaga batas layer.',
+    },
+    {
+      question: 'Apa fungsi sqlx::migrate!?',
+      options: [
+        'Menjalankan file migrasi SQL saat startup',
+        'Membuat endpoint health',
+        'Mengubah JSON menjadi struct',
+        'Menjalankan server TCP',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Migrasi menjaga skema database.',
+        'Salah. Health adalah route.',
+        'Salah. Itu serde.',
+        'Salah. Server dijalankan axum.',
+      ],
+      explanation:
+        'Migrasi membuat skema konsisten di setiap environment.',
+    },
+    {
+      question: 'Dari mana BIND_ADDR dibaca?',
+      options: ['Environment variable', 'File HTML', 'Query string', 'Header HTTP'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Konfigurasi dibaca dari environment.',
+        'Salah. Bukan file HTML.',
+        'Salah. Belum ada request saat startup.',
+        'Salah. Header bukan konfigurasi startup.',
+      ],
+      explanation:
+        'Environment memisahkan konfigurasi dari source code.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

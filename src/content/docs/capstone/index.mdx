@@ -1,64 +1,100 @@
 ---
 title: 'Capstone: Kasir Warung API'
-description: 'Rencana proyek akhir di luar Rust Book: REST API Kasir Warung dengan axum, tokio, dan SQLite.'
+description: 'Proyek akhir di luar Rust Book: REST API Kasir Warung dengan axum, tokio, sqlx, dan SQLite.'
 ---
 
 :::caution[Materi tambahan di luar Rust Book]
-Capstone ini bukan bagian dari 21 bab The Rust Programming Language. Isinya disusun dari dokumentasi resmi axum, tokio, dan sqlx. Halaman ini masih berupa rencana. Belum ada kode API yang ditulis.
+Capstone ini bukan bagian dari 21 bab The Rust Programming Language. Kodenya ada di `capstone-kasir/` dan dibangun dari dokumentasi resmi axum, tokio, serta sqlx versi stabil yang dipakai proyek. Materi ini melanjutkan domain Kasir Warung dari Bab 1 sampai 21.
 :::
 
-Setelah 21 bab, Kasir Warung masih berupa program CLI. Capstone mengubahnya menjadi layanan HTTP yang bisa menerima pesanan, menyimpan data, dan mengembalikan response JSON. Ini adalah latihan pertama menyusun layanan backend Rust yang utuh, bukan sekadar contoh satu file.
+Capstone mengubah Kasir Warung dari CLI dan server TCP manual menjadi REST API dengan database. Fokusnya bukan lagi membangun listener HTTP, tetapi merancang endpoint, state bersama, error response, transaksi database, test, dan operasi release.
 
-Capstone tidak menggantikan Bab 21. Bab 21 membangun web server multithread dari nol supaya kamu melihat cara kerja listener, request, dan thread pool. Capstone memakai framework supaya kamu bisa fokus pada routing, state, error, database, dan test.
+## Peta fitur ke bab
 
-## Prasyarat
+| Fitur capstone | Bab asal |
+| --- | --- |
+| `ItemPesanan`, `Transaksi`, `StatusPesanan`, `KasirError` | Bab 5, 6, 8, 9 |
+| Module, library, workspace | Bab 7, 14 |
+| `PaymentMethod` dan `Box<dyn PaymentMethod>` | Bab 10, 18 |
+| Iterator dan `HashMap` untuk laporan | Bab 8, 13 |
+| `Arc` dan shared state | Bab 15, 16 |
+| Async handler, tokio, graceful shutdown | Bab 17, 21 |
+| Pattern matching status dan payload | Bab 19 |
+| Test dan release | Bab 11, 14 |
+| axum, hyper, tower, sqlx | Materi tambahan capstone |
 
-- Bab 1 sampai Bab 21 selesai, terutama Bab 9 (error handling), Bab 10 (trait), Bab 16 (threading), Bab 17 (async), Bab 18 (trait object), dan Bab 21 (web server).
-- Nyaman dengan HTTP, status code, JSON, dan database relasional.
-- Bisa menjalankan `cargo`, `sqlx`, dan server lokal dari terminal.
-
-## Yang akan dibangun
-
-Rencana permukaan API:
+## Endpoint
 
 | Method | Path | Fungsi |
 | --- | --- | --- |
-| `GET` | `/health` | Cek apakah layanan hidup |
-| `GET` | `/menu` | Daftar menu dan harga |
-| `POST` | `/orders` | Membuat pesanan baru |
-| `GET` | `/orders/{id}` | Detail satu pesanan |
-| `POST` | `/orders/{id}/pay` | Membayar pesanan |
+| `GET` | `/health` | Status layanan |
+| `GET` | `/api/menu` | Daftar menu |
+| `POST` | `/api/menu` | Tambah menu |
+| `GET` | `/api/menu/{kode}` | Detail menu |
+| `PUT` | `/api/menu/{kode}` | Ubah menu |
+| `DELETE` | `/api/menu/{kode}` | Hapus menu |
+| `POST` | `/api/orders` | Buat pesanan dengan validasi |
+| `GET` | `/api/orders/{id}` | Detail pesanan |
+| `POST` | `/api/orders/{id}/pay` | Bayar lewat trait object |
+| `PATCH` | `/api/orders/{id}/status` | Ubah status dengan aturan transisi |
+| `GET` | `/api/reports/daily` | Laporan harian |
+| `GET` | `/api/events` | Event latar belakang |
 
-Endpoint di atas adalah rencana, bukan kontrak yang sudah jadi. Saat capstone ditulis, setiap endpoint harus punya contoh request dan response nyata.
+## Struktur proyek
 
-## Cakupan materi
+```text
+capstone-kasir/
+├── Cargo.toml
+├── Cargo.lock
+├── kasir-core/
+│   ├── Cargo.toml
+│   └── src/lib.rs
+└── kasir-api/
+    ├── Cargo.toml
+    ├── migrations/0001_init.sql
+    ├── src/
+    │   ├── main.rs
+    │   ├── lib.rs
+    │   ├── config.rs
+    │   ├── error.rs
+    │   ├── models.rs
+    │   ├── routes.rs
+    │   ├── state.rs
+    │   ├── store.rs
+    │   └── worker.rs
+    └── tests/api.rs
+```
 
-1. Menyiapkan proyek `kasir_warung_api` dengan axum 0.8 dan tokio.
-2. Routing, handler async, dan ekstraktor untuk JSON, path, dan query.
-3. Shared state dengan `Arc<AppState>` dan `State` extractor.
-4. Error aplikasi yang dikonversi menjadi response HTTP memakai `IntoResponse`.
-5. Database SQLite lewat `sqlx`, termasuk query async dan migrasi.
-6. Test endpoint tanpa membuka port jaringan.
-7. Menjalankan build debug, build release, dan menjalankan binary hasil build.
+## Versi yang dipakai
 
-## Versi yang dipakai saat rencana ini ditulis
-
-| Crate | Versi stabil | Dokumentasi |
+| Crate | Versi di proyek | Dokumentasi |
 | --- | --- | --- |
 | axum | 0.8.9 | [docs.rs/axum](https://docs.rs/axum/0.8.9/axum/) |
 | tokio | 1.54.1 | [docs.rs/tokio](https://docs.rs/tokio/1.54.1/tokio/) |
 | sqlx | 0.9.0 | [docs.rs/sqlx](https://docs.rs/sqlx/0.9.0/sqlx/) |
 
-Versi bisa berubah. Sebelum menulis kode capstone, cek ulang crates.io dan docs.rs. Jangan menyalin API dari ingatan.
+Versi bisa berubah. Cek docs.rs dan crates.io sebelum memperbarui dependency. Halaman [perbandingan framework](framework/) tetap tersedia sebagai catatan pemilihan axum.
 
-## Urutan belajar yang disarankan
+## Prasyarat
 
-1. Pahami dulu kenapa axum dipilih dibanding actix-web dan rocket di [halaman perbandingan framework](framework/).
-2. Siapkan proyek dan endpoint `/health`.
-3. Tambahkan menu dari database SQLite.
-4. Tambahkan pembuatan pesanan dan validasi input.
-5. Tambahkan pembayaran, state, dan error response.
-6. Tambahkan test endpoint.
-7. Jalankan build release dan dokumentasikan cara menjalankan layanan.
+- Bab 1 sampai 21 selesai, terutama Bab 9, 10, 13, 16, 17, 18, dan 21.
+- Nyaman dengan HTTP, JSON, status code, dan SQL dasar.
+- Bisa menjalankan `cargo`, `curl`, dan server lokal.
 
-Halaman rincian capstone akan ditulis setelah Bab 4 sampai Bab 21 selesai. Sampai saat itu, halaman ini menjadi batas cakupan yang disepakati.
+## Langkah
+
+1. [Persiapan workspace dan health](langkah-1-persiapan/) membahas workspace, konfigurasi, migrasi, dan endpoint health.
+2. [Menu dan sqlx](langkah-2-menu/) membahas CRUD menu dan query SQLite.
+3. [Pesanan dan validasi](langkah-3-transaksi/) membahas pembuatan transaksi dan validasi item.
+4. [Pembayaran dan status](langkah-4-pembayaran-status/) membahas trait object, transaksi database, dan aturan transisi.
+5. [Laporan dan background task](langkah-5-laporan-background/) membahas iterator, HashMap, channel, dan tracing.
+6. [Test dan release](langkah-6-test-release/) membahas integration test, clippy, dan build release.
+7. [Menjalankan dan deploy](menjalankan/) membahas env, graceful shutdown, curl, dan batas deployment.
+
+:::note[Kenapa axum?]
+axum memakai ekosistem Tokio, hyper, dan tower yang sudah muncul di Bab 17 dan 21. Routing serta extractor-nya eksplisit, sehingga alur request mudah dibaca setelah membangun server TCP manual.
+:::
+
+:::tip[Tips]
+Jalankan server hanya di `127.0.0.1` saat latihan. Sebelum deploy, tambahkan autentikasi, pembatasan request, timeout, dan backup database.
+:::

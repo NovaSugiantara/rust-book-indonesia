@@ -54,7 +54,7 @@ Aturan link internal saat menambah halaman:
 - Bab 19: pattern di match, let, if let, loop, destructuring, match guard, dan parser perintah.
 - Bab 20: unsafe Rust, trait dan tipe lanjutan, function pointer, macro_rules, dan derive macro.
 - Bab 21: server TCP manual, thread pool, graceful shutdown, dan jembatan ke Capstone.
-- Capstone: halaman rencana API Kasir Warung dengan axum, Tokio, dan SQLite, plus perbandingan axum, actix-web, dan rocket. Detail implementasi menyusul setelah Bab 21.
+- Capstone: API Kasir Warung dengan axum, Tokio, SQLx, dan SQLite. Kode ada di `capstone-kasir/`, panduan bertahap dan test endpoint ada di grup Capstone.
 - Proyek Bonus: URL shortener dengan statistik klik, kode lengkap di `proyek-bonus/`, halaman pengantar dan empat langkah di situs.
 - Komponen playground, kuis, studi kasus, dan penanda progres. Semuanya berjalan tanpa backend.
 
@@ -63,7 +63,7 @@ Aturan link internal saat menambah halaman:
 - Astro dan Starlight
 - TypeScript
 - npm
-- Tidak ada database atau API sendiri. Satu-satunya permintaan jaringan dari halaman adalah ke playground Rust publik saat tombol Jalankan diklik.
+- Tidak ada database atau API sendiri yang dijalankan situs. Satu-satunya permintaan jaringan dari halaman adalah ke playground Rust publik saat tombol Jalankan diklik. Kode Capstone dan Proyek Bonus berada di folder terpisah dan dijalankan secara lokal.
 
 ## Struktur penting
 
@@ -76,9 +76,10 @@ src/
 └── styles/custom.css    Warna aksen dan gaya halaman depan
 
 proyek-bonus/            Crate Rust terpisah: URL shortener dengan axum
+capstone-kasir/          Workspace Rust terpisah: API Kasir Warung
 ```
 
-`proyek-bonus/` tidak ikut build Astro. Folder `target/` dan file database di dalamnya diabaikan Git.
+`proyek-bonus/` dan `capstone-kasir/` tidak ikut build Astro. Folder `target/` dan file database di dalamnya diabaikan Git.
 
 Panduan menulis bab, aturan gaya, dan keadaan studi kasus ada di [CONTRIBUTING.md](./CONTRIBUTING.md).
 

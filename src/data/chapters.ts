@@ -293,6 +293,13 @@ export const chapters: Chapter[] = [
 export const capstonePages: ChapterPage[] = [
   { label: 'Ringkasan Capstone', slug: 'capstone' },
   { label: 'Memilih framework', slug: 'capstone/framework' },
+  { label: 'Langkah 1: workspace dan health', slug: 'capstone/langkah-1-persiapan' },
+  { label: 'Langkah 2: CRUD menu', slug: 'capstone/langkah-2-menu' },
+  { label: 'Langkah 3: pesanan dan validasi', slug: 'capstone/langkah-3-transaksi' },
+  { label: 'Langkah 4: pembayaran dan status', slug: 'capstone/langkah-4-pembayaran-status' },
+  { label: 'Langkah 5: laporan dan background task', slug: 'capstone/langkah-5-laporan-background' },
+  { label: 'Langkah 6: test dan release', slug: 'capstone/langkah-6-test-release' },
+  { label: 'Menjalankan dan deploy', slug: 'capstone/menjalankan' },
 ];
 
 export const bonusPages: ChapterPage[] = [
