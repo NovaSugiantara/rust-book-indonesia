@@ -1,0 +1,306 @@
+---
+title: '10.4 Studi kasus: Kasir Warung'
+description: 'Menambahkan trait pembayaran, fungsi generik, dan lifetime pada ringkasan transaksi.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Di Bab 9, pembayaran masih memakai enum dan method langsung di `Transaksi`. Sekarang kita membuat trait `PaymentMethod` agar metode pembayaran bisa diperlakukan sebagai perilaku, bukan tipe konkret. Kita juga menambahkan ringkasan yang meminjam data transaksi dengan lifetime.
+
+<StudyCase title="Kasir Warung: pembayaran dan ringkasan" intro="Membuat trait pembayaran, fungsi generik, dan view yang meminjam transaksi.">
+  <StudyCaseStep
+    title="Buat trait PaymentMethod"
+    goal="Mendefinisikan kontrak pembayaran yang bisa dipakai beberapa metode."
+  >
+    Trait menyimpan perilaku yang sama: label metode dan proses pembayaran.
+
+    ```rust
+    trait PaymentMethod {
+        fn label(&self) -> &'static str;
+        fn bayar(&self, total: u32) -> Result<(), KasirError>;
+    }
+
+    struct Tunai;
+
+    impl PaymentMethod for Tunai {
+        fn label(&self) -> &'static str {
+            "tunai"
+        }
+
+        fn bayar(&self, total: u32) -> Result<(), KasirError> {
+            println!("Menerima tunai Rp{total}");
+            Ok(())
+        }
+    }
+
+    struct Qris;
+
+    impl PaymentMethod for Qris {
+        fn label(&self) -> &'static str {
+            "QRIS"
+        }
+
+        fn bayar(&self, total: u32) -> Result<(), KasirError> {
+            println!("Memproses QRIS Rp{total}");
+            Ok(())
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      Mulai dari method yang benar-benar berbeda antar metode pembayaran. Jangan memasukkan semua logika transaksi ke trait.
+    </Fragment>
+
+    <Fragment slot="solution">
+      `PaymentMethod` adalah kontrak kecil. `Transaksi` tetap memiliki data pesanan; trait hanya mengurus proses pembayaran.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Fungsi generik pembayaran"
+    goal="Memakai trait bound agar fungsi menerima metode pembayaran apa pun."
+  >
+    Fungsi generik bisa memanggil method trait tanpa mengetahui tipe konkretnya.
+
+    ```rust
+    fn proses_pembayaran<T: PaymentMethod>(
+        metode: &T,
+        total: u32,
+    ) -> Result<(), KasirError> {
+        metode.bayar(total)
+    }
+    ```
+
+    Pemanggilan:
+
+    ```rust
+    proses_pembayaran(&Tunai, 43_000)?;
+    proses_pembayaran(&Qris, 43_000)?;
+    ```
+
+    <Fragment slot="hint">
+      `T: PaymentMethod` adalah trait bound. Tanpa bound, compiler tidak tahu bahwa `T` punya method `bayar`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Satu fungsi bisa dipakai untuk `Tunai`, `Qris`, dan metode lain yang mengimplementasikan trait.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Ringkasan dengan lifetime"
+    goal="Membuat view ringkasan yang meminjam nama pelanggan tanpa clone."
+  >
+    `Ringkasan` menyimpan reference ke nama pelanggan. Lifetime `'a` memastikan ringkasan tidak hidup lebih lama dari transaksi.
+
+    ```rust
+    struct Ringkasan<'a> {
+        pelanggan: &'a str,
+        subtotal: u32,
+    }
+
+    fn buat_ringkasan<'a>(
+        transaksi: &'a Transaksi,
+    ) -> Result<Ringkasan<'a>, KasirError> {
+        Ok(Ringkasan {
+            pelanggan: &transaksi.pelanggan,
+            subtotal: transaksi.subtotal()?,
+        })
+    }
+    ```
+
+    <Fragment slot="hint">
+      Hasil `buat_ringkasan` meminjam `transaksi`. Pemanggil tidak boleh memakai ringkasan setelah transaksi di-drop.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Ringkasan menghindari clone nama pelanggan. Compiler memastikan reference tetap valid selama view dipakai.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+Contoh ini memakai data sederhana agar trait, generic, dan lifetime bisa dilihat bersama.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum KasirError {
+    PembayaranGagal(String),
+}
+
+impl std::fmt::Display for KasirError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PembayaranGagal(pesan) => write!(f, "pembayaran gagal: {pesan}"),
+        }
+    }
+}
+
+trait PaymentMethod {
+    fn label(&self) -> &'static str;
+    fn bayar(&self, total: u32) -> Result<(), KasirError>;
+}
+
+struct Tunai;
+
+impl PaymentMethod for Tunai {
+    fn label(&self) -> &'static str {
+        "tunai"
+    }
+
+    fn bayar(&self, total: u32) -> Result<(), KasirError> {
+        println!("Menerima tunai Rp{total}");
+        Ok(())
+    }
+}
+
+struct Qris;
+
+impl PaymentMethod for Qris {
+    fn label(&self) -> &'static str {
+        "QRIS"
+    }
+
+    fn bayar(&self, total: u32) -> Result<(), KasirError> {
+        println!("Memproses QRIS Rp{total}");
+        Ok(())
+    }
+}
+
+struct Transaksi {
+    pelanggan: String,
+    subtotal: u32,
+}
+
+impl Transaksi {
+    fn subtotal(&self) -> Result<u32, KasirError> {
+        Ok(self.subtotal)
+    }
+}
+
+struct Ringkasan<'a> {
+    pelanggan: &'a str,
+    subtotal: u32,
+}
+
+fn proses_pembayaran<T: PaymentMethod>(
+    metode: &T,
+    total: u32,
+) -> Result<(), KasirError> {
+    println!("Metode: {}", metode.label());
+    metode.bayar(total)
+}
+
+fn buat_ringkasan<'a>(
+    transaksi: &'a Transaksi,
+) -> Result<Ringkasan<'a>, KasirError> {
+    Ok(Ringkasan {
+        pelanggan: &transaksi.pelanggan,
+        subtotal: transaksi.subtotal()?,
+    })
+}
+
+fn main() {
+    let transaksi = Transaksi {
+        pelanggan: String::from("Bu Sri"),
+        subtotal: 43_000,
+    };
+
+    proses_pembayaran(&Tunai, 43_000).unwrap();
+    proses_pembayaran(&Qris, 43_000).unwrap();
+
+    match buat_ringkasan(&transaksi) {
+        Ok(ringkasan) => {
+            println!(
+                "Ringkasan: {} Rp{}",
+                ringkasan.pelanggan, ringkasan.subtotal
+            );
+        }
+        Err(error) => eprintln!("{error}"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Trait, generic, dan lifetime pada Kasir Warung"
+/>
+
+## Keadaan setelah Bab 10
+
+- `PaymentMethod` menjadi trait untuk metode pembayaran.
+- `Tunai` dan `Qris` mengimplementasikan trait itu.
+- `proses_pembayaran<T: PaymentMethod>` adalah fungsi generik dengan trait bound.
+- `Ringkasan<'a>` meminjam nama pelanggan dari `Transaksi` tanpa clone.
+- `KasirError` dari Bab 9 tetap dipakai.
+- Belum ada trait object `Box<dyn PaymentMethod>`; itu masuk Bab 18.
+- Belum ada test otomatis; itu masuk Bab 11.
+
+:::note[Kalau di bahasa lain]
+Trait mirip interface TypeScript, Go, atau PHP. Bedanya, implementasi Rust ditulis eksplisit dan bisa memiliki default method. Lifetime tidak punya padanan langsung di JavaScript atau PHP. Ia menyatakan umur reference pada compile time, bukan mengandalkan garbage collector atau reference counting.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa fungsi trait PaymentMethod?',
+      options: [
+        'Mendefinisikan perilaku pembayaran yang bisa dipakai beberapa tipe',
+        'Menyimpan daftar transaksi',
+        'Mengatur module',
+        'Membuat lifetime menjadi static',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Trait adalah kontrak method pembayaran.',
+        'Salah. Daftar transaksi ada di Vec.',
+        'Salah. Module diatur mod.',
+        'Salah. Trait tidak mengubah lifetime.',
+      ],
+      explanation:
+        'Tunai dan Qris bisa diperlakukan sebagai PaymentMethod.',
+    },
+    {
+      question: 'Mengapa proses_pembayaran memakai T: PaymentMethod?',
+      options: [
+        'Agar compiler tahu T punya method label dan bayar',
+        'Agar T selalu menjadi Tunai',
+        'Agar pembayaran tidak bisa gagal',
+        'Agar lifetime dihapus',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Trait bound memberi akses ke method trait.',
+        'Salah. T bisa Qris atau tipe lain.',
+        'Salah. Pembayaran tetap mengembalikan Result.',
+        'Salah. Trait bound tidak menghapus lifetime.',
+      ],
+      explanation:
+        'Tanpa bound, method trait tidak tersedia pada T yang generik.',
+    },
+    {
+      question: 'Apa yang dijamin lifetime pada Ringkasan?',
+      options: [
+        'Ringkasan tidak hidup lebih lama dari data transaksi yang dipinjam',
+        'Ringkasan selalu berada di heap',
+        'Ringkasan menyalin nama pelanggan',
+        'Ringkasan tidak bisa dibaca',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Reference di Ringkasan terikat pada transaksi.',
+        'Salah. Lokasi memory bukan jaminan lifetime.',
+        'Salah. Tidak ada clone nama.',
+        'Salah. Field pelanggan bisa dibaca.',
+      ],
+      explanation:
+        'Lifetime mencegah view dipakai setelah sumbernya di-drop.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

@@ -32,7 +32,7 @@ Aturan link internal saat menambah halaman:
 ## Isi saat ini
 
 - Halaman depan berbahasa Indonesia dengan ringkasan progres.
-- Sidebar untuk 21 bab buku Rust. Bab 1 sampai Bab 9 sudah lengkap, bab lain masih halaman "Segera hadir".
+- Sidebar untuk 21 bab buku Rust. Bab 1 sampai Bab 12 sudah lengkap, bab lain masih halaman "Segera hadir".
 - Bab 1: instalasi, Hello World, Cargo, dan studi kasus Kasir Warung.
 - Bab 2: game tebak angka dengan input, crate rand, match, dan loop.
 - Bab 3: variabel, tipe data, fungsi, komentar, dan control flow.
@@ -42,6 +42,9 @@ Aturan link internal saat menambah halaman:
 - Bab 7: package, crate, module, path, use, dan pemisahan file.
 - Bab 8: Vec, String, HashMap, dan studi kasus collection.
 - Bab 9: panic, Result, operator ?, dan error kustom.
+- Bab 10: generic, trait, lifetime, dan perbandingan dengan interface TypeScript, Go, serta PHP.
+- Bab 11: unit test, integration test, dan perbandingan dengan Jest, go test, PHPUnit, serta pytest.
+- Bab 12: minigrep, argumen CLI, file, environment variable, stderr, dan CLI laporan harian Kasir Warung.
 - Capstone: halaman rencana API Kasir Warung dengan axum, Tokio, dan SQLite, plus perbandingan axum, actix-web, dan rocket. Detail implementasi menyusul setelah Bab 21.
 - Proyek Bonus: URL shortener dengan statistik klik, kode lengkap di `proyek-bonus/`, halaman pengantar dan empat langkah di situs.
 - Komponen playground, kuis, studi kasus, dan penanda progres. Semuanya berjalan tanpa backend.

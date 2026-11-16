@@ -1,0 +1,509 @@
+---
+title: '12.7 Studi kasus: laporan harian Kasir Warung'
+description: 'Membuat CLI laporan harian yang membaca file transaksi, memvalidasi baris, dan menulis error ke stderr.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Sampai Bab 11, Kasir Warung punya library dengan modul menu, transaksi, error, trait pembayaran, dan test. Sekarang kita menambahkan binary CLI yang membaca file transaksi harian, menghitung rekap, lalu mencetak laporan.
+
+<StudyCase title="Kasir Warung: laporan harian" intro="Membaca argumen dan file, memvalidasi baris transaksi, lalu menulis laporan ke stdout dan error ke stderr.">
+  <StudyCaseStep
+    title="Tentukan format file dan konfigurasi"
+    goal="Membuat CLI menerima satu path file transaksi."
+  >
+    Format file dibuat sederhana: satu baris berisi kode menu dan jumlah, dipisahkan koma. Baris kosong diabaikan.
+
+    ```text
+    KOPI,2
+    ROTI,3
+    KOPI,1
+    ```
+
+    `Config::build` memeriksa jumlah argumen. Kalau kurang, ia mengembalikan error, bukan panic.
+
+    ```rust
+    pub struct Config {
+        pub file_path: String,
+    }
+
+    impl Config {
+        pub fn build(args: &[String]) -> Result<Config, LaporanError> {
+            if args.len() < 2 {
+                return Err(LaporanError::ArgumenKurang);
+            }
+
+            Ok(Config {
+                file_path: args[1].clone(),
+            })
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      Argumen pertama setelah nama program adalah path file. Jangan membaca `args[1]` sebelum panjangnya diperiksa.
+    </Fragment>
+
+    <Fragment slot="solution">
+      `Config::build` mengubah input pengguna menjadi konfigurasi yang valid atau error yang bisa ditampilkan.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Baca file dan pisahkan logika"
+    goal="Membaca file di jalankan, lalu mengolah isi di fungsi murni yang bisa dites."
+  >
+    `jalankan` membaca file dengan `fs::read_to_string`. Error dari file diteruskan dengan `?`. Logika pengolahan dipisahkan ke `proses` agar tidak bergantung pada filesystem.
+
+    ```rust
+    use std::error::Error;
+    use std::fs;
+
+    pub fn jalankan(config: &Config) -> Result<(), Box<dyn Error>> {
+        let contents = fs::read_to_string(&config.file_path)?;
+        let rekap = proses(&contents)?;
+        cetak(&config.file_path, &rekap);
+        Ok(())
+    }
+    ```
+
+    `main` hanya menyiapkan konfigurasi, memanggil `jalankan`, dan menangani error:
+
+    ```rust
+    fn main() {
+        let args: Vec<String> = env::args().collect();
+
+        let config = Config::build(&args).unwrap_or_else(|err| {
+            eprintln!("{err}");
+            process::exit(1);
+        });
+
+        if let Err(err) = jalankan(&config) {
+            eprintln!("Gagal membuat laporan: {err}");
+            process::exit(1);
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      `proses` menerima `&str` dan mengembalikan `Result`. Dengan begitu test tidak perlu membuat file sungguhan.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Error baca file dan error format baris sama-sama sampai ke `main`, lalu dicetak ke stderr dengan status keluar 1.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Validasi baris dan rekap"
+    goal="Mengubah setiap baris menjadi item, menolak input salah, dan menjumlahkan per kode menu."
+  >
+    Parsing memakai `split_once`, `trim`, `to_uppercase`, dan `parse`. Setiap kegagalan menyebut nomor baris.
+
+    ```rust
+    #[derive(Debug, PartialEq)]
+    pub struct BarisLaporan {
+        pub kode: String,
+        pub jumlah: u32,
+    }
+
+    pub fn parse_baris(nomor: usize, isi: &str) -> Result<BarisLaporan, LaporanError> {
+        let (kode, jumlah) = isi
+            .split_once(',')
+            .ok_or_else(|| LaporanError::BarisTidakValid(nomor, isi.to_string()))?;
+
+        let kode = kode.trim().to_uppercase();
+        if kode.is_empty() {
+            return Err(LaporanError::BarisTidakValid(nomor, isi.to_string()));
+        }
+
+        let jumlah = jumlah
+            .trim()
+            .parse::<u32>()
+            .map_err(|_| LaporanError::JumlahTidakValid(nomor, isi.to_string()))?;
+
+        if jumlah == 0 {
+            return Err(LaporanError::JumlahTidakValid(nomor, isi.to_string()));
+        }
+
+        Ok(BarisLaporan { kode, jumlah })
+    }
+    ```
+
+    Rekap memakai `HashMap<String, RingkasItem>`. Setiap kode yang dikenal menambah jumlah dan subtotal.
+
+    ```rust
+    #[derive(Default)]
+    pub struct Rekap {
+        pub baris: HashMap<String, RingkasItem>,
+    }
+
+    pub struct RingkasItem {
+        pub jumlah: u32,
+        pub subtotal: u32,
+    }
+
+    impl Rekap {
+        pub fn tambah(&mut self, baris: BarisLaporan) -> Result<(), LaporanError> {
+            let harga = harga_menu(&baris.kode)
+                .ok_or_else(|| LaporanError::KodeTidakDikenal(baris.kode.clone()))?;
+
+            let item = self.baris.entry(baris.kode).or_insert(RingkasItem {
+                jumlah: 0,
+                subtotal: 0,
+            });
+
+            item.jumlah += baris.jumlah;
+            item.subtotal += harga * baris.jumlah;
+            Ok(())
+        }
+
+        pub fn total(&self) -> u32 {
+            self.baris.values().map(|item| item.subtotal).sum()
+        }
+    }
+    ```
+
+    `harga_menu` mengembalikan `Option<u32>`. Kode yang tidak ada di menu menjadi error, bukan harga nol. Di proyek penuh, fungsi ini membaca `HashMap<String, MenuItem>` dari modul `menu`; di sini peta harga ditulis langsung agar contoh fokus pada alur CLI.
+
+    `LaporanError` adalah error khusus modul laporan. Di kode lengkap, variant yang sama bisa digabung ke `KasirError`, tetapi memisahkannya membuat batas modul tetap jelas.
+
+    <Fragment slot="hint">
+      `or_insert` membuat entri baru hanya jika kode belum ada. Setelah itu, referensi ke entri bisa diubah untuk menambah jumlah.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Semua aturan input berada di satu tempat. Test bisa memanggil `parse_baris` dan `proses` tanpa menyentuh file.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Cetak laporan dan uji"
+    goal="Menulis hasil ke stdout dan memastikan error format tidak lolos."
+  >
+    `cetak` mengurutkan kode agar output stabil, lalu mencetak jumlah dan subtotal per item serta total akhir.
+
+    ```rust
+    pub fn cetak(file_path: &str, rekap: &Rekap) {
+        println!("Laporan harian: {file_path}");
+
+        let mut kode: Vec<&String> = rekap.baris.keys().collect();
+        kode.sort();
+
+        for kode in kode {
+            let item = &rekap.baris[kode];
+            println!(
+                "{kode}: {} item, Rp{}",
+                item.jumlah, item.subtotal
+            );
+        }
+
+        println!("Total: Rp{}", rekap.total());
+    }
+    ```
+
+    Contoh output:
+
+    ```text
+    Laporan harian: transaksi.csv
+    KOPI: 3 item, Rp36000
+    ROTI: 3 item, Rp24000
+    Total: Rp60000
+    ```
+
+    Test di `tests/laporan.rs` memakai API public:
+
+    ```rust
+    use kasir_warung::laporan::{parse_baris, proses, LaporanError};
+
+    #[test]
+    fn baris_valid_dinormalisasi() {
+        let baris = parse_baris(1, "kopi, 2").unwrap();
+        assert_eq!(baris.kode, "KOPI");
+        assert_eq!(baris.jumlah, 2);
+    }
+
+    #[test]
+    fn jumlah_nol_ditolak() {
+        let hasil = parse_baris(2, "KOPI,0");
+        assert!(matches!(
+            hasil,
+            Err(LaporanError::JumlahTidakValid(2, _))
+        ));
+    }
+
+    #[test]
+    fn kode_tidak_dikenal_ditolak() {
+        let hasil = proses("KOPI,1\nPIZZA,2\n");
+        assert!(matches!(
+            hasil,
+            Err(LaporanError::KodeTidakDikenal(kode)) if kode == "PIZZA"
+        ));
+    }
+    ```
+
+    <Fragment slot="hint">
+      Test error memakai `matches!` agar tidak bergantung pada teks pesan. Yang diuji adalah variant dan nomor baris.
+    </Fragment>
+
+    <Fragment slot="solution">
+      CLI sekarang membaca file, menolak baris salah dengan pesan yang menyebut nomor baris, dan menulis hasil sukses ke stdout.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+Playground tidak bisa membaca file dari argumen, jadi isi file disimpan di variabel dan argumen disusun manual. Alur parsing, rekap, dan pencetakan tetap sama.
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+use std::error::Error;
+use std::process;
+
+#[derive(Debug)]
+enum LaporanError {
+    ArgumenKurang,
+    BarisTidakValid(usize, String),
+    JumlahTidakValid(usize, String),
+    KodeTidakDikenal(String),
+}
+
+impl std::fmt::Display for LaporanError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ArgumenKurang => write!(f, "pakai: kasir-laporan <file>"),
+            Self::BarisTidakValid(nomor, isi) => {
+                write!(f, "baris {nomor} tidak valid: {isi}")
+            }
+            Self::JumlahTidakValid(nomor, isi) => {
+                write!(f, "jumlah di baris {nomor} tidak valid: {isi}")
+            }
+            Self::KodeTidakDikenal(kode) => {
+                write!(f, "kode menu tidak dikenal: {kode}")
+            }
+        }
+    }
+}
+
+impl Error for LaporanError {}
+
+struct Config {
+    file_path: String,
+}
+
+impl Config {
+    fn build(args: &[String]) -> Result<Config, LaporanError> {
+        if args.len() < 2 {
+            return Err(LaporanError::ArgumenKurang);
+        }
+
+        Ok(Config {
+            file_path: args[1].clone(),
+        })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+struct BarisLaporan {
+    kode: String,
+    jumlah: u32,
+}
+
+fn parse_baris(nomor: usize, isi: &str) -> Result<BarisLaporan, LaporanError> {
+    let (kode, jumlah) = isi
+        .split_once(',')
+        .ok_or_else(|| LaporanError::BarisTidakValid(nomor, isi.to_string()))?;
+
+    let kode = kode.trim().to_uppercase();
+    if kode.is_empty() {
+        return Err(LaporanError::BarisTidakValid(nomor, isi.to_string()));
+    }
+
+    let jumlah = jumlah
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| LaporanError::JumlahTidakValid(nomor, isi.to_string()))?;
+
+    if jumlah == 0 {
+        return Err(LaporanError::JumlahTidakValid(nomor, isi.to_string()));
+    }
+
+    Ok(BarisLaporan { kode, jumlah })
+}
+
+fn harga_menu(kode: &str) -> Option<u32> {
+    match kode {
+        "KOPI" => Some(12_000),
+        "ROTI" => Some(8_000),
+        "TEH" => Some(5_000),
+        _ => None,
+    }
+}
+
+struct RingkasItem {
+    jumlah: u32,
+    subtotal: u32,
+}
+
+#[derive(Default)]
+struct Rekap {
+    baris: HashMap<String, RingkasItem>,
+}
+
+impl Rekap {
+    fn tambah(&mut self, baris: BarisLaporan) -> Result<(), LaporanError> {
+        let harga = harga_menu(&baris.kode)
+            .ok_or_else(|| LaporanError::KodeTidakDikenal(baris.kode.clone()))?;
+
+        let item = self.baris.entry(baris.kode).or_insert(RingkasItem {
+            jumlah: 0,
+            subtotal: 0,
+        });
+
+        item.jumlah += baris.jumlah;
+        item.subtotal += harga * baris.jumlah;
+        Ok(())
+    }
+
+    fn total(&self) -> u32 {
+        self.baris.values().map(|item| item.subtotal).sum()
+    }
+}
+
+fn proses(contents: &str) -> Result<Rekap, LaporanError> {
+    let mut rekap = Rekap::default();
+
+    for (indeks, baris) in contents.lines().enumerate() {
+        let baris = baris.trim();
+        if baris.is_empty() {
+            continue;
+        }
+
+        rekap.tambah(parse_baris(indeks + 1, baris)?)?;
+    }
+
+    Ok(rekap)
+}
+
+fn cetak(file_path: &str, rekap: &Rekap) {
+    println!("Laporan harian: {file_path}");
+
+    let mut kode: Vec<&String> = rekap.baris.keys().collect();
+    kode.sort();
+
+    for kode in kode {
+        let item = &rekap.baris[kode];
+        println!("{kode}: {} item, Rp{}", item.jumlah, item.subtotal);
+    }
+
+    println!("Total: Rp{}", rekap.total());
+}
+
+fn main() {
+    let args = vec![
+        String::from("kasir-laporan"),
+        String::from("transaksi.csv"),
+    ];
+
+    let config = match Config::build(&args) {
+        Ok(config) => config,
+        Err(err) => {
+            eprintln!("{err}");
+            process::exit(1);
+        }
+    };
+
+    let contents = "KOPI,2\\nROTI,3\\nKOPI,1\\n";
+
+    match proses(contents) {
+        Ok(rekap) => cetak(&config.file_path, &rekap),
+        Err(err) => {
+            eprintln!("Gagal membuat laporan: {err}");
+            process::exit(1);
+        }
+    }
+}`}
+  filename="src/main.rs"
+  label="CLI laporan harian dengan argumen, rekap, dan stderr"
+/>
+
+## Keadaan setelah Bab 12
+
+- `Config` membaca path file dari argumen dan menolak argumen yang kurang.
+- `fs::read_to_string` membaca file, error-nya diteruskan dengan `?`.
+- `parse_baris` memvalidasi format, jumlah nol, dan kode menu.
+- `Rekap` memakai `HashMap` untuk menjumlahkan item dan subtotal.
+- `cetak` menulis laporan ke stdout; `eprintln!` dipakai untuk error.
+- `main` kecil: konfigurasi, panggil `jalankan`, tangani error, keluar dengan status 1.
+- Test mencakup normalisasi kode, jumlah nol, kode tidak dikenal, dan total.
+
+:::note[Kalau di bahasa lain]
+CLI Node.js biasanya memakai `process.argv` dan `fs.readFileSync`. Go memakai `os.Args` dan `os.ReadFile`. PHP memakai `$argv` dan `file_get_contents`. Polanya sama: ambil input, baca file, validasi, cetak hasil, tulis error ke stderr, lalu tentukan exit code. Rust menambahkan pemeriksaan tipe dan `Result` yang harus ditangani.
+:::
+
+:::tip[Tips]
+Kalau format file dipakai oleh alat lain, dokumentasikan di bantuan CLI dan buat test untuk baris kosong, spasi berlebih, serta kode yang tidak dikenal. Input operasional jarang rapi.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa proses dipisahkan dari jalankan?',
+      options: [
+        'Agar logika bisa dites tanpa membaca file',
+        'Agar file tidak perlu ditutup',
+        'Agar error tidak perlu ditangani',
+        'Agar argumen tidak dibutuhkan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. proses menerima teks dan mengembalikan Result.',
+        'Salah. File tetap dibaca oleh jalankan.',
+        'Salah. Error tetap dikembalikan.',
+        'Salah. Argumen tetap dipakai untuk path.',
+      ],
+      explanation:
+        'Fungsi murni lebih mudah diuji dan tidak bergantung pada filesystem.',
+    },
+    {
+      question: 'Apa yang terjadi pada baris PIZZA,2?',
+      options: [
+        'Menghasilkan error kode menu tidak dikenal',
+        'Dihitung dengan harga nol',
+        'Diabaikan tanpa pesan',
+        'Program panic',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Harga tidak ditemukan sehingga rekap menolak kode itu.',
+        'Salah. Kode tak dikenal bukan harga nol.',
+        'Salah. Baris dilaporkan sebagai error.',
+        'Salah. Error dikembalikan sebagai Result.',
+      ],
+      explanation:
+        'Validasi kode menu mencegah laporan berisi item yang tidak pernah dijual.',
+    },
+    {
+      question: 'Ke mana pesan Gagal membuat laporan ditulis?',
+      options: ['stderr', 'stdout', 'File transaksi', 'HashMap'],
+      answer: 0,
+      optionNotes: [
+        'Benar. eprintln menulis ke standard error.',
+        'Salah. stdout untuk laporan sukses.',
+        'Salah. File transaksi tidak ditulis.',
+        'Salah. HashMap menyimpan rekap, bukan pesan.',
+      ],
+      explanation:
+        'Pemisahan aliran menjaga hasil laporan tetap bersih saat stdout dialihkan ke file.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

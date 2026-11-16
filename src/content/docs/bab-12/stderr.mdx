@@ -1,0 +1,186 @@
+---
+title: '12.6 Standard error'
+description: 'Menulis pesan error ke stderr dengan eprintln dan memisahkan hasil sukses dari pesan kegagalan.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Terminal punya dua aliran output: standard output untuk hasil normal dan standard error untuk pesan error. Memisahkan keduanya membuat pengguna bisa menyimpan hasil sukses ke file tanpa kehilangan pesan kegagalan di layar.
+
+## Melihat masalahnya
+
+Sebelum diperbaiki, semua pesan ditulis dengan `println!`. Jalankan program tanpa argumen dan arahkan stdout ke file:
+
+```console
+$ cargo run > output.txt
+```
+
+Pesan error tidak muncul di layar. Isi `output.txt` menunjukkan bahwa pesan itu ikut masuk ke file:
+
+```text
+Problem parsing arguments: not enough arguments
+```
+
+Hasil yang seharusnya terlihat oleh pengguna malah tersembunyi di file. Ini bukan perilaku yang diharapkan dari program CLI.
+
+## Menulis dengan eprintln
+
+`eprintln!` mencetak ke standard error. Ganti `println!` yang menangani error, bukan `println!` yang mencetak hasil pencarian.
+
+```rust
+use std::process;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let config = Config::build(&args).unwrap_or_else(|err| {
+        eprintln!("Problem parsing arguments: {err}");
+        process::exit(1);
+    });
+
+    if let Err(e) = run(&config) {
+        eprintln!("Application error: {e}");
+        process::exit(1);
+    }
+}
+```
+
+Sekarang, saat stdout diarahkan ke file, pesan error tetap tampil di terminal:
+
+```console
+$ cargo run > output.txt
+Problem parsing arguments: not enough arguments
+```
+
+`output.txt` tetap kosong karena tidak ada hasil sukses yang dicetak.
+
+## Hasil sukses tetap di stdout
+
+Saat pencarian berhasil, baris yang cocok dicetak dengan `println!`:
+
+```console
+$ cargo run -- to poem.txt > output.txt
+```
+
+Tidak ada output di layar, dan `output.txt` berisi hasil pencarian:
+
+```text
+Are you nobody, too?
+How dreary to be somebody!
+```
+
+Ini membuktikan pemisahan aliran bekerja: hasil sukses ke stdout, pesan error ke stderr.
+
+## Contoh yang bisa dijalankan
+
+<RustPlayground
+  code={`fn cari<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    contents
+        .lines()
+        .filter(|line| line.contains(query))
+        .collect()
+}
+
+fn main() {
+    let contents = "Rust aman\\nBelajar Rust\\nBaris lain";
+    let hasil = cari("Rust", contents);
+
+    if hasil.is_empty() {
+        eprintln!("Tidak ada baris yang cocok");
+    } else {
+        for line in hasil {
+            println!("{line}");
+        }
+    }
+}`}
+  filename="src/main.rs"
+  label="Hasil ke stdout dan pesan gagal ke stderr"
+/>
+
+Playground menampilkan kedua aliran di panel yang sama, tetapi di terminal keduanya bisa diarahkan ke tujuan berbeda. `eprintln!` tidak mengubah data hasil; ia hanya memilih aliran output.
+
+## Exit status
+
+Status keluar memberi tahu proses pemanggil apakah program berhasil. `process::exit(0)` menandakan sukses, sedangkan `process::exit(1)` menandakan kegagalan. Tanpa pemanggilan eksplisit, program yang selesai normal keluar dengan status 0.
+
+```rust
+if let Err(e) = run(&config) {
+    eprintln!("Application error: {e}");
+    process::exit(1);
+}
+```
+
+Skrip shell bisa memeriksa status ini untuk berhenti saat langkah sebelumnya gagal.
+
+:::note[Kalau di bahasa lain]
+Node.js memakai `console.error` untuk stderr dan `process.exitCode` untuk status. Go menulis ke `os.Stderr` dan memanggil `os.Exit`. PHP menulis ke `STDERR` dan memakai `exit(1)`. Rust menyediakan `eprintln!` dan `std::process::exit`, dengan pemisahan aliran yang sama seperti alat CLI lain.
+:::
+
+:::tip[Tips]
+Audit semua `println!` saat membuat CLI. Hanya hasil yang memang ingin disimpan pengguna yang boleh masuk stdout. Semua diagnostik, peringatan, dan error masuk stderr.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa fungsi eprintln!?',
+      options: [
+        'Mencetak ke standard error',
+        'Mencetak ke file tertentu',
+        'Menghentikan program',
+        'Membaca input pengguna',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. eprintln menulis ke stderr.',
+        'Salah. Ia tidak membuka file sendiri.',
+        'Salah. Program berhenti lewat process::exit.',
+        'Salah. Input dibaca dengan std::io.',
+      ],
+      explanation:
+        'Pesan error di stderr tetap terlihat walau stdout dialihkan ke file.',
+    },
+    {
+      question: 'Mengapa hasil sukses tetap memakai println!?',
+      options: [
+        'Agar hasil bisa diarahkan ke file lewat stdout',
+        'Agar hasil tidak terlihat pengguna',
+        'Agar program keluar dengan status 1',
+        'Agar error ikut masuk ke file',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. stdout adalah aliran untuk hasil normal.',
+        'Salah. Hasil justru perlu terlihat atau disimpan.',
+        'Salah. Status sukses bukan 1.',
+        'Salah. Error tidak boleh masuk hasil.',
+      ],
+      explanation:
+        'Pemisahan aliran memungkinkan hasil disimpan tanpa pesan diagnostik.',
+    },
+    {
+      question: 'Apa arti process::exit(1)?',
+      options: [
+        'Menghentikan program dengan status kegagalan',
+        'Mengulang program satu kali',
+        'Menutup standard output',
+        'Menghapus file output',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Status bukan nol menandakan kegagalan.',
+        'Salah. Tidak ada pengulangan.',
+        'Salah. exit menghentikan proses.',
+        'Salah. File tidak dihapus.',
+      ],
+      explanation:
+        'Status keluar dipakai shell dan proses pemanggil untuk mengetahui hasil program.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

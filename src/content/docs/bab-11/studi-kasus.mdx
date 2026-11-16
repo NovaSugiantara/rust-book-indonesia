@@ -1,0 +1,245 @@
+---
+title: '11.4 Studi kasus: Kasir Warung'
+description: 'Menambahkan unit test dan integration test untuk Kasir Warung.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Sampai Bab 10, Kasir Warung punya validasi, perhitungan, dan error. Sekarang kita menambahkan test agar aturan itu tidak rusak saat kode berubah.
+
+<StudyCase title="Kasir Warung: test aturan bisnis" intro="Menguji input, diskon, subtotal, dan pembayaran gagal.">
+  <StudyCaseStep
+    title="Test validasi input"
+    goal="Memastikan input salah menghasilkan error yang tepat."
+  >
+    `parse_jumlah` mengembalikan `Result`. Test bisa memeriksa variant error tanpa mencetak pesan.
+
+    ```rust
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn jumlah_nol_ditolak() {
+            let hasil = parse_jumlah("0");
+            assert!(matches!(
+                hasil,
+                Err(KasirError::InputTidakValid(_))
+            ));
+        }
+
+        #[test]
+        fn teks_ditolak() {
+            assert!(matches!(
+                parse_jumlah("dua"),
+                Err(KasirError::InputTidakValid(_))
+            ));
+        }
+
+        #[test]
+        fn jumlah_valid_diterima() {
+            assert_eq!(parse_jumlah("3").unwrap(), 3);
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      `matches!` memeriksa pattern tanpa harus menangani seluruh variant. Cocok untuk test error.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Test memastikan input salah tidak berubah menjadi panic dan input valid tetap diterima.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Test perhitungan"
+    goal="Menguji subtotal dan diskon dengan data yang mudah dibaca."
+  >
+    Buat helper kecil di module test untuk menyusun transaksi. Helper test boleh memakai nilai tetap.
+
+    ```rust
+    fn transaksi_contoh() -> Transaksi {
+        let menu = HashMap::from([
+            (
+                "KOPI".to_string(),
+                MenuItem {
+                    nama: "Kopi".to_string(),
+                    harga: 12_000,
+                },
+            ),
+            (
+                "ROTI".to_string(),
+                MenuItem {
+                    nama: "Roti".to_string(),
+                    harga: 8_000,
+                },
+            ),
+        ]);
+
+        let items = vec![
+            ItemPesanan::baru("KOPI", 1),
+            ItemPesanan::baru("ROTI", 2),
+        ];
+
+        Transaksi::baru(String::from("Bu Sri"), menu, items)
+    }
+
+    #[test]
+    fn subtotal_sesuai_menu() {
+        let transaksi = transaksi_contoh();
+        assert_eq!(transaksi.subtotal().unwrap(), 28_000);
+    }
+    ```
+
+    <Fragment slot="hint">
+      Fokuskan satu test pada satu aturan. Test subtotal tidak perlu memeriksa status pembayaran.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Dengan helper, test tetap pendek dan data uji tidak tersebar.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Test pembayaran dan integration test"
+    goal="Menguji aturan pembayaran dan memakai API public dari luar crate."
+  >
+    Pembayaran kedua harus menghasilkan error. Integration test memakai library seperti pemakai luar.
+
+    ```rust
+    #[test]
+    fn pembayaran_kedua_ditolak() {
+        let mut transaksi = transaksi_contoh();
+        transaksi.bayar(MetodeBayar::Qris).unwrap();
+
+        let hasil = transaksi.bayar(MetodeBayar::Tunai);
+        assert!(matches!(hasil, Err(KasirError::PembayaranGagal(_))));
+    }
+    ```
+
+    File `tests/kasir.rs`:
+
+    ```rust
+    use kasir_warung::menu::ItemPesanan;
+
+    #[test]
+    fn item_pesanan_public_bisa_dibuat() {
+        let item = ItemPesanan::baru("KOPI", 1);
+        assert_eq!(item.subtotal(), 12_000);
+    }
+    ```
+
+    <Fragment slot="hint">
+      Integration test hanya bisa memakai item public. Kalau helper test private dibutuhkan, letakkan di unit test atau buat helper public khusus test.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Unit test menguji detail internal. Integration test memastikan API public tetap bekerja dari sudut pemakai crate.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Contoh assertion yang bisa dijalankan
+
+Playground tidak menjalankan `cargo test`, tetapi kamu bisa melihat logika assertion di dalam `main`.
+
+<RustPlayground
+  code={`fn harga_setelah_diskon(subtotal: u32) -> u32 {
+    if subtotal >= 40_000 {
+        subtotal - (subtotal * 10 / 100)
+    } else {
+        subtotal
+    }
+}
+
+fn main() {
+    assert_eq!(harga_setelah_diskon(39_999), 39_999);
+    assert_eq!(harga_setelah_diskon(40_000), 36_000);
+    assert_eq!(harga_setelah_diskon(50_000), 45_000);
+
+    println!("Aturan diskon sesuai");
+}`}
+  filename="src/main.rs"
+  label="Assertion aturan diskon"
+/>
+
+## Keadaan setelah Bab 11
+
+- Validasi input memiliki unit test untuk nol, teks, dan nilai valid.
+- Subtotal diuji dengan menu dan item contoh.
+- Pembayaran kedua diuji sebagai error.
+- Integration test dapat memakai API public library.
+- Perilaku aplikasi tidak berubah; test hanya menambah jaring pengaman.
+- Belum ada test endpoint HTTP karena endpoint belum ada.
+
+:::note[Kalau di bahasa lain]
+Jest, go test, PHPUnit, dan pytest sama-sama memisahkan tahap arrange, act, dan assert. Rust memakai fungsi `#[test]` serta `assert_eq!`/`assert!`, dan integration test berada di crate terpisah. Konsepnya mirip, alatnya menyatu dengan Cargo.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa test validasi memakai matches!?',
+      options: [
+        'Untuk memeriksa variant error tanpa menangani semua kemungkinan',
+        'Untuk menjalankan fungsi dua kali',
+        'Untuk mengubah Result menjadi panic',
+        'Untuk membuat test selalu lulus',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. matches! cocok untuk assertion pattern.',
+        'Salah. Tidak ada pengulangan.',
+        'Salah. matches! tidak panic karena Result.',
+        'Salah. Test tetap bisa gagal.',
+      ],
+      explanation:
+        'Test error hanya perlu memastikan variant yang diharapkan muncul.',
+    },
+    {
+      question: 'Mengapa integration test tidak bisa menguji fungsi private?',
+      options: [
+        'Karena integration test adalah crate terpisah yang hanya melihat API public',
+        'Karena fungsi private tidak bisa dipanggil sama sekali',
+        'Karena Cargo melarang test di folder tests',
+        'Karena test tidak punya akses file',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Integration test memakai library seperti pemakai luar.',
+        'Salah. Fungsi private bisa dipanggil dari module yang sama.',
+        'Salah. Cargo mendukung tests.',
+        'Salah. Akses file bukan penyebabnya.',
+      ],
+      explanation:
+        'Gunakan unit test untuk detail private dan integration test untuk API public.',
+    },
+    {
+      question: 'Apa yang sebaiknya diuji saat pembayaran kedua?',
+      options: [
+        'Bahwa hasilnya Err PembayaranGagal, bukan panic',
+        'Bahwa status berubah menjadi Baru',
+        'Bahwa HashMap menjadi kosong',
+        'Bahwa program berhenti',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Aturan bisnis mengembalikan error yang bisa ditangani.',
+        'Salah. Status sudah bukan Baru.',
+        'Salah. Pembayaran tidak menghapus menu.',
+        'Salah. Program tidak boleh berhenti.',
+      ],
+      explanation:
+        'Test memastikan kegagalan pembayaran tetap menjadi nilai Result.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

@@ -1,0 +1,345 @@
+---
+title: '12.3 Refactoring dan error'
+description: 'Memisahkan konfigurasi, mengembalikan Result dari build dan run, serta membagi main.rs dengan lib.rs.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Setelah file berhasil dibaca, `main` melakukan terlalu banyak hal: membaca argumen, menyimpan konfigurasi, membaca file, dan mencetak hasil. Bab ini memecah tanggung jawab itu dan mengganti panic dengan `Result`.
+
+## Empat masalah
+
+Kode sebelumnya punya empat masalah:
+
+1. `main` menangani parsing argumen sekaligus logika pencarian.
+2. Variabel konfigurasi dan variabel kerja bercampur di satu scope.
+3. `expect` mencetak pesan yang sama untuk semua kegagalan membaca file.
+4. Akses indeks tanpa pemeriksaan menghasilkan pesan panic yang membingungkan pengguna.
+
+Refactoring dilakukan bertahap dan program dijalankan setelah setiap langkah.
+
+## Memisahkan parse_config
+
+Langkah pertama, pindahkan logika pemilihan argumen ke fungsi `parse_config`:
+
+```rust
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let (query, file_path) = parse_config(&args);
+
+    println!("Mencari {query}");
+    println!("Di file {file_path}");
+}
+
+fn parse_config(args: &[String]) -> (&str, &str) {
+    let query = &args[1];
+    let file_path = &args[2];
+
+    (query, file_path)
+}
+```
+
+Fungsi ini masih mengembalikan tuple. Tuple cepat, tetapi tidak memberi nama pada nilai yang dikembalikan.
+
+## Config dengan field bernama
+
+Query dan path adalah bagian dari satu konfigurasi. Struct memberi nama pada hubungan itu:
+
+```rust
+struct Config {
+    query: String,
+    file_path: String,
+}
+
+fn parse_config(args: &[String]) -> Config {
+    let query = args[1].clone();
+    let file_path = args[2].clone();
+
+    Config { query, file_path }
+}
+```
+
+`Config` memiliki `String`, bukan `&str`, karena `args` hanya meminjamkan nilainya. Kalau `Config` menyimpan reference ke `args`, lifetime harus ditulis dan `Config` tidak boleh hidup lebih lama dari `args`. Untuk dua string kecil yang dibuat sekali, `clone` adalah jalan paling sederhana. Buku mencatat bahwa salinan ini menghabiskan sedikit waktu dan memory, dan itu dapat diterima pada tahap ini.
+
+## Config::build
+
+Fungsi yang membuat `Config` lebih idiomatis sebagai associated function `Config::build`. Nama `build` dipakai karena fungsi `new` biasanya tidak gagal, sedangkan fungsi ini bisa menolak argumen yang kurang.
+
+<RustPlayground
+  code={`struct Config {
+    query: String,
+    file_path: String,
+}
+
+impl Config {
+    fn build(args: &[String]) -> Result<Config, &'static str> {
+        if args.len() < 3 {
+            return Err("argumen kurang");
+        }
+
+        Ok(Config {
+            query: args[1].clone(),
+            file_path: args[2].clone(),
+        })
+    }
+}
+
+fn main() {
+    let args = vec![
+        String::from("minigrep"),
+        String::from("rust"),
+        String::from("puisi.txt"),
+    ];
+
+    match Config::build(&args) {
+        Ok(config) => {
+            println!("Mencari {}", config.query);
+            println!("Di file {}", config.file_path);
+        }
+        Err(pesan) => println!("Problem: {pesan}"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Config::build mengembalikan Result"
+/>
+
+Kalau `args` kurang dari tiga elemen, fungsi mengembalikan `Err` berisi string statis. Kalau cukup, hasilnya `Ok(Config)`. Pemanggil yang memutuskan bagaimana error ditampilkan.
+
+## Operator ? di main
+
+Operator `?` hanya bisa dipakai di fungsi yang mengembalikan `Result`, `Option`, atau tipe yang mengimplementasikan `FromResidual`. `main` mengembalikan `()`, sehingga `?` di dalamnya ditolak.
+
+<RustPlayground
+  code={`fn buat_config(panjang: usize) -> Result<String, String> {
+    if panjang < 3 {
+        return Err(String::from("argumen kurang"));
+    }
+
+    Ok(String::from("konfigurasi siap"))
+}
+
+fn main() {
+    let config = buat_config(1)?;
+    println!("{config}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error operator tanya di main"
+/>
+
+Pesan `the ? operator can only be used in a function that returns Result` muncul karena `main` tidak mengembalikan `Result`. Di kode asli, error dari `Config::build` ditangani dengan `unwrap_or_else`, bukan `?`.
+
+## unwrap_or_else dan exit status
+
+`unwrap_or_else` mengambil nilai `Ok`, atau menjalankan closure jika hasilnya `Err`:
+
+```rust
+use std::process;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let config = Config::build(&args).unwrap_or_else(|err| {
+        println!("Problem parsing arguments: {err}");
+        process::exit(1);
+    });
+
+    println!("Mencari {}", config.query);
+    println!("Di file {}", config.file_path);
+}
+```
+
+Closure adalah fungsi anonim yang ditulis di antara `| |`. Di sini closure menerima `err` dan menjalankan dua baris: mencetak pesan lalu keluar dengan status 1. Status bukan nol menandakan program gagal, sehingga skrip lain yang memanggil program ini bisa mendeteksinya.
+
+## Memindahkan logika ke run
+
+Fungsi `run` menampung logika setelah konfigurasi siap. `main` hanya menyiapkan konfigurasi, memanggil `run`, dan menangani error.
+
+<RustPlayground
+  code={`use std::error::Error;
+
+struct Config {
+    query: String,
+    file_path: String,
+}
+
+impl Config {
+    fn build(args: &[String]) -> Result<Config, &'static str> {
+        if args.len() < 3 {
+            return Err("argumen kurang");
+        }
+
+        Ok(Config {
+            query: args[1].clone(),
+            file_path: args[2].clone(),
+        })
+    }
+}
+
+fn run(config: &Config, contents: &str) -> Result<(), Box<dyn Error>> {
+    if contents.is_empty() {
+        return Err("isi file kosong".into());
+    }
+
+    for line in contents.lines() {
+        if line.contains(&config.query) {
+            println!("{line}");
+        }
+    }
+
+    Ok(())
+}
+
+fn main() {
+    let args = vec![
+        String::from("minigrep"),
+        String::from("rust"),
+        String::from("puisi.txt"),
+    ];
+
+    let config = match Config::build(&args) {
+        Ok(config) => config,
+        Err(err) => {
+            println!("Problem parsing arguments: {err}");
+            return;
+        }
+    };
+
+    let contents = "Rust aman\\nBelajar Rust\\nBaris lain";
+
+    if let Err(err) = run(&config, contents) {
+        println!("Problem: {err}");
+    }
+}`}
+  filename="src/main.rs"
+  label="run mengembalikan Result dan main menangani error"
+/>
+
+`Result<(), Box<dyn Error>>` berarti fungsi mengembalikan nilai unit saat sukses, atau tipe apa pun yang mengimplementasikan trait `Error` saat gagal. `Box<dyn Error>` memberi fleksibilitas karena error dari file, parsing, dan sumber lain bisa berbeda tipe. Trait object dibahas lebih dalam di Bab 18.
+
+Operator `?` meneruskan error ke pemanggil. Di `main`, hasil `run` diperiksa dengan `if let`. Kalau `Err`, pesan dicetak dan program keluar dengan status gagal.
+
+## Memisahkan main.rs dan lib.rs
+
+Logika pencarian dipindahkan ke `src/lib.rs`. Binary di `src/main.rs` mengimpor library dengan `use minigrep::search;`. Pola ini membuat logika bisa dites tanpa menjalankan binary.
+
+```rust
+// src/lib.rs
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    let mut results = Vec::new();
+
+    for line in contents.lines() {
+        if line.contains(query) {
+            results.push(line);
+        }
+    }
+
+    results
+}
+```
+
+```rust
+// src/main.rs
+use minigrep::search;
+
+fn run(config: &Config, contents: &str) -> Result<(), Box<dyn Error>> {
+    for line in search(&config.query, contents) {
+        println!("{line}");
+    }
+
+    Ok(())
+}
+```
+
+Lifetime `'a` pada `search` dibahas di halaman TDD. Untuk sementara, perhatikan bahwa hasil pencarian meminjam `contents`, bukan `query`.
+
+:::note[Kalau di bahasa lain]
+Di Node.js, error biasanya dilempar sebagai exception dan ditangkap `try/catch`. Go mengembalikan `(value, error)` dan memeriksa error secara eksplisit. PHP melempar exception atau mengembalikan `false`. Rust memakai `Result` sebagai nilai, sehingga pemanggil wajib memutuskan penanganannya. `process::exit(1)` adalah konvensi status proses di banyak sistem operasi, bukan fitur khusus Rust.
+:::
+
+:::tip[Tips]
+Lakukan refactoring dalam langkah kecil dan jalankan program setelah tiap langkah. Mengganti seluruh `main` sekaligus membuat penyebab error lebih sulit ditemukan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa Config menyimpan String, bukan &str dari args?',
+      options: [
+        'Karena Config tidak boleh meminjam data yang dimiliki args tanpa lifetime',
+        'Karena &str tidak bisa dibaca',
+        'Karena String lebih pendek',
+        'Karena args tidak punya tipe',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Menyimpan reference akan mengikat Config pada lifetime args.',
+        'Salah. &str bisa dibaca.',
+        'Salah. Panjang bukan alasan utamanya.',
+        'Salah. args bertipe Vec<String>.',
+      ],
+      explanation:
+        'Clone membuat Config memiliki datanya sendiri dan menghindari pengaturan lifetime.',
+    },
+    {
+      question: 'Apa yang dilakukan unwrap_or_else saat Result berisi Err?',
+      options: [
+        'Menjalankan closure dengan nilai error',
+        'Mengembalikan nilai Ok',
+        'Mengabaikan error',
+        'Mengulang fungsi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Closure menerima error dan menentukan tindakan.',
+        'Salah. Nilai Ok hanya dikembalikan pada kasus Ok.',
+        'Salah. Error ditangani, bukan diabaikan.',
+        'Salah. Tidak ada pengulangan otomatis.',
+      ],
+      explanation:
+        'Closure memungkinkan penanganan error khusus tanpa panic dari unwrap.',
+    },
+    {
+      question: 'Apa arti Result<(), Box<dyn Error>> pada run?',
+      options: [
+        'Sukses menghasilkan unit, gagal menghasilkan error apa pun yang mengimplementasikan Error',
+        'Fungsi selalu gagal',
+        'Fungsi mengembalikan String',
+        'Fungsi tidak bisa mengembalikan error',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Box<dyn Error> menampung berbagai tipe error.',
+        'Salah. Ok(()) adalah jalur sukses.',
+        'Salah. Tipe suksesnya unit.',
+        'Salah. Justru error bisa dikembalikan.',
+      ],
+      explanation:
+        'Trait object membuat run bisa memakai ? pada error dari beberapa sumber.',
+    },
+    {
+      question: 'Mengapa status keluar bukan nol penting?',
+      options: [
+        'Agar pemanggil seperti skrip tahu program gagal',
+        'Agar program berjalan lebih cepat',
+        'Agar file tidak perlu dibaca',
+        'Agar stdout kosong',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Status proses menandakan sukses atau gagal.',
+        'Salah. Status bukan pengatur kecepatan.',
+        'Salah. Status tidak mengubah pembacaan file.',
+        'Salah. stdout dan status adalah hal berbeda.',
+      ],
+      explanation:
+        'process::exit(1) memberi sinyal kegagalan kepada shell atau proses pemanggil.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

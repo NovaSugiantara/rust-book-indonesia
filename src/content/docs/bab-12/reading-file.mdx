@@ -1,0 +1,162 @@
+---
+title: '12.2 Membaca file'
+description: 'Membaca isi file dengan fs::read_to_string dan menangani io::Result.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Setelah path file didapat dari argumen, program perlu membaca isinya. `std::fs::read_to_string` membuka file dan mengembalikan seluruh isinya sebagai `String`.
+
+## Menyiapkan file contoh
+
+Buat `poem.txt` di root proyek. Puisi Emily Dickinson dipakai di buku karena punya beberapa baris dengan kata berulang.
+
+```text
+I'm nobody! Who are you?
+Are you nobody, too?
+Then there's a pair of us - don't tell!
+They'd banish us, you know.
+
+How dreary to be somebody!
+How public, like a frog
+To tell your name the livelong day
+To an admiring bog!
+```
+
+## Membaca isi file
+
+Tambahkan `use std::fs;` lalu panggil `fs::read_to_string`:
+
+```rust
+use std::env;
+use std::fs;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let query = &args[1];
+    let file_path = &args[2];
+
+    println!("Mencari {query}");
+    println!("Di file {file_path}");
+
+    let contents = fs::read_to_string(file_path)
+        .expect("file seharusnya bisa dibaca");
+
+    println!("Isi file:\n{contents}");
+}
+```
+
+`fs::read_to_string` mengembalikan `std::io::Result<String>`. Tipe itu adalah alias `Result<String, std::io::Error>`. File bisa gagal dibaca karena tidak ada, tidak punya izin, atau path bukan file teks yang valid.
+
+`expect` membuka nilai `Ok` dan menghentikan program dengan pesan jika hasilnya `Err`. Untuk eksplorasi awal ini cukup, tetapi pesan `expect` yang sama dipakai untuk semua penyebab kegagalan. Refactoring berikutnya akan menggantinya dengan penanganan error yang lebih informatif.
+
+## Result bukan String
+
+Hasil `read_to_string` tidak bisa langsung dipakai sebagai teks. Ia harus dibuka dengan `expect`, `unwrap`, `match`, atau operator `?`.
+
+<RustPlayground
+  code={`use std::fs;
+
+fn main() {
+    let contents = fs::read_to_string("poem.txt");
+    println!("{contents}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mencetak Result sebagai teks"
+/>
+
+Pesan `std::io::Error doesn't implement std::fmt::Display` versi `Result` muncul karena `println!` dengan `{}` membutuhkan `Display`, sedangkan `Result` tidak mengimplementasikannya. Buka hasilnya lebih dulu, misalnya dengan `expect` atau `match`.
+
+## Memakai isi file
+
+Setelah dibuka, `String` bisa dipecah menjadi baris dengan `lines`. Contoh berikut memakai teks yang disimpan langsung agar bisa dijalankan di playground. Di program asli, teks yang sama berasal dari `fs::read_to_string`.
+
+<RustPlayground
+  code={`fn main() {
+    let contents = "I'm nobody! Who are you?\\nAre you nobody, too?\\nThen there's a pair of us - don't tell!\\n";
+
+    for line in contents.lines() {
+        println!("{line}");
+    }
+
+    println!("Jumlah baris: {}", contents.lines().count());
+}`}
+  filename="src/main.rs"
+  label="Memecah isi file menjadi baris"
+/>
+
+`lines` memisahkan teks pada newline dan membuang `\r` di akhir baris. Ini nyaman untuk file teks, tetapi bukan parser format biner.
+
+:::note[Kalau di bahasa lain]
+Node.js memakai `fs.readFileSync(path, "utf8")` dan mengembalikan string atau melempar exception. Go memakai `os.ReadFile` yang mengembalikan `[]byte` dan `error`. PHP memakai `file_get_contents`. Rust mengembalikan `Result<String, io::Error>`, sehingga kegagalan membaca file adalah nilai yang harus ditangani, bukan exception tersembunyi.
+:::
+
+:::tip[Tips]
+Baca file setelah argumen tervalidasi. Kalau path belum tentu ada, tangani `Err` dan tampilkan path yang gagal dibaca agar pengguna tahu apa yang harus diperbaiki.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa tipe hasil fs::read_to_string?',
+      options: [
+        'Result<String, io::Error>',
+        'String langsung',
+        'Vec<String>',
+        'Option<File>',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Hasilnya Result berisi String atau io::Error.',
+        'Salah. Hasilnya dibungkus Result.',
+        'Salah. Bukan vector baris.',
+        'Salah. read_to_string mengembalikan isi, bukan File.',
+      ],
+      explanation:
+        'Karena membaca file bisa gagal, hasilnya berupa Result.',
+    },
+    {
+      question: 'Apa yang dilakukan expect pada Result?',
+      options: [
+        'Mengembalikan nilai Ok atau panic jika Err',
+        'Mengabaikan error dan mengembalikan string kosong',
+        'Mengubah Result menjadi Vec',
+        'Membaca file dua kali',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. expect membuka Ok dan panic pada Err.',
+        'Salah. Error tidak diabaikan.',
+        'Salah. Tidak ada konversi ke Vec.',
+        'Salah. File dibaca sekali.',
+      ],
+      explanation:
+        'expect berguna untuk prototipe, tetapi pesannya sama untuk semua penyebab error.',
+    },
+    {
+      question: 'Mengapa println!("{contents}") gagal saat contents adalah Result?',
+      options: [
+        'Karena Result tidak mengimplementasikan Display',
+        'Karena Result selalu kosong',
+        'Karena println hanya menerima angka',
+        'Karena file belum dibuka',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Result tidak punya implementasi Display untuk dicetak dengan {}.',
+        'Salah. Result bisa berisi nilai.',
+        'Salah. println bisa mencetak teks.',
+        'Salah. Masalahnya tipe, bukan status file.',
+      ],
+      explanation:
+        'Gunakan expect, match, atau ? untuk membuka Result sebelum mencetak isinya.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

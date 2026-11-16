@@ -53,7 +53,7 @@ Kasir Warung dimulai sebagai CLI di Bab 1 dan tumbuh menjadi layanan backend. Se
 
 Aturan peta:
 
-- Bab 4 sampai 9 sudah ditulis. Jangan menulis bab 10 sampai 21 sebelum ada tugas khusus untuk bab itu.
+- Bab 4 sampai 12 sudah ditulis. Jangan menulis bab 13 sampai 21 sebelum ada tugas khusus untuk bab itu.
 - Setiap bab yang menyentuh Kasir Warung harus meninggalkan kode yang bisa dijalankan dan output contoh yang benar.
 - Jangan memakai fitur dari bab yang belum diajarkan tanpa penjelasan singkat. Kalau terpaksa, jelaskan alasannya di callout.
 - Bab 4 dan 5 mengubah cara data transaksi disimpan. Jangan mempertahankan array harga dari Bab 3 kalau struct sudah tersedia.
@@ -188,6 +188,27 @@ src/
 │   │   ├── result.mdx
 │   │   ├── panic-or-result.mdx
 │   │   └── studi-kasus.mdx
+│   ├── bab-10/
+│   │   ├── index.mdx
+│   │   ├── generics.mdx
+│   │   ├── traits.mdx
+│   │   ├── lifetimes.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-11/
+│   │   ├── index.mdx
+│   │   ├── writing-tests.mdx
+│   │   ├── running-tests.mdx
+│   │   ├── test-organization.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-12/
+│   │   ├── index.mdx
+│   │   ├── accepting-arguments.mdx
+│   │   ├── reading-file.mdx
+│   │   ├── refactoring.mdx
+│   │   ├── tdd.mdx
+│   │   ├── environment-variables.mdx
+│   │   ├── stderr.mdx
+│   │   └── studi-kasus.mdx
 │   ├── capstone/
 │   │   ├── index.mdx
 │   │   └── framework.mdx
@@ -197,7 +218,7 @@ src/
 │   │   ├── langkah-2.mdx
 │   │   ├── langkah-3.mdx
 │   │   └── langkah-4.mdx
-│   └── bab-4.mdx ... bab-21.mdx
+│   └── bab-13.mdx ... bab-21.mdx
 ├── data/chapters.ts
 ├── scripts/progress.ts
 └── styles/custom.css
@@ -783,6 +804,91 @@ Kontrak setelah Bab 9:
 - Panic hanya untuk invariant internal yang rusak, bukan input pengguna.
 - `Vec` dan `HashMap` tetap dipakai.
 - Belum ada handler HTTP; pemetaan error ke status HTTP masuk Capstone.
+
+### Keadaan setelah Bab 10
+
+Bab 10 menambahkan trait pembayaran, fungsi generik, dan view yang meminjam transaksi. Pembayaran sekarang memakai kontrak perilaku, bukan hanya enum metode.
+
+```rust
+trait PaymentMethod {
+    fn label(&self) -> &'static str;
+    fn bayar(&self, total: u32) -> Result<(), KasirError>;
+}
+
+fn proses_pembayaran<T: PaymentMethod>(
+    metode: &T,
+    total: u32,
+) -> Result<(), KasirError>;
+
+struct Ringkasan<'a> {
+    pelanggan: &'a str,
+    subtotal: u32,
+}
+```
+
+Kontrak setelah Bab 10:
+
+- `Tunai` dan `Qris` mengimplementasikan `PaymentMethod`.
+- `proses_pembayaran` generik dengan trait bound.
+- `Ringkasan<'a>` meminjam nama pelanggan dari `Transaksi`, tanpa clone.
+- `KasirError` tetap menjadi tipe error aplikasi.
+- Belum ada trait object `Box<dyn PaymentMethod>`; itu masuk Bab 18.
+- Belum ada test otomatis; itu masuk Bab 11.
+
+### Keadaan setelah Bab 11
+
+Bab 11 menambahkan unit test di module dan integration test di folder `tests`. Perilaku aplikasi tidak berubah; test menjadi jaring pengaman untuk validasi, perhitungan, dan pembayaran.
+
+```text
+kasir_warung/
+├── src/
+│   ├── lib.rs
+│   ├── menu.rs
+│   ├── transaksi.rs
+│   ├── laporan.rs
+│   └── main.rs
+└── tests/
+    └── kasir.rs
+```
+
+Kontrak setelah Bab 11:
+
+- Unit test memeriksa `parse_jumlah`, subtotal, diskon, dan pembayaran kedua.
+- Integration test memakai API public library.
+- Test error memakai `matches!` atau pengecekan `Result`.
+- Perilaku runtime tetap sama.
+- Belum ada test endpoint HTTP; endpoint baru ada di Capstone.
+- Belum ada iterator/closure tingkat lanjut; CLI laporan sudah ada di Bab 12 dan iterator masuk Bab 13.
+
+### Keadaan setelah Bab 12
+
+Bab 12 menambahkan binary CLI laporan harian. Binary membaca path file dari argumen, membaca file dengan `fs::read_to_string`, memvalidasi setiap baris, lalu mencetak rekap ke stdout. Error ditulis ke stderr dan program keluar dengan status 1.
+
+```text
+kasir_warung/
+├── src/
+│   ├── lib.rs
+│   ├── menu.rs
+│   ├── transaksi.rs
+│   ├── laporan.rs
+│   └── main.rs
+└── tests/
+    ├── kasir.rs
+    └── laporan.rs
+```
+
+Kontrak setelah Bab 12:
+
+- Perintah: `kasir-laporan <file>`.
+- Format baris: `KODE,jumlah`, satu baris per item; baris kosong diabaikan.
+- `Config::build` menolak argumen yang kurang dengan `LaporanError::ArgumenKurang`.
+- `jalankan` membaca file dan meneruskan error dengan `?`.
+- `parse_baris` menormalkan kode menjadi huruf besar dan menolak jumlah nol atau bukan angka.
+- `Rekap` memakai `HashMap<String, RingkasItem>` untuk jumlah dan subtotal per kode.
+- Kode menu yang tidak dikenal menjadi `LaporanError::KodeTidakDikenal`.
+- Laporan sukses ditulis dengan `println!`; error ditulis dengan `eprintln!`.
+- Integration test di `tests/laporan.rs` menguji normalisasi, jumlah nol, kode tidak dikenal, dan total.
+- Belum ada iterator dan closure tingkat lanjut; itu masuk Bab 13.
 
 ### Aturan untuk bab berikutnya
 

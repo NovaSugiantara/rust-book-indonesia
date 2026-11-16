@@ -1,0 +1,79 @@
+---
+title: 'Bab 11: Menulis test otomatis'
+description: 'Menulis unit test, integration test, dan menjalankan cargo test di proyek Rust.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Test otomatis membuat perubahan kode bisa diperiksa tanpa menjalankan seluruh aplikasi secara manual. Rust menyertakan test runner di Cargo, jadi tidak perlu framework eksternal untuk memulai.
+
+Di backend, test membantu menjaga aturan bisnis seperti validasi input, perhitungan total, dan pemetaan error ke response. Test tidak membuktikan program bebas bug, tetapi memberi jaring pengaman saat kode berubah.
+
+## Urutan bab
+
+1. [Menulis test](writing-tests/) membahas attribute `#[test]`, assertion, `should_panic`, dan test yang mengembalikan `Result`.
+2. [Menjalankan test](running-tests/) membahas `cargo test`, filter, output, thread, dan test yang diabaikan.
+3. [Organisasi test](test-organization/) membahas unit test di module dan integration test di folder `tests`.
+4. [Studi kasus: Kasir Warung](studi-kasus/) menambahkan test untuk validasi, subtotal, dan pembayaran.
+
+:::note[Kenapa begini?]
+Test di Rust adalah fungsi biasa yang ditandai `#[test]`. `cargo test` mengompilasi kode test dan menjalankannya. Kalau sebuah test panic, test itu gagal. Ini alasan `assert_eq!`, `assert!`, dan `panic!` menjadi alat utama di test.
+:::
+
+:::tip[Tips]
+Mulai dari satu test untuk perilaku yang paling penting. Test yang menguji terlalu banyak hal sekaligus sulit diketahui penyebab gagalnya.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Bagaimana menandai sebuah fungsi sebagai test?',
+      options: ['#[test]', '#[cfg(test)] saja', 'fn test()', '#[bench]'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Attribute #[test] menandai fungsi test.',
+        'Salah. #[cfg(test)] menandai module test, bukan fungsi test.',
+        'Salah. Nama fungsi tidak cukup.',
+        'Salah. #[bench] untuk benchmark, bukan test biasa.',
+      ],
+      explanation:
+        'Test runner Cargo mencari fungsi dengan attribute #[test].',
+    },
+    {
+      question: 'Apa arti panic di dalam test?',
+      options: [
+        'Test gagal',
+        'Test dilewati',
+        'Test dianggap lulus',
+        'Program produksi berhenti',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Panic menandai test gagal.',
+        'Salah. Test dilewati dengan #[ignore].',
+        'Salah. Panic bukan lulus.',
+        'Salah. Test berjalan di proses test.',
+      ],
+      explanation:
+        'Test dianggap berhasil kalau fungsi selesai tanpa panic.',
+    },
+    {
+      question: 'Di mana integration test biasanya diletakkan?',
+      options: ['Folder tests', 'Folder src/bin', 'Cargo.lock', 'Folder target'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Setiap file di tests adalah integration test crate.',
+        'Salah. src/bin berisi binary crate.',
+        'Salah. Cargo.lock mencatat dependency.',
+        'Salah. target berisi hasil build.',
+      ],
+      explanation:
+        'Integration test memakai library dari luar, seperti pemakai crate.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

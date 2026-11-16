@@ -1,0 +1,89 @@
+---
+title: 'Bab 10: Generic, trait, dan lifetime'
+description: 'Menulis kode generik, trait sebagai kontrak, dan lifetime untuk reference yang aman.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Tiga fitur ini membuat Rust bisa menangani abstraksi tanpa mengorbankan pemeriksaan tipe. Generic membuat fungsi dan tipe bekerja untuk banyak tipe. Trait mendefinisikan perilaku bersama. Lifetime memastikan reference tidak hidup lebih lama dari data yang dipinjam.
+
+Di backend, ketiganya muncul saat kamu membuat handler generik, trait untuk penyimpanan atau pembayaran, dan fungsi yang mengembalikan potongan data dari request tanpa menyalinnya.
+
+## Urutan bab
+
+1. [Generic](generics/) membahas fungsi generik, struct generik, method, dan monomorphization.
+2. [Trait](traits/) membahas kontrak perilaku, default method, trait bound, impl Trait, dan where.
+3. [Lifetime](lifetimes/) membahas reference yang valid, anotasi `'a`, lifetime pada struct, dan elision.
+4. [Studi kasus: Kasir Warung](studi-kasus/) menambahkan trait pembayaran dan lifetime pada ringkasan.
+
+:::note[Kenapa begini?]
+Generic dan trait mengurangi duplikasi tanpa kehilangan tipe konkret. Lifetime menyelesaikan masalah yang sama untuk reference: compiler perlu tahu berapa lama pinjaman valid. Ketiganya adalah alat desain, bukan sintaks yang harus dihafal terpisah.
+:::
+
+:::tip[Tips]
+Jangan mulai dari generic. Tulis versi konkret terlebih dahulu, lihat duplikasinya, lalu generalisasi. Compiler akan menunjukkan batas trait yang dibutuhkan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa fungsi generic?',
+      options: [
+        'Menulis kode yang bekerja untuk banyak tipe tanpa duplikasi',
+        'Menghapus semua pemeriksaan tipe',
+        'Membuat program berjalan tanpa compiler',
+        'Mengubah tipe menjadi String',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Generic memakai parameter tipe.',
+        'Salah. Pemeriksaan tipe tetap dilakukan.',
+        'Salah. Generic tetap dikompilasi.',
+        'Salah. Generic tidak mengubah tipe menjadi String.',
+      ],
+      explanation:
+        'Parameter tipe membuat satu definisi dipakai untuk banyak tipe konkret.',
+    },
+    {
+      question: 'Apa fungsi trait?',
+      options: [
+        'Mendefinisikan perilaku yang bisa diimplementasikan banyak tipe',
+        'Menyimpan data di heap',
+        'Membuat module baru',
+        'Menggantikan lifetime',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Trait adalah kontrak method.',
+        'Salah. Trait bukan collection.',
+        'Salah. Module diatur mod.',
+        'Salah. Trait dan lifetime menyelesaikan masalah berbeda.',
+      ],
+      explanation:
+        'Trait memungkinkan fungsi meminta perilaku, bukan tipe konkret.',
+    },
+    {
+      question: 'Apa yang dijamin lifetime?',
+      options: [
+        'Reference tidak hidup lebih lama dari data yang dipinjam',
+        'Semua data disimpan di stack',
+        'Program tidak pernah panic',
+        'Semua tipe menjadi Copy',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Lifetime memastikan pinjaman valid.',
+        'Salah. Data heap tetap ada.',
+        'Salah. Lifetime tidak menghapus panic.',
+        'Salah. Lifetime tidak mengubah trait Copy.',
+      ],
+      explanation:
+        'Lifetime mencegah dangling reference.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

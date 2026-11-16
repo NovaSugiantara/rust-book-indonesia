@@ -1,0 +1,197 @@
+---
+title: '11.3 Organisasi test'
+description: 'Unit test di module dan integration test di folder tests.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Rust membedakan unit test dan integration test. Unit test tinggal dekat kode yang diuji. Integration test memakai crate dari luar, seperti pemakai library.
+
+## Unit test
+
+Unit test berada di module yang sama dengan kode dan biasanya dibungkus `#[cfg(test)]`.
+
+```rust
+pub fn add_two(a: u64) -> u64 {
+    internal_adder(a, 2)
+}
+
+fn internal_adder(left: u64, right: u64) -> u64 {
+    left + right
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn internal() {
+        assert_eq!(internal_adder(2, 2), 4);
+    }
+}
+```
+
+Karena berada di dalam crate yang sama, unit test bisa menguji fungsi private seperti `internal_adder`. Integration test tidak bisa.
+
+## Integration test
+
+Integration test diletakkan di folder `tests` pada root package.
+
+```text
+adder/
+├── Cargo.toml
+├── src/
+│   └── lib.rs
+└── tests/
+    └── integration_test.rs
+```
+
+Isi `tests/integration_test.rs`:
+
+```rust
+use adder::add_two;
+
+#[test]
+fn it_adds_two() {
+    assert_eq!(add_two(2), 4);
+}
+```
+
+Setiap file di `tests` dikompilasi sebagai crate terpisah. File itu harus mengimpor library dengan nama package, bukan memakai `crate::`.
+
+Jalankan semua test:
+
+```console
+$ cargo test
+running 1 test
+test tests::internal ... ok
+
+running 1 test
+test it_adds_two ... ok
+```
+
+Jalankan hanya satu file integration test:
+
+```console
+$ cargo test --test integration_test
+```
+
+## Module bantu untuk test
+
+Kalau beberapa integration test memakai helper yang sama, letakkan helper di `tests/common/mod.rs`.
+
+```text
+tests/
+├── common/
+│   └── mod.rs
+└── integration_test.rs
+```
+
+```rust
+mod common;
+
+#[test]
+fn it_adds_two() {
+    common::setup();
+    assert_eq!(adder::add_two(2), 4);
+}
+```
+
+File di `tests/common/mod.rs` tidak dianggap integration test tersendiri karena berada di subfolder `common`.
+
+## Contoh perilaku
+
+<RustPlayground
+  code={`fn harga_setelah_diskon(subtotal: u32) -> u32 {
+    if subtotal >= 40_000 {
+        subtotal - (subtotal * 10 / 100)
+    } else {
+        subtotal
+    }
+}
+
+fn main() {
+    assert_eq!(harga_setelah_diskon(39_999), 39_999);
+    assert_eq!(harga_setelah_diskon(40_000), 36_000);
+    assert_eq!(harga_setelah_diskon(50_000), 45_000);
+
+    println!("Aturan diskon sesuai");
+}`}
+  filename="src/main.rs"
+  label="Perilaku yang layak diuji"
+/>
+
+Di proyek nyata, tiga assertion itu bisa menjadi tiga test terpisah agar kegagalan menunjukkan kasus yang tepat.
+
+:::note[Kalau di bahasa lain]
+Jest biasanya memisahkan file test di folder `__tests__` atau `*.test.js`. Go menaruh test di file `_test.go` pada package yang sama. PHPUnit punya folder `tests`, dan pytest menemukan file `test_*.py`. Rust membedakan unit test dalam crate dan integration test yang mengimpor crate seperti pengguna luar.
+:::
+
+:::tip[Tips]
+Gunakan unit test untuk aturan internal dan edge case. Gunakan integration test untuk alur yang dilihat pemakai library atau API. Jangan menguji implementasi private dari integration test.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa keuntungan unit test di module yang sama?',
+      options: [
+        'Bisa menguji item private',
+        'Tidak perlu dijalankan',
+        'Otomatis menjadi integration test',
+        'Tidak membutuhkan assertion',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Unit test berada di dalam crate yang sama.',
+        'Salah. Unit test tetap dijalankan.',
+        'Salah. Integration test ada di folder tests.',
+        'Salah. Assertion tetap diperlukan.',
+      ],
+      explanation:
+        'Akses ke private item membuat unit test cocok untuk detail implementasi.',
+    },
+    {
+      question: 'Bagaimana integration test mengakses library?',
+      options: [
+        'Dengan use nama_package::item',
+        'Dengan crate::item',
+        'Dengan super::item',
+        'Dengan mod tests',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Integration test adalah crate terpisah.',
+        'Salah. crate menunjuk integration test itu sendiri.',
+        'Salah. super menunjuk module induk di crate yang sama.',
+        'Salah. mod tests bukan cara mengimpor library.',
+      ],
+      explanation:
+        'Integration test memakai API public seperti pemakai eksternal.',
+    },
+    {
+      question: 'Mengapa helper di tests/common/mod.rs tidak menjadi test sendiri?',
+      options: [
+        'Karena berada di subfolder common, bukan file langsung di tests',
+        'Karena helper tidak berisi fungsi',
+        'Karena Cargo mengabaikan folder tests',
+        'Karena file mod.rs selalu private',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Cargo hanya memperlakukan file langsung di tests sebagai test crate.',
+        'Salah. Helper bisa berisi fungsi.',
+        'Salah. Folder tests dipakai.',
+        'Salah. Alasan utamanya lokasi subfolder.',
+      ],
+      explanation:
+        'Subfolder common adalah pola untuk kode pendukung integration test.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

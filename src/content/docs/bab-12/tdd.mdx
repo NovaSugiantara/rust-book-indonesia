@@ -1,0 +1,201 @@
+---
+title: '12.4 TDD pencarian'
+description: 'Menulis test yang gagal lebih dulu, lalu mengimplementasikan search dengan lifetime dan lines.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Setelah logika pencarian berada di library, fungsi `search` bisa diuji langsung tanpa menjalankan binary. Halaman ini memakai test-driven development: tulis test yang gagal, buat test lulus dengan kode minimal, lalu rapikan.
+
+## Siklus TDD
+
+1. Tulis test yang gagal dan jalankan untuk memastikan gagalnya karena alasan yang benar.
+2. Tulis atau ubah kode secukupnya agar test lulus.
+3. Rapikan kode sambil memastikan test tetap lulus.
+4. Ulangi.
+
+Test lebih dulu memaksa kita menentukan perilaku yang diinginkan sebelum implementasi. Ini juga menjaga cakupan test tetap dekat dengan kebutuhan.
+
+## Test yang gagal
+
+Tambahkan module test di `src/lib.rs`:
+
+```rust
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    unimplemented!();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn one_result() {
+        let query = "duct";
+        let contents = "\
+Rust:
+safe, fast, productive.
+Pick three.";
+
+        assert_eq!(
+            vec!["safe, fast, productive."],
+            search(query, contents)
+        );
+    }
+}
+```
+
+Test mencari `duct`. Dari tiga baris, hanya `safe, fast, productive.` yang cocok. Test gagal karena `unimplemented!` panic dengan pesan `not implemented`.
+
+## Membuat test bisa dikompilasi
+
+Langkah kecil berikutnya adalah membuat fungsi mengembalikan vector kosong. Test masih gagal, tetapi sekarang gagal karena hasilnya tidak cocok, bukan karena panic.
+
+```rust
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    Vec::new()
+}
+```
+
+Kegagalan assertion menampilkan nilai kiri dan kanan, sehingga jelas bahwa implementasi belum mencari apa pun.
+
+## Kenapa ada lifetime 'a
+
+Hasil `search` berisi potongan dari `contents`, bukan dari `query`. Signature perlu menyatakan bahwa vector hasil hidup paling lama selama `contents` valid:
+
+```rust
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str>
+```
+
+Tanpa anotasi, compiler tidak tahu apakah `&str` di dalam vector meminjam `query` atau `contents`. Keduanya adalah input reference, sehingga ada dua kemungkinan.
+
+<RustPlayground
+  code={`fn search(query: &str, contents: &str) -> Vec<&str> {
+    let mut results = Vec::new();
+
+    for line in contents.lines() {
+        if line.contains(query) {
+            results.push(line);
+        }
+    }
+
+    results
+}
+
+fn main() {
+    let hasil = search("duct", "safe, fast, productive.\\nPick three.");
+    println!("{hasil:?}");
+}`}
+  expectError
+  filename="src/lib.rs"
+  label="Contoh error search tanpa lifetime"
+/>
+
+Pesan `missing lifetime specifier` muncul karena output reference tidak terhubung ke input mana pun. Compiler menyarankan `'_`, tetapi saran itu belum tentu benar. Di sini yang benar adalah mengikat hasil ke `contents`, karena hasil berisi baris dari `contents`.
+
+## Iterasi baris
+
+Method `lines` mengembalikan iterator baris tanpa karakter akhir baris. Untuk setiap baris, `contains` memeriksa apakah query muncul sebagai substring.
+
+<RustPlayground
+  code={`fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    let mut results = Vec::new();
+
+    for line in contents.lines() {
+        if line.contains(query) {
+            results.push(line);
+        }
+    }
+
+    results
+}
+
+fn main() {
+    let contents = "Rust:\\nsafe, fast, productive.\\nPick three.\\nTrust me.";
+
+    for line in search("duct", contents) {
+        println!("{line}");
+    }
+}`}
+  filename="src/lib.rs"
+  label="Implementasi search dengan lines dan contains"
+/>
+
+`contains` melakukan pencarian substring, bukan pencarian kata utuh. Query `duct` cocok dengan `productive`, dan query `Rust` juga akan cocok dengan `Trust` kalau huruf besar kecilnya sama. Perilaku ini sesuai dengan versi sederhana di buku.
+
+## Vector hasil
+
+`results` dibuat mutable sebelum loop, lalu `push` menambahkan setiap baris yang cocok. Setelah loop, vector dikembalikan. Karena elemennya `&'a str`, vector tidak menyalin teks; ia hanya menyimpan reference ke bagian `contents`.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, `String.prototype.includes` atau `filter` pada array baris melakukan pekerjaan serupa. Di Go, `strings.Contains` dipakai di dalam loop. Di PHP, `str_contains` tersedia sejak PHP 8. Rust memakai `contains` pada `str` dan mengembalikan reference, sehingga lifetime perlu dinyatakan agar compiler tahu sumber datanya.
+:::
+
+:::tip[Tips]
+Tulis test untuk kasus yang tidak cocok juga, bukan hanya yang cocok. Test `monomorphization` yang tidak ditemukan memastikan fungsi tidak mengembalikan baris secara asal.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa langkah pertama dalam TDD?',
+      options: [
+        'Menulis test yang gagal untuk perilaku yang diinginkan',
+        'Menulis seluruh implementasi lalu test',
+        'Menghapus semua test lama',
+        'Menjalankan program di production',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Test gagal menentukan target perilaku.',
+        'Salah. Implementasi menyusul secukupnya.',
+        'Salah. Test lama tetap berguna.',
+        'Salah. TDD berjalan lokal, bukan di production.',
+      ],
+      explanation:
+        'Test yang gagal memastikan kita tahu perilaku apa yang belum ada.',
+    },
+    {
+      question: 'Mengapa search memakai lifetime pada contents?',
+      options: [
+        'Karena hasil berisi potongan teks dari contents',
+        'Karena query selalu lebih pendek',
+        'Karena lines membutuhkan lifetime static',
+        'Karena Vec tidak bisa menyimpan reference',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Hasil meminjam data dari contents.',
+        'Salah. Panjang query bukan alasan.',
+        'Salah. lines tidak membutuhkan static.',
+        'Salah. Vec bisa menyimpan reference.',
+      ],
+      explanation:
+        'Lifetime menghubungkan umur hasil dengan sumber teks yang dipinjam.',
+    },
+    {
+      question: 'Apa yang dilakukan line.contains(query)?',
+      options: [
+        'Memeriksa apakah baris mengandung query sebagai substring',
+        'Membandingkan panjang baris dan query',
+        'Mengubah baris menjadi angka',
+        'Menghapus query dari baris',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. contains memeriksa substring.',
+        'Salah. Panjang tidak dibandingkan.',
+        'Salah. Tidak ada konversi angka.',
+        'Salah. Baris tidak diubah.',
+      ],
+      explanation:
+        'Karena itu query pendek bisa cocok dengan kata yang lebih panjang.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

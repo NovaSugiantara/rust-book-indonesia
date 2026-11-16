@@ -1,0 +1,309 @@
+---
+title: '10.2 Trait'
+description: 'Mendefinisikan perilaku bersama dengan trait, default method, dan trait bound.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Trait mendefinisikan method yang harus dimiliki sebuah tipe. Trait adalah kontrak perilaku. Tipe yang berbeda bisa mengimplementasikan trait yang sama, lalu fungsi bisa meminta trait itu alih-alih tipe konkret.
+
+## Mendefinisikan dan mengimplementasikan trait
+
+<RustPlayground
+  code={`trait Summary {
+    fn summarize(&self) -> String;
+}
+
+struct NewsArticle {
+    headline: String,
+    author: String,
+}
+
+impl Summary for NewsArticle {
+    fn summarize(&self) -> String {
+        format!("{}, by {}", self.headline, self.author)
+    }
+}
+
+struct SocialPost {
+    username: String,
+    content: String,
+}
+
+impl Summary for SocialPost {
+    fn summarize(&self) -> String {
+        format!("{}: {}", self.username, self.content)
+    }
+}
+
+fn main() {
+    let article = NewsArticle {
+        headline: String::from("Rust di backend"),
+        author: String::from("Redaksi"),
+    };
+
+    let post = SocialPost {
+        username: String::from("dev"),
+        content: String::from("Belajar trait"),
+    };
+
+    println!("{}", article.summarize());
+    println!("{}", post.summarize());
+}`}
+  filename="src/main.rs"
+  label="Trait Summary dengan dua implementasi"
+/>
+
+`impl Summary for NewsArticle` berarti `NewsArticle` berjanji menyediakan `summarize`. Kalau method wajib tidak ditulis, compiler menolak implementasinya.
+
+## Default method
+
+Trait bisa menyediakan implementasi default. Tipe yang memakai default tidak perlu menulis method itu.
+
+<RustPlayground
+  code={`trait Summary {
+    fn summarize(&self) -> String {
+        String::from("(Read more...)")
+    }
+}
+
+struct NewsArticle;
+
+impl Summary for NewsArticle {}
+
+fn main() {
+    let article = NewsArticle;
+    println!("{}", article.summarize());
+}`}
+  filename="src/main.rs"
+  label="Default method pada trait"
+/>
+
+Default method bisa memanggil method lain yang wajib diimplementasikan:
+
+<RustPlayground
+  code={`trait Summary {
+    fn summarize_author(&self) -> String;
+
+    fn summarize(&self) -> String {
+        format!("(Read more from {}...)", self.summarize_author())
+    }
+}
+
+struct SocialPost {
+    username: String,
+}
+
+impl Summary for SocialPost {
+    fn summarize_author(&self) -> String {
+        format!("@{}", self.username)
+    }
+}
+
+fn main() {
+    let post = SocialPost {
+        username: String::from("dev"),
+    };
+
+    println!("{}", post.summarize());
+}`}
+  filename="src/main.rs"
+  label="Default method yang memanggil method wajib"
+/>
+
+## Trait sebagai parameter
+
+Fungsi bisa menerima `impl Trait` atau parameter generic dengan trait bound.
+
+<RustPlayground
+  code={`trait Summary {
+    fn summarize(&self) -> String;
+}
+
+struct NewsArticle;
+
+impl Summary for NewsArticle {
+    fn summarize(&self) -> String {
+        String::from("Berita")
+    }
+}
+
+fn notify(item: &impl Summary) {
+    println!("Breaking news! {}", item.summarize());
+}
+
+fn main() {
+    notify(&NewsArticle);
+}`}
+  filename="src/main.rs"
+  label="Parameter impl Trait"
+/>
+
+Bentuk generic-nya setara untuk satu parameter:
+
+```rust
+fn notify<T: Summary>(item: &T) {
+    println!("Breaking news! {}", item.summarize());
+}
+```
+
+Perbedaannya terasa saat beberapa parameter harus bertipe sama. `fn notify(item1: &impl Summary, item2: &impl Summary)` boleh menerima dua tipe berbeda. `fn notify<T: Summary>(item1: &T, item2: &T)` memaksa keduanya bertipe sama.
+
+## Banyak bound dan where
+
+Kalau bound mulai panjang, gunakan `where`.
+
+```rust
+use std::fmt::{Debug, Display};
+
+fn tampilkan<T>(value: T)
+where
+    T: Display + Debug,
+{
+    println!("display: {value}");
+    println!("debug: {value:?}");
+}
+```
+
+`impl Trait` juga bisa dipakai di return type selama hanya ada satu tipe konkret yang dikembalikan.
+
+<RustPlayground
+  code={`trait Summary {
+    fn summarize(&self) -> String;
+}
+
+struct SocialPost;
+
+impl Summary for SocialPost {
+    fn summarize(&self) -> String {
+        String::from("post")
+    }
+}
+
+fn buat_post() -> impl Summary {
+    SocialPost
+}
+
+fn main() {
+    println!("{}", buat_post().summarize());
+}`}
+  filename="src/main.rs"
+  label="Return impl Trait"
+/>
+
+## Trait yang belum diimplementasikan
+
+Kalau tipe tidak mengimplementasikan trait yang diminta, pemanggilan ditolak.
+
+<RustPlayground
+  code={`trait Summary {
+    fn summarize(&self) -> String;
+}
+
+struct Draft;
+
+fn notify(item: &impl Summary) {
+    println!("{}", item.summarize());
+}
+
+fn main() {
+    let draft = Draft;
+    notify(&draft);
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error trait bound tidak terpenuhi"
+/>
+
+Pesan `Draft doesn't implement Summary` menunjukkan kontrak yang belum dipenuhi. Tambahkan `impl Summary for Draft` atau jangan kirim `Draft` ke fungsi itu.
+
+:::note[Kalau di bahasa lain]
+Trait mirip interface di TypeScript, Go, dan PHP, tetapi ada perbedaan. Di Go, interface biasanya kecil dan dipenuhi secara implisit. Di TypeScript, interface hilang saat runtime. Di PHP, kelas menulis `implements` dan harus menyediakan method yang diminta; trait PHP adalah mekanisme reuse method, bukan kontrak yang sama dengan trait Rust. Di Rust, trait bisa punya default method, trait bound diperiksa saat kompilasi, dan implementasi bisa dipakai tanpa inheritance.
+:::
+
+:::tip[Tips]
+Buat trait kecil yang mewakili satu kemampuan. Trait besar dengan banyak method sulit diimplementasikan dan sulit dites. `Summary` lebih mudah dipakai daripada `Everything`.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang didefinisikan trait?',
+      options: [
+        'Perilaku berupa method yang bisa diimplementasikan tipe lain',
+        'Lokasi file module',
+        'Ukuran memory tipe',
+        'Nilai default field struct',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Trait adalah kontrak method.',
+        'Salah. Lokasi file diatur mod.',
+        'Salah. Trait tidak menentukan ukuran.',
+        'Salah. Field default bukan fitur trait.',
+      ],
+      explanation:
+        'Trait memungkinkan fungsi meminta kemampuan, bukan tipe konkret.',
+    },
+    {
+      question: 'Apa perbedaan impl Trait dan generic T: Trait pada parameter?',
+      options: [
+        'impl Trait pada beberapa parameter boleh tipe berbeda; T yang sama memaksa satu tipe',
+        'impl Trait hanya untuk return type',
+        'Generic tidak memeriksa trait',
+        'Keduanya selalu identik untuk semua kasus',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Bound pada T yang sama menyatukan tipe parameter.',
+        'Salah. impl Trait bisa di parameter dan return.',
+        'Salah. Generic dengan bound tetap diperiksa.',
+        'Salah. Perbedaannya muncul saat beberapa parameter.',
+      ],
+      explanation:
+        'Pilih generic T saat parameter harus bertipe sama, impl Trait saat boleh berbeda.',
+    },
+    {
+      question: 'Kapan where clause berguna?',
+      options: [
+        'Saat trait bound banyak atau signature mulai panjang',
+        'Saat ingin menghapus trait',
+        'Saat membuat module baru',
+        'Saat memakai lifetime static',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. where memindahkan bound agar lebih mudah dibaca.',
+        'Salah. where tidak menghapus trait.',
+        'Salah. Module bukan urusan where.',
+        'Salah. static bukan alasan utama where.',
+      ],
+      explanation:
+        'where menjaga signature tetap terbaca saat bound bertambah.',
+    },
+    {
+      question: 'Apa yang terjadi jika tipe tidak mengimplementasikan trait yang diminta?',
+      options: [
+        'Compiler menolak dengan trait bound not satisfied',
+        'Program memakai implementasi kosong',
+        'Trait dibuat otomatis',
+        'Program berjalan tanpa method',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini error kompilasi.',
+        'Salah. Tidak ada implementasi otomatis.',
+        'Salah. Implementasi harus ditulis.',
+        'Salah. Method yang diminta tidak ada.',
+      ],
+      explanation:
+        'Trait bound memastikan fungsi hanya menerima tipe yang memenuhi kontrak.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

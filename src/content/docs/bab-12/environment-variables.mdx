@@ -1,0 +1,244 @@
+---
+title: '12.5 Environment variable'
+description: 'Membaca IGNORE_CASE dengan env::var dan menambahkan pencarian tanpa membedakan huruf besar kecil.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Pencarian bisa dibuat tidak membedakan huruf besar kecil lewat environment variable. Pengguna menyetel `IGNORE_CASE` sekali di sesi terminal, lalu semua pencarian mengikuti pengaturan itu tanpa harus mengetik opsi tambahan setiap kali.
+
+## env::var
+
+`std::env::var` menerima nama environment variable dan mengembalikan `Result<String, VarError>`:
+
+```rust
+use std::env;
+
+fn main() {
+    let ignore_case = env::var("IGNORE_CASE").is_ok();
+    println!("ignore_case: {ignore_case}");
+}
+```
+
+Hasilnya `Ok` jika variable diset, dan `Err` jika tidak diset. Program ini hanya peduli apakah variable ada, bukan nilainya, sehingga `is_ok` cukup. Kalau nilainya perlu dibaca, gunakan `match` atau `unwrap_or_else`.
+
+## Menambah field konfigurasi
+
+Tambahkan `ignore_case` ke `Config`:
+
+```rust
+struct Config {
+    query: String,
+    file_path: String,
+    ignore_case: bool,
+}
+```
+
+Setelah field ditambahkan, semua tempat yang membuat `Config` harus mengisinya. Kalau field baru lupa diisi, compiler menolak:
+
+<RustPlayground
+  code={`struct Config {
+    query: String,
+    file_path: String,
+    ignore_case: bool,
+}
+
+fn main() {
+    let config = Config {
+        query: String::from("rust"),
+        file_path: String::from("puisi.txt"),
+    };
+
+    println!("{}", config.query);
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error field Config belum diisi"
+/>
+
+Pesan `missing field ignore_case in initializer of Config` menunjukkan field yang belum diberikan nilai. Tambahkan `ignore_case` saat membuat `Config`, misalnya dari hasil `env::var`.
+
+## search_case_insensitive
+
+Fungsi baru mengubah query dan setiap baris menjadi huruf kecil sebelum membandingkan:
+
+<RustPlayground
+  code={`fn search_case_insensitive<'a>(
+    query: &str,
+    contents: &'a str,
+) -> Vec<&'a str> {
+    let query = query.to_lowercase();
+    let mut results = Vec::new();
+
+    for line in contents.lines() {
+        if line.to_lowercase().contains(&query) {
+            results.push(line);
+        }
+    }
+
+    results
+}
+
+fn main() {
+    let contents = "Rust:\\nTrust me.\\nDuct tape.";
+
+    for line in search_case_insensitive("rUsT", contents) {
+        println!("{line}");
+    }
+}`}
+  filename="src/lib.rs"
+  label="Pencarian tanpa membedakan huruf besar kecil"
+/>
+
+`to_lowercase` membuat `String` baru, sehingga variabel `query` di dalam fungsi berubah tipe dari `&str` menjadi `String`. Karena `contains` menerima pola teks, `query` yang kini `String` dipinjam dengan `&query`.
+
+`to_lowercase` menangani Unicode dasar, tetapi tidak sepenuhnya akurat untuk semua aturan casing. Buku mencatat batas ini; untuk contoh ini, perilaku tersebut sudah cukup.
+
+Perhatikan bahwa hasil tetap meminjam `contents`, bukan hasil `to_lowercase`. Baris asli dikembalikan, bukan versi huruf kecilnya.
+
+Test untuk fungsi ini ditulis lebih dulu, mengikuti alur TDD di halaman sebelumnya:
+
+```rust
+#[test]
+fn case_insensitive() {
+    let query = "rUsT";
+    let contents = "\
+Rust:
+safe, fast, productive.
+Pick three.
+Trust me.";
+
+    assert_eq!(
+        vec!["Rust:", "Trust me."],
+        search_case_insensitive(query, contents)
+    );
+}
+```
+
+Sebelum fungsi tersedia, test gagal dikompilasi. Setelah implementasi ditambahkan, test lulus. Tambahkan juga baris seperti `Duct tape.` ke test pencarian sensitif untuk memastikan query `duct` tidak ikut cocok saat `IGNORE_CASE` tidak diset.
+
+## Memilih fungsi di run
+
+`run` memeriksa `config.ignore_case` dan memanggil fungsi yang sesuai:
+
+```rust
+fn run(config: &Config, contents: &str) -> Result<(), Box<dyn Error>> {
+    let results = if config.ignore_case {
+        search_case_insensitive(&config.query, contents)
+    } else {
+        search(&config.query, contents)
+    };
+
+    for line in results {
+        println!("{line}");
+    }
+
+    Ok(())
+}
+```
+
+Saat membuat `Config`, isi field dari environment:
+
+```rust
+let ignore_case = env::var("IGNORE_CASE").is_ok();
+
+let config = Config {
+    query: args[1].clone(),
+    file_path: args[2].clone(),
+    ignore_case,
+};
+```
+
+## Menjalankan
+
+Tanpa environment variable, pencarian membedakan huruf besar kecil:
+
+```console
+$ cargo run -- to poem.txt
+```
+
+Dengan `IGNORE_CASE`, query `to` juga cocok dengan `To`:
+
+```console
+$ IGNORE_CASE=1 cargo run -- to poem.txt
+Are you nobody, too?
+How dreary to be somebody!
+To tell your name the livelong day
+To an admiring bog!
+```
+
+Di PowerShell, set variable dan jalankan program sebagai dua perintah:
+
+```console
+PS> $Env:IGNORE_CASE=1; cargo run -- to poem.txt
+```
+
+Nilai variable tidak dipakai, hanya keberadaannya. Program lain bisa memakai nilai `1`, `true`, atau teks lain, dan hasilnya tetap dianggap aktif.
+
+:::note[Kalau di bahasa lain]
+Node.js membaca environment lewat `process.env.IGNORE_CASE`. Go memakai `os.Getenv` atau `os.LookupEnv` untuk membedakan kosong dan tidak diset. PHP memakai `getenv` atau `$_ENV`. Rust memakai `env::var` yang mengembalikan `Result`, sehingga status ada atau tidak ada menjadi nilai yang eksplisit.
+:::
+
+:::tip[Tips]
+Environment variable cocok untuk pengaturan sesi, bukan untuk input rahasia yang harus selalu eksplisit. Kalau opsi perlu terlihat di riwayat perintah, pertimbangkan flag command line.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dikembalikan env::var jika variable tidak diset?',
+      options: ['Err', 'Ok berisi string kosong', 'None', 'Panic selalu'],
+      answer: 0,
+      optionNotes: [
+        'Benar. env::var mengembalikan Result dan Err saat variable tidak ada.',
+        'Salah. String kosong hanya jika variable diset kosong.',
+        'Salah. env::var memakai Result, bukan Option.',
+        'Salah. Tidak panic secara otomatis.',
+      ],
+      explanation:
+        'Karena hasilnya Result, is_ok bisa dipakai untuk memeriksa keberadaan variable.',
+    },
+    {
+      question: 'Mengapa query berubah menjadi String di search_case_insensitive?',
+      options: [
+        'Karena to_lowercase membuat String baru',
+        'Karena &str tidak bisa dibaca',
+        'Karena contains hanya menerima angka',
+        'Karena environment variable bertipe String',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. to_lowercase mengalokasikan String baru.',
+        'Salah. &str bisa dibaca.',
+        'Salah. contains menerima pola teks.',
+        'Salah. Penyebabnya hasil to_lowercase.',
+      ],
+      explanation:
+        'Setelah diubah, query perlu dipinjam dengan & saat diberikan ke contains.',
+    },
+    {
+      question: 'Apa yang terjadi jika field ignore_case tidak diisi saat membuat Config?',
+      options: [
+        'Compiler menolak dengan missing field',
+        'Field otomatis false',
+        'Program memakai nilai default',
+        'Field dihapus dari struct',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Semua field harus diinisialisasi.',
+        'Salah. Tidak ada default otomatis untuk field struct.',
+        'Salah. Nilai default tidak diberikan compiler.',
+        'Salah. Struct tidak berubah.',
+      ],
+      explanation:
+        'Rust meminta setiap field struct diberi nilai saat instance dibuat.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

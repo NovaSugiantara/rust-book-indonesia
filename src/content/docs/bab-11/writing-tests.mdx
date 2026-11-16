@@ -1,0 +1,206 @@
+---
+title: '11.1 Menulis test'
+description: 'Fungsi test, assert, should_panic, dan test yang mengembalikan Result.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Test di Rust adalah fungsi yang ditandai `#[test]`. Saat `cargo test` dijalankan, test runner memanggil fungsi itu. Kalau fungsi selesai tanpa panic, test lulus. Kalau panic, test gagal.
+
+## Test pertama
+
+Buat library dengan `cargo new adder --lib`. Cargo membuat `src/lib.rs` dengan fungsi dan module test.
+
+```rust
+pub fn add(left: u64, right: u64) -> u64 {
+    left + right
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        let result = add(2, 2);
+        assert_eq!(result, 4);
+    }
+}
+```
+
+`#[cfg(test)]` membuat module test hanya dikompilasi saat test. `use super::*` membawa item dari module induk ke scope test.
+
+Jalankan:
+
+```console
+$ cargo test
+running 1 test
+test tests::it_works ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+## Assertion
+
+Assertion adalah cara test memeriksa nilai.
+
+<RustPlayground
+  code={`fn add(left: u64, right: u64) -> u64 {
+    left + right
+}
+
+fn main() {
+    let hasil = add(2, 2);
+    assert_eq!(hasil, 4);
+    assert_ne!(hasil, 5);
+    assert!(hasil > 0);
+
+    println!("Semua assertion lulus");
+}`}
+  filename="src/main.rs"
+  label="Assertion dasar di dalam main"
+/>
+
+Di test, assertion yang sama dipakai di dalam fungsi `#[test]`. `assert_eq!` membandingkan dua nilai dan menampilkan nilai kiri serta kanan saat gagal. `assert!` memeriksa boolean. `assert_ne!` memastikan dua nilai berbeda.
+
+Pesan kustom bisa ditambahkan:
+
+```rust
+assert!(
+    hasil.contains("Carol"),
+    "hasil tidak mengandung nama, nilainya {hasil}"
+);
+```
+
+## should_panic
+
+Test yang mengharapkan panic memakai `#[should_panic]`.
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic]
+    fn lebih_dari_seratus() {
+        Guess::new(200);
+    }
+}
+```
+
+Kalau fungsi tidak panic, test gagal. Kamu bisa mempersempit pesan panic:
+
+```rust
+#[test]
+#[should_panic(expected = "kurang dari atau sama dengan 100")]
+fn lebih_dari_seratus() {
+    Guess::new(200);
+}
+```
+
+`expected` memeriksa substring pesan panic. Ini mencegah test lulus karena panic dari penyebab yang salah.
+
+## Test yang mengembalikan Result
+
+Test bisa mengembalikan `Result<(), E>` daripada panic. Ini berguna kalau kamu ingin memakai operator `?`.
+
+```rust
+#[test]
+fn it_works() -> Result<(), String> {
+    let result = add(2, 2);
+
+    if result == 4 {
+        Ok(())
+    } else {
+        Err(String::from("2 + 2 bukan 4"))
+    }
+}
+```
+
+Test dengan `Err` dianggap gagal. Pilihan antara panic dan `Result` tergantung gaya yang paling jelas.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, Jest menyediakan `test`, `expect`, dan `toEqual`. Di Go, `go test` mencari fungsi `TestXxx(*testing.T)` dan memakai `t.Errorf`. Di PHP, PHPUnit memakai attribute atau method `test*`, sedangkan Python memakai pytest atau unittest. Rust menyertakan runner dan assertion di toolchain, tetapi pola dasarnya sama: siapkan nilai, jalankan aksi, periksa hasil.
+:::
+
+:::tip[Tips]
+Beri nama test sesuai perilaku yang diuji, misalnya `input_kosong_menghasilkan_error`, bukan `test1`. Nama yang jelas langsung memberi tahu apa yang rusak saat test gagal.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa fungsi assert_eq!?',
+      options: [
+        'Membandingkan dua nilai dan panic jika tidak sama',
+        'Membandingkan tipe saja',
+        'Menjalankan test dua kali',
+        'Mengabaikan test',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. assert_eq! memeriksa kesamaan nilai.',
+        'Salah. Ia membandingkan nilai, bukan hanya tipe.',
+        'Salah. Tidak ada pengulangan.',
+        'Salah. Itu #[ignore].',
+      ],
+      explanation:
+        'Saat gagal, assert_eq! menampilkan nilai kiri dan kanan.',
+    },
+    {
+      question: 'Apa arti #[should_panic]?',
+      options: [
+        'Test lulus jika fungsi panic',
+        'Test selalu gagal',
+        'Test dilewati',
+        'Fungsi tidak boleh panic',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Attribute ini membalik ekspektasi panic.',
+        'Salah. Test lulus saat panic terjadi.',
+        'Salah. Itu #[ignore].',
+        'Salah. Justru panic yang diharapkan.',
+      ],
+      explanation:
+        'Gunakan together dengan expected untuk memastikan alasan panic.',
+    },
+    {
+      question: 'Mengapa module test memakai #[cfg(test)]?',
+      options: [
+        'Agar kode test hanya dikompilasi saat test',
+        'Agar test berjalan di production',
+        'Agar fungsi menjadi public',
+        'Agar assertion tidak pernah gagal',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. cfg(test) membatasi kompilasi ke konfigurasi test.',
+        'Salah. Test tidak ikut production.',
+        'Salah. cfg tidak mengubah visibilitas.',
+        'Salah. Assertion tetap bisa gagal.',
+      ],
+      explanation:
+        'Kode test tidak perlu masuk binary produksi.',
+    },
+    {
+      question: 'Apa arti test yang mengembalikan Err?',
+      options: ['Test gagal', 'Test lulus', 'Test diabaikan', 'Test diulang'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Err menandai kegagalan test.',
+        'Salah. Hanya Ok yang lulus.',
+        'Salah. Bukan perilaku Result test.',
+        'Salah. Test runner tidak mengulang otomatis.',
+      ],
+      explanation:
+        'Result memungkinkan test memakai operator ? tanpa panic langsung.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

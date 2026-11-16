@@ -1,0 +1,87 @@
+---
+title: 'Bab 12: Proyek I/O CLI'
+description: 'Membangun minigrep dan CLI laporan harian dengan argumen, file, environment variable, dan stderr.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Bab ini menggabungkan modul, collection, error handling, trait, lifetime, dan test menjadi satu program CLI. Proyek utamanya adalah `minigrep`, versi sederhana dari `grep`: menerima query dan path file, membaca file, lalu mencetak baris yang cocok.
+
+Bagi backend developer, pola ini dekat dengan pekerjaan sehari-hari. CLI impor data, skrip migrasi, dan alat operasional membaca argumen, membuka file, menangani error, dan menulis hasil ke stdout. Semua bagian itu muncul di bab ini.
+
+## Urutan bab
+
+1. [Menerima argumen](accepting-arguments/) membahas `env::args`, `Vec<String>`, dan membaca argumen program.
+2. [Membaca file](reading-file/) membahas `fs::read_to_string` dan `io::Result`.
+3. [Refactoring dan error](refactoring/) membahas `Config::build`, `Result`, `run`, dan pemisahan `main.rs` dengan `lib.rs`.
+4. [TDD pencarian](tdd/) membahas test yang gagal lebih dulu lalu implementasi `search`.
+5. [Environment variable](environment-variables/) membahas `env::var` dan pencarian tanpa membedakan huruf besar kecil.
+6. [Standard error](stderr/) membahas `eprintln!`, stdout, dan exit status.
+7. [Studi kasus: Kasir Warung](studi-kasus/) membuat CLI laporan harian dari file transaksi.
+
+:::note[Kenapa begini?]
+Program CLI yang baik memisahkan tiga hal: konfigurasi dari argumen, logika di library, dan penanganan error di `main`. Pemisahan ini membuat logika bisa dites tanpa menjalankan binary, persis alasan `main.rs` dan `lib.rs` dipisahkan di bab ini.
+:::
+
+:::tip[Tips]
+Jalankan program setelah setiap perubahan kecil. CLI bergantung pada input dari luar, jadi kesalahan argumen atau path lebih cepat terlihat saat program benar-benar dijalankan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dibangun di bab ini?',
+      options: [
+        'CLI pencarian teks bernama minigrep',
+        'Server HTTP dengan database',
+        'Library GUI untuk desktop',
+        'Game tebak angka',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. minigrep mencari teks di file.',
+        'Salah. Server HTTP dibahas di bab lain.',
+        'Salah. Bab ini tentang CLI.',
+        'Salah. Game tebak angka ada di Bab 2.',
+      ],
+      explanation:
+        'minigrep menerima query dan path file, lalu mencetak baris yang cocok.',
+    },
+    {
+      question: 'Mengapa logika program dipindahkan ke lib.rs?',
+      options: [
+        'Agar logika bisa dites tanpa menjalankan binary',
+        'Agar program tidak membutuhkan argumen',
+        'Agar file tidak perlu dibaca',
+        'Agar error tidak perlu ditangani',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Library bisa diuji langsung dari test.',
+        'Salah. Argumen tetap dibutuhkan.',
+        'Salah. File tetap dibaca oleh logika.',
+        'Salah. Error tetap harus ditangani.',
+      ],
+      explanation:
+        'Fungsi main sulit dites langsung, sedangkan fungsi library mudah dipanggil dari test.',
+    },
+    {
+      question: 'Ke mana pesan error sebaiknya ditulis?',
+      options: ['Standard error', 'Standard output', 'File konfigurasi', 'Database'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Error ditulis ke stderr agar stdout tetap bersih.',
+        'Salah. stdout dipakai untuk hasil normal.',
+        'Salah. File konfigurasi bukan aliran output.',
+        'Salah. Database bukan tujuan default pesan error.',
+      ],
+      explanation:
+        'Pemisahan stdout dan stderr memungkinkan hasil sukses diarahkan ke file tanpa menyembunyikan error.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

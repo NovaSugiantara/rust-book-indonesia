@@ -1,0 +1,173 @@
+---
+title: '12.1 Menerima argumen'
+description: 'Membaca argumen command line dengan env::args dan menyimpannya dalam Vec.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Program CLI menerima input pertama dari command line. Di Rust, `std::env::args` mengembalikan iterator berisi argumen yang dipakai saat program dijalankan. Iterator itu diubah menjadi `Vec<String>` dengan `collect`.
+
+## Membuat proyek
+
+```console
+$ cargo new minigrep
+     Created binary (application) `minigrep` project
+$ cd minigrep
+```
+
+Binary yang dihasilkan belum membaca argumen. Tambahkan `use std::env;` dan kumpulkan argumen di `main`:
+
+```rust
+use std::env;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    println!("{args:?}");
+}
+```
+
+Jalankan dengan dua argumen:
+
+```console
+$ cargo run -- test sample.txt
+["target/debug/minigrep", "test", "sample.txt"]
+```
+
+Elemen pertama adalah path binary, bukan argumen pertama yang diketik pengguna. Ini mengikuti perilaku daftar argumen di C dan memungkinkan program mengetahui nama atau alias yang dipakai untuk memanggilnya.
+
+## Anotasi tipe pada collect
+
+`collect` bisa menghasilkan banyak jenis collection, sehingga compiler tidak selalu bisa menyimpulkan tipe yang dimaksud. Anotasi `Vec<String>` atau tipe pada variabel diperlukan.
+
+Tanpa anotasi, compiler tidak tahu collection apa yang diminta:
+
+<RustPlayground
+  code={`use std::env;
+
+fn main() {
+    let args = env::args().collect();
+    println!("{}", args[1]);
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error collect tanpa anotasi tipe"
+/>
+
+Pesan `type annotations needed` muncul karena `collect` hanya tahu bahwa hasilnya adalah collection, bukan collection apa. Tambahkan `Vec<String>` untuk memperjelas.
+
+## Menyimpan argumen ke variabel
+
+Setelah argumen terkumpul, ambil query di indeks 1 dan path file di indeks 2:
+
+<RustPlayground
+  code={`fn main() {
+    let args = vec![
+        String::from("target/debug/minigrep"),
+        String::from("test"),
+        String::from("sample.txt"),
+    ];
+
+    let query = &args[1];
+    let file_path = &args[2];
+
+    println!("Mencari {query}");
+    println!("Di file {file_path}");
+}`}
+  filename="src/main.rs"
+  label="Mengambil query dan path dari Vec argumen"
+/>
+
+Di program asli, `args` berasal dari `env::args().collect()`. Playground tidak bisa menerima argumen command line dari pemanggil, jadi contoh ini menyusun vector yang sama secara manual.
+
+## Bahaya indeks di luar batas
+
+Mengakses `args[2]` saat hanya ada satu elemen membuat program panic. Kode berikut gagal saat dijalankan, bukan saat dikompilasi:
+
+```rust
+use std::env;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let query = &args[1];
+    println!("{query}");
+}
+```
+
+Kalau dijalankan tanpa argumen, muncul `index out of bounds: the len is 1 but the index is 1`. Pesan ini ditujukan untuk programmer, bukan pengguna CLI. Bab ini akan menggantinya dengan `Result` dan pesan yang jelas saat membahas refactoring.
+
+## Argumen dengan Unicode tidak valid
+
+`env::args` panic kalau ada argumen yang bukan Unicode valid. Untuk menerima argumen semacam itu, gunakan `env::args_os`, yang menghasilkan `OsString`. Contoh di bab ini memakai `args` agar kode lebih sederhana.
+
+:::note[Kalau di bahasa lain]
+Di Node.js, argumen ada di `process.argv` dan dua elemen pertama adalah path Node serta path skrip. Di Go, `os.Args` juga menyertakan nama program di indeks 0. Di PHP, `$argv[0]` adalah nama skrip. Rust mengikuti pola yang sama: indeks 0 adalah nama program, argumen pengguna mulai dari indeks 1.
+:::
+
+:::tip[Tips]
+Perlakukan indeks 0 sebagai nama program. Jangan memakai `args[1]` tanpa memeriksa panjang vector lebih dulu, karena input pengguna tidak bisa dipercaya.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa isi args[0]?',
+      options: [
+        'Nama atau path program yang dijalankan',
+        'Query pencarian pertama',
+        'Path file yang dicari',
+        'Jumlah argumen',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. args[0] adalah nama program.',
+        'Salah. Query ada di args[1].',
+        'Salah. Path file ada di args[2].',
+        'Salah. Panjang vector dibaca lewat len().',
+      ],
+      explanation:
+        'Argumen pengguna mulai dari indeks 1, mengikuti konvensi daftar argumen program.',
+    },
+    {
+      question: 'Mengapa collect kadang membutuhkan anotasi tipe?',
+      options: [
+        'Karena collect bisa menghasilkan beberapa jenis collection',
+        'Karena collect hanya bekerja untuk String',
+        'Karena env::args tidak menghasilkan iterator',
+        'Karena Rust tidak punya Vec',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler perlu tahu collection tujuan.',
+        'Salah. collect bisa menghasilkan Vec, HashMap, dan lain-lain.',
+        'Salah. env::args menghasilkan iterator.',
+        'Salah. Rust punya Vec.',
+      ],
+      explanation:
+        'Anotasi Vec<String> memberi tahu compiler collection dan tipe elemen yang diinginkan.',
+    },
+    {
+      question: 'Apa yang terjadi jika args[2] diakses saat vector hanya punya satu elemen?',
+      options: [
+        'Program panic saat runtime dengan index out of bounds',
+        'Compiler menolak dengan error tipe',
+        'Program mengembalikan string kosong',
+        'Program mengambil argumen default',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Indeks dicek saat runtime dan panic jika melewati batas.',
+        'Salah. Ini bukan error kompilasi.',
+        'Salah. Tidak ada nilai default.',
+        'Salah. Tidak ada argumen default otomatis.',
+      ],
+      explanation:
+        'Karena itu panjang argumen perlu diperiksa sebelum indeks dipakai.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

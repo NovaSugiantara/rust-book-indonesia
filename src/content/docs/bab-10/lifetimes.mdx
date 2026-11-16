@@ -1,0 +1,342 @@
+---
+title: '10.3 Lifetime'
+description: 'Anotasi lifetime, reference yang valid, lifetime pada struct, elision, dan static.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Lifetime adalah cara compiler memastikan reference tidak hidup lebih lama dari data yang dipinjam. Anotasi lifetime tidak memperpanjang umur data. Anotasi hanya menjelaskan hubungan antara beberapa reference.
+
+## Reference yang keluar dari scope
+
+Kode berikut menyimpan reference ke `x`, lalu memakai reference setelah `x` di-drop:
+
+<RustPlayground
+  code={`fn main() {
+    let r;
+
+    {
+        let x = 5;
+        r = &x;
+    }
+
+    println!("r: {r}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error reference hidup lebih lama dari nilai"
+/>
+
+Pesan `x does not live long enough` menunjukkan bahwa `x` di-drop saat blok selesai, sedangkan `r` masih dipakai sesudahnya. Compiler menolak karena reference akan dangling.
+
+## Anotasi pada fungsi
+
+Fungsi `longest` mengembalikan salah satu dari dua reference. Compiler perlu tahu reference mana yang menentukan umur hasil.
+
+<RustPlayground
+  code={`fn main() {
+    let string1 = String::from("abcd");
+    let string2 = "xyz";
+
+    let result = longest(string1.as_str(), string2);
+    println!("The longest string is {result}");
+}
+
+fn longest(x: &str, y: &str) -> &str {
+    if x.len() > y.len() { x } else { y }
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error fungsi mengembalikan reference tanpa lifetime"
+/>
+
+Compiler tidak bisa memilih apakah hasilnya terikat pada `x` atau `y`. Tambahkan lifetime:
+
+<RustPlayground
+  code={`fn main() {
+    let string1 = String::from("abcd");
+    let string2 = "xyz";
+
+    let result = longest(string1.as_str(), string2);
+    println!("The longest string is {result}");
+}
+
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}`}
+  filename="src/main.rs"
+  label="Fungsi longest dengan lifetime eksplisit"
+/>
+
+`'a` berarti hasil hidup paling lama selama kedua input masih valid. Anotasi ini tidak membuat data hidup lebih lama; ia memberi tahu compiler hubungan yang sudah ada.
+
+## Scope hasil
+
+Kalau `string2` di-drop sebelum hasil dipakai, compiler menolak:
+
+<RustPlayground
+  code={`fn main() {
+    let string1 = String::from("long string is long");
+    let result;
+
+    {
+        let string2 = String::from("xyz");
+        result = longest(string1.as_str(), string2.as_str());
+    }
+
+    println!("The longest string is {result}");
+}
+
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error hasil meminjam nilai yang sudah drop"
+/>
+
+`string2` tidak hidup cukup lama untuk hasil `longest`. Ini alasan hasil tidak boleh dipakai setelah scope `string2` berakhir.
+
+## Tidak boleh mengembalikan data lokal
+
+Fungsi tidak boleh mengembalikan reference ke `String` yang dibuat di dalamnya:
+
+<RustPlayground
+  code={`fn main() {
+    let result = buat_teks();
+    println!("{result}");
+}
+
+fn buat_teks() -> &str {
+    let result = String::from("teks lokal");
+    result.as_str()
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mengembalikan reference ke data lokal"
+/>
+
+Pesan `cannot return value referencing local variable` menunjukkan bahwa `result` dimiliki fungsi dan di-drop saat fungsi selesai. Kembalikan `String` jika pemanggil membutuhkan data itu.
+
+## Lifetime pada struct
+
+Struct bisa menyimpan reference, tetapi harus menyatakan lifetime-nya:
+
+<RustPlayground
+  code={`struct ImportantExcerpt<'a> {
+    part: &'a str,
+}
+
+fn main() {
+    let novel = String::from("Call me Ishmael. Some years ago...");
+    let first_sentence = novel.split('.').next().unwrap();
+
+    let excerpt = ImportantExcerpt {
+        part: first_sentence,
+    };
+
+    println!("{}", excerpt.part);
+}`}
+  filename="src/main.rs"
+  label="Struct dengan field reference"
+/>
+
+Struct tidak boleh hidup lebih lama dari `novel`. Compiler memastikan itu lewat lifetime.
+
+Method pada struct bisa memakai lifetime yang sama:
+
+<RustPlayground
+  code={`struct ImportantExcerpt<'a> {
+    part: &'a str,
+}
+
+impl<'a> ImportantExcerpt<'a> {
+    fn announce_and_return_part(&self, announcement: &str) -> &str {
+        println!("Attention please: {announcement}");
+        self.part
+    }
+}
+
+fn main() {
+    let novel = String::from("Call me Ishmael. Some years ago...");
+    let first_sentence = novel.split('.').next().unwrap();
+    let excerpt = ImportantExcerpt { part: first_sentence };
+
+    println!("{}", excerpt.announce_and_return_part("Halo"));
+}`}
+  filename="src/main.rs"
+  label="Method pada struct dengan lifetime"
+/>
+
+## Elision
+
+Compiler bisa menyimpulkan lifetime pada pola umum. Fungsi `first_word(s: &str) -> &str` tidak perlu anotasi karena hanya ada satu reference input, sehingga output dianggap terikat pada input itu.
+
+Aturan elision yang penting:
+
+- Setiap parameter reference mendapat lifetime sendiri.
+- Kalau hanya ada satu parameter reference, output memakai lifetime itu.
+- Kalau ada `&self` atau `&mut self`, output memakai lifetime `self`.
+
+Kalau aturan tidak cukup, tulis lifetime eksplisit.
+
+## Static
+
+`'static` berarti reference valid selama program berjalan. String literal bertipe `&'static str`.
+
+<RustPlayground
+  code={`fn main() {
+    let s: &'static str = "I have a static lifetime.";
+    println!("{s}");
+}`}
+  filename="src/main.rs"
+  label="Reference static"
+/>
+
+Jangan memakai `'static` untuk menyelesaikan error lifetime kalau data sebenarnya tidak hidup selama program. Itu biasanya tanda desain yang perlu diubah.
+
+## Generic dan lifetime
+
+Lifetime bisa digabung dengan parameter tipe dan trait bound:
+
+<RustPlayground
+  code={`use std::fmt::Display;
+
+fn longest_with_an_announcement<'a, T>(
+    x: &'a str,
+    y: &'a str,
+    ann: T,
+) -> &'a str
+where
+    T: Display,
+{
+    println!("Announcement! {ann}");
+    if x.len() > y.len() { x } else { y }
+}
+
+fn main() {
+    let result = longest_with_an_announcement("abcd", "xyz", "Hari ini");
+    println!("{result}");
+}`}
+  filename="src/main.rs"
+  label="Lifetime, generic, dan trait bound"
+/>
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, object reference bisa tetap ada selama garbage collector belum membersihkannya. Di Go, GC menjaga object hidup, dan pointer bisa menunjuk data selama object reachable. Di PHP, reference counting dan cycle collector mengatur umur data. Rust memakai lifetime untuk membuktikan pada compile time bahwa reference tidak melewati umur pemiliknya. Ini bukan klaim performa, melainkan perbedaan model keamanan.
+:::
+
+## Di backend
+
+Handler sering menerima `&str` dari request dan mengembalikan potongan teks. Signature seperti `fn first_segment(input: &str) -> &str` mengikat hasil ke input. Kalau handler membuat `String` baru, ia harus mengembalikan `String` yang dimiliki, bukan reference ke variabel lokal. Compiler memaksa keputusan ini.
+
+Contoh berikut mengambil nilai field dari body request tanpa menyalin teks. Hasilnya meminjam `body`, bukan `kunci`:
+
+<RustPlayground
+  code={`fn ambil_nilai<'a>(body: &'a str, kunci: &str) -> Option<&'a str> {
+    body.lines().find_map(|baris| {
+        let (nama, nilai) = baris.split_once('=')?;
+        (nama == kunci).then_some(nilai)
+    })
+}
+
+fn main() {
+    let body = "nama=Bu Sri\\nkota=Bandung";
+
+    match ambil_nilai(body, "kota") {
+        Some(kota) => println!("Kota: {kota}"),
+        None => println!("Field tidak ditemukan"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Mengembalikan slice dari body request"
+/>
+
+Lifetime `'a` hanya menghubungkan `body` dengan hasil. `kunci` dipakai selama pencarian dan tidak ikut menentukan umur hasil. Kalau hasil diikat ke `kunci`, compiler akan menolak pemakaian hasil setelah `kunci` di-drop.
+
+:::tip[Tips]
+Saat error lifetime muncul, tanyakan data mana yang menjadi sumber hasil. Kalau hasil berasal dari data lokal, kembalikan tipe owned. Kalau hasil berasal dari input, nyatakan hubungannya dengan lifetime.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa arti lifetime pada reference?',
+      options: [
+        'Hubungan umur reference dengan data yang dipinjam',
+        'Ukuran memory reference',
+        'Jumlah thread yang memakai data',
+        'Nilai default reference',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Lifetime menjelaskan validitas pinjaman.',
+        'Salah. Ukuran reference tidak ditentukan lifetime.',
+        'Salah. Thread bukan lifetime.',
+        'Salah. Reference tidak punya nilai default.',
+      ],
+      explanation:
+        'Lifetime adalah bukti compile-time bahwa reference tetap valid.',
+    },
+    {
+      question: 'Mengapa longest butuh anotasi lifetime?',
+      options: [
+        'Karena mengembalikan salah satu dari dua reference input',
+        'Karena string terlalu panjang',
+        'Karena fungsi menggunakan if',
+        'Karena Rust tidak mendukung reference di return',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler perlu tahu hasil terikat pada input mana.',
+        'Salah. Panjang string tidak menentukan.',
+        'Salah. if bukan penyebabnya.',
+        'Salah. Reference bisa dikembalikan dengan lifetime yang benar.',
+      ],
+      explanation:
+        'Tanpa anotasi, compiler tidak bisa menentukan umur hasil.',
+    },
+    {
+      question: "Apa arti &'static str?",
+      options: [
+        'Reference yang valid selama program berjalan',
+        'String yang selalu kosong',
+        'String yang hanya ada di stack',
+        'Reference yang tidak bisa dibaca',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. static berarti hidup selama program.',
+        'Salah. static tidak berarti kosong.',
+        'Salah. Literal disimpan di binary.',
+        'Salah. static reference tetap bisa dibaca.',
+      ],
+      explanation:
+        'String literal biasanya bertipe &static str.',
+    },
+    {
+      question: 'Mengapa mengembalikan result.as_str() dari String lokal gagal?',
+      options: [
+        'Karena String lokal di-drop saat fungsi selesai',
+        'Karena as_str tidak mengembalikan reference',
+        'Karena semua String harus static',
+        'Karena fungsi tidak boleh mengembalikan str',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Reference akan dangling setelah String lokal hilang.',
+        'Salah. as_str mengembalikan &str.',
+        'Salah. String tidak harus static.',
+        'Salah. &str bisa dikembalikan jika sumbernya valid.',
+      ],
+      explanation:
+        'Kembalikan String owned jika data dibuat di dalam fungsi.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />
