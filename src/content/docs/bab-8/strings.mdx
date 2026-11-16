@@ -1,0 +1,228 @@
+---
+title: '8.2 String'
+description: 'String, &str, UTF-8, penggabungan, dan mengapa string tidak bisa diindeks dengan angka.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+String adalah collection byte yang diinterpretasikan sebagai teks UTF-8. Ada dua tipe utama: `String` yang memiliki data dan bisa bertambah, serta `&str` yang meminjam teks.
+
+## Membuat String
+
+`String::new` membuat string kosong. String harus mutable kalau akan diisi atau diubah.
+
+<RustPlayground
+  code={`fn main() {
+    let mut s = String::new();
+    s.push_str("halo");
+    println!("{s}");
+}`}
+  filename="src/main.rs"
+  label="Membuat String kosong"
+/>
+
+`to_string` dan `String::from` membuat `String` dari teks yang sudah ada.
+
+<RustPlayground
+  code={`fn main() {
+    let data = "initial contents";
+
+    let s1 = data.to_string();
+    let s2 = "initial contents".to_string();
+    let s3 = String::from("initial contents");
+
+    println!("{s1} | {s2} | {s3}");
+}`}
+  filename="src/main.rs"
+  label="Membuat String dari literal"
+/>
+
+## Menambah isi
+
+`push_str` menambahkan slice tanpa mengambil ownership-nya. `push` menambahkan satu `char`.
+
+<RustPlayground
+  code={`fn main() {
+    let mut s = String::from("foo");
+    let tambahan = "bar";
+
+    s.push_str(tambahan);
+    s.push('!');
+
+    println!("{s} dan {tambahan}");
+}`}
+  filename="src/main.rs"
+  label="push_str dan push"
+/>
+
+## Menggabungkan
+
+Operator `+` mengambil ownership `String` di kiri dan meminjam teks di kanan.
+
+<RustPlayground
+  code={`fn main() {
+    let s1 = String::from("Hello, ");
+    let s2 = String::from("world!");
+
+    let s3 = s1 + &s2;
+
+    println!("{s3}");
+}`}
+  filename="src/main.rs"
+  label="Menggabungkan dengan operator plus"
+/>
+
+Setelah `s1 + &s2`, `s1` tidak bisa dipakai lagi karena sudah dipindahkan. Untuk beberapa bagian, `format!` lebih mudah dibaca dan tidak mengambil ownership parameter.
+
+<RustPlayground
+  code={`fn main() {
+    let s1 = String::from("tic");
+    let s2 = String::from("tac");
+    let s3 = String::from("toe");
+
+    let s = format!("{s1}-{s2}-{s3}");
+
+    println!("{s}");
+}`}
+  filename="src/main.rs"
+  label="Menggabungkan dengan format"
+/>
+
+## Mengapa tidak bisa diindeks dengan angka
+
+String tidak mendukung `s[0]` karena satu byte tidak selalu sama dengan satu karakter. Kode berikut sengaja salah:
+
+<RustPlayground
+  code={`fn main() {
+    let s = String::from("hi");
+    let h = s[0];
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mengindeks String dengan angka"
+/>
+
+Pesan compiler menyebut `the type str cannot be indexed by {integer}` dan menyarankan `chars().nth()` atau `bytes().nth()`. String adalah kumpulan byte UTF-8; indeks byte belum tentu berada di batas karakter.
+
+Untuk mengambil potongan, gunakan range yang berada di batas karakter:
+
+```rust
+let hello = "Здравствуйте";
+let s = &hello[0..4];
+```
+
+`&hello[0..4]` berisi dua karakter pertama karena setiap karakter memakai dua byte. Kalau range memotong satu karakter, program panic saat runtime.
+
+## Bytes, scalar, dan grapheme
+
+UTF-8 bisa dilihat dalam tiga cara:
+
+- bytes, misalnya `[208, 151]`;
+- Unicode scalar values, yaitu `char`;
+- grapheme cluster, yaitu apa yang manusia anggap satu huruf.
+
+Rust menyediakan `chars()` dan `bytes()`. Grapheme cluster membutuhkan crate tambahan.
+
+<RustPlayground
+  code={`fn main() {
+    for karakter in "Зд".chars() {
+        println!("char: {karakter}");
+    }
+
+    for byte in "Зд".bytes() {
+        println!("byte: {byte}");
+    }
+}`}
+  filename="src/main.rs"
+  label="Iterasi char dan byte"
+/>
+
+## Di backend
+
+Body request, query string, dan path adalah data UTF-8. Gunakan `&str` saat hanya membaca. Kalau harus memotong berdasarkan indeks, pastikan indeks berada di batas karakter atau gunakan `chars`/`bytes` sesuai kebutuhan. Jangan memotong string berdasarkan posisi byte dari input mentah tanpa validasi.
+
+:::note[Kalau di bahasa lain]
+JavaScript mengindeks string berdasarkan unit UTF-16, sehingga emoji bisa terbelah. Go memakai byte dan mendukung slicing string, tetapi batas karakter tetap perlu dijaga. PHP dan Python punya model string sendiri. Rust memilih memperlakukan string sebagai UTF-8 dan menolak indeks angka yang tidak jelas maksudnya.
+:::
+
+:::caution[Hati-hati]
+`&s[0..n]` pada String memakai indeks byte. Kalau `n` bukan batas karakter UTF-8, program panic. Gunakan `get(0..n)` kalau ingin menangani kasus itu tanpa panic.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa perbedaan String dan &str?',
+      options: [
+        'String memiliki data yang bisa bertambah; &str meminjam teks',
+        'String hanya untuk literal; &str untuk heap',
+        'Keduanya selalu memiliki data sendiri',
+        '&str tidak bisa dipakai sebagai parameter',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. String owned dan growable; &str borrowed.',
+        'Salah. Justru literal biasanya &str.',
+        'Salah. &str tidak memiliki data.',
+        'Salah. &str umum dipakai sebagai parameter.',
+      ],
+      explanation:
+        'Gunakan &str untuk membaca dan String saat perlu memiliki atau mengubah teks.',
+    },
+    {
+      question: 'Mengapa s[0] tidak valid untuk String?',
+      options: [
+        'Karena indeks angka tidak jelas menunjuk byte, char, atau grapheme',
+        'Karena String tidak punya elemen',
+        'Karena hanya Vec yang bisa diindeks',
+        'Karena string selalu kosong',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. UTF-8 membuat indeks tunggal ambigu.',
+        'Salah. String punya isi, tetapi aksesnya tidak lewat indeks integer.',
+        'Salah. Banyak tipe bisa diindeks.',
+        'Salah. String bisa berisi teks.',
+      ],
+      explanation:
+        'Rust meminta range byte yang jelas atau metode chars/bytes.',
+    },
+    {
+      question: 'Apa yang dilakukan operator + pada s1 + &s2?',
+      options: [
+        'Mengambil ownership s1 dan meminjam s2',
+        'Menyalin s1 dan s2 tanpa memindahkan apa pun',
+        'Mengubah tipe s1 menjadi &str',
+        'Membuat s2 tidak valid',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. + memakai add(self, &str).',
+        'Salah. s1 dipindahkan.',
+        'Salah. Tipe s1 tetap String sampai dipindahkan.',
+        'Salah. s2 dipinjam, tetap valid.',
+      ],
+      explanation:
+        'Gunakan format! jika tidak ingin salah satu String dipindahkan.',
+    },
+    {
+      question: 'Metode apa untuk iterasi karakter Unicode?',
+      options: ['chars()', 'bytes()', 'split()', 'len()'],
+      answer: 0,
+      optionNotes: [
+        'Benar. chars menghasilkan char Unicode scalar.',
+        'Salah. bytes menghasilkan u8 mentah.',
+        'Salah. split membagi berdasarkan pola.',
+        'Salah. len memberi panjang byte.',
+      ],
+      explanation:
+        'Pilih chars untuk karakter dan bytes untuk data biner.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

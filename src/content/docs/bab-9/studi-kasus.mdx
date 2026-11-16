@@ -1,0 +1,292 @@
+---
+title: '9.4 Studi kasus: Kasir Warung'
+description: 'Mengubah input dan lookup Kasir Warung menjadi Result, bukan panic.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Setelah Bab 8, Kasir Warung sudah memakai `Vec` dan `HashMap`, tetapi input dan lookup masih mengabaikan error. Bab ini mengubahnya menjadi `Result` agar kegagalan bisa ditangani dan nantinya dipetakan menjadi response HTTP.
+
+<StudyCase title="Kasir Warung: error sebagai nilai" intro="Membuat KasirError, memvalidasi input, dan meneruskan error dengan operator tanya.">
+  <StudyCaseStep
+    title="Buat tipe error aplikasi"
+    goal="Membuat KasirError yang bisa ditampilkan dan dikembalikan dari fungsi."
+  >
+    Error aplikasi tidak perlu berupa String bebas. Enum membuat jenis kegagalan terlihat jelas.
+
+    ```rust
+    use std::fmt;
+
+    #[derive(Debug)]
+    enum KasirError {
+        InputTidakValid(String),
+        ItemTidakDitemukan(String),
+        PembayaranGagal(String),
+    }
+
+    impl fmt::Display for KasirError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::InputTidakValid(pesan) => write!(f, "input tidak valid: {pesan}"),
+                Self::ItemTidakDitemukan(kode) => write!(f, "item tidak ditemukan: {kode}"),
+                Self::PembayaranGagal(pesan) => write!(f, "pembayaran gagal: {pesan}"),
+            }
+        }
+    }
+
+    impl std::error::Error for KasirError {}
+    ```
+
+    <Fragment slot="hint">
+      Implementasikan `Display` dan `Error` agar tipe ini bisa dipakai dengan `?` dan `Box<dyn Error>`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Enum error memisahkan input salah, item tidak ditemukan, dan pembayaran gagal. Nanti pemetaan ke HTTP bisa berbeda untuk setiap variant.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Validasi input dengan Result"
+    goal="Mengubah parse jumlah barang menjadi fungsi yang mengembalikan Result."
+  >
+    `parse_jumlah` tidak panic. Ia mengembalikan `KasirError` saat input kosong, bukan angka, atau di luar rentang.
+
+    ```rust
+    fn parse_jumlah(input: &str) -> Result<usize, KasirError> {
+        let bersih = input.trim();
+
+        if bersih.is_empty() {
+            return Err(KasirError::InputTidakValid(
+                "jumlah tidak boleh kosong".to_string(),
+            ));
+        }
+
+        let jumlah: usize = bersih
+            .parse()
+            .map_err(|_| KasirError::InputTidakValid("jumlah harus angka".to_string()))?;
+
+        if !(1..=100).contains(&jumlah) {
+            return Err(KasirError::InputTidakValid(
+                "jumlah harus 1 sampai 100".to_string(),
+            ));
+        }
+
+        Ok(jumlah)
+    }
+    ```
+
+    <Fragment slot="hint">
+      `map_err` mengubah error `ParseIntError` menjadi `KasirError::InputTidakValid`. Operator `?` meneruskan error yang tidak ditangani.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Loop input memanggil fungsi ini. Saat `Err`, cetak pesan dan `continue`; saat `Ok`, simpan jumlah dan `break`.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Lookup dan pembayaran dengan Result"
+    goal="Mengembalikan error saat item tidak ada atau pembayaran tidak valid."
+  >
+    Subtotal mengembalikan `Result` karena kode item bisa tidak ada di menu. Pembayaran mengembalikan `Result` karena status transaksi bisa tidak valid.
+
+    ```rust
+    impl Transaksi {
+        fn subtotal(&self) -> Result<u32, KasirError> {
+            let mut subtotal = 0;
+
+            for item in &self.items {
+                let menu_item = self.menu.get(&item.kode).ok_or_else(|| {
+                    KasirError::ItemTidakDitemukan(item.kode.clone())
+                })?;
+
+                subtotal += menu_item.harga * item.jumlah;
+            }
+
+            Ok(subtotal)
+        }
+
+        fn bayar(&mut self, metode: MetodeBayar) -> Result<(), KasirError> {
+            if self.status != StatusPesanan::Baru {
+                return Err(KasirError::PembayaranGagal(
+                    "transaksi sudah diproses".to_string(),
+                ));
+            }
+
+            self.metode_bayar = Some(metode);
+            self.status = StatusPesanan::Selesai;
+            self.diskon = self.hitung_diskon()?;
+            Ok(())
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      `ok_or_else` mengubah `Option` menjadi `Result`. Gunakan `?` saat error harus diteruskan ke pemanggil.
+    </Fragment>
+
+    <Fragment slot="solution">
+      `cetak` juga mengembalikan `Result` karena memanggil `subtotal`. `main` bisa memakai `?` jika memilih berhenti pada error, atau menangani error dan memberi pesan.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+Playground ini memakai data tetap dan menunjukkan jalur sukses serta jalur error tanpa panic.
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+use std::fmt;
+
+#[derive(Debug)]
+enum KasirError {
+    InputTidakValid(String),
+    ItemTidakDitemukan(String),
+    PembayaranGagal(String),
+}
+
+impl fmt::Display for KasirError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InputTidakValid(pesan) => write!(f, "input tidak valid: {pesan}"),
+            Self::ItemTidakDitemukan(kode) => write!(f, "item tidak ditemukan: {kode}"),
+            Self::PembayaranGagal(pesan) => write!(f, "pembayaran gagal: {pesan}"),
+        }
+    }
+}
+
+impl std::error::Error for KasirError {}
+
+fn parse_jumlah(input: &str) -> Result<usize, KasirError> {
+    let bersih = input.trim();
+
+    if bersih.is_empty() {
+        return Err(KasirError::InputTidakValid(
+            "jumlah tidak boleh kosong".to_string(),
+        ));
+    }
+
+    let jumlah: usize = bersih
+        .parse()
+        .map_err(|_| KasirError::InputTidakValid("jumlah harus angka".to_string()))?;
+
+    if !(1..=100).contains(&jumlah) {
+        return Err(KasirError::InputTidakValid(
+            "jumlah harus 1 sampai 100".to_string(),
+        ));
+    }
+
+    Ok(jumlah)
+}
+
+fn main() {
+    for input in ["3", "abc", "0"] {
+        match parse_jumlah(input) {
+            Ok(jumlah) => println!("input {input:?}: jumlah {jumlah}"),
+            Err(error) => println!("input {input:?}: {error}"),
+        }
+    }
+
+    let menu: HashMap<String, u32> = HashMap::from([
+        ("KOPI".to_string(), 12_000),
+        ("ROTI".to_string(), 8_000),
+    ]);
+
+    let mut subtotal = 0;
+
+    for (kode, jumlah) in [("KOPI", 2u32), ("TEH", 1u32)] {
+        match menu.get(kode) {
+            Some(harga) => subtotal += *harga * jumlah,
+            None => println!("{}", KasirError::ItemTidakDitemukan(kode.to_string())),
+        }
+    }
+
+    println!("Subtotal yang berhasil dihitung: Rp{subtotal}");
+}`}
+  filename="src/main.rs"
+  label="Validasi dan lookup dengan Result"
+/>
+
+## Keadaan setelah Bab 9
+
+- `KasirError` menjadi tipe error aplikasi dengan variant input, item, dan pembayaran.
+- `parse_jumlah` mengembalikan `Result`, tidak panic untuk input salah.
+- Lookup menu memakai `Option` dan `ok_or_else` untuk menghasilkan error.
+- `subtotal`, `cetak`, dan `bayar` bisa mengembalikan `Result`.
+- Input salah ditangani dengan pesan, bukan menghentikan program.
+- `panic` disisakan untuk invariant yang benar-benar rusak.
+- Collection `Vec` dan `HashMap` tetap dipakai.
+- Belum ada handler HTTP; pemetaan error ke status HTTP dilakukan di Capstone.
+
+:::note[Kalau di bahasa lain]
+`Result` dan `?` mirip error return di Go, sedangkan `try/catch` di JavaScript, PHP, dan Python menyembunyikan jalur error dari signature. Keuntungan Rust adalah error terlihat di tipe dan tidak bisa diabaikan tanpa peringatan. Untuk backend, ini membuat pemetaan error ke response HTTP lebih eksplisit.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa parse_jumlah mengembalikan Result, bukan panic?',
+      options: [
+        'Karena input pengguna salah adalah kegagalan yang diharapkan dan bisa ditangani',
+        'Karena Result lebih cepat dari panic',
+        'Karena panic tidak bisa dipakai di Rust',
+        'Karena Result menghapus semua error',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Input salah adalah alur normal yang perlu response.',
+        'Salah. Kecepatan bukan alasan utamanya.',
+        'Salah. Panic bisa dipakai, tetapi tidak tepat di sini.',
+        'Salah. Result tetap berisi Err.',
+      ],
+      explanation:
+        'Result memberi pemanggil pilihan untuk mencetak pesan, mengulang, atau mengembalikan response HTTP.',
+    },
+    {
+      question: 'Apa fungsi ok_or_else pada lookup menu?',
+      options: [
+        'Mengubah Option menjadi Result dengan error yang dibuat saat None',
+        'Mengubah Result menjadi Option',
+        'Membuat panic',
+        'Menambahkan item baru ke menu',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. ok_or_else menghasilkan Err saat None.',
+        'Salah. Arahnya Option ke Result.',
+        'Salah. Tidak ada panic.',
+        'Salah. Lookup tidak mengubah menu.',
+      ],
+      explanation:
+        'Dengan ok_or_else, kode yang tidak ditemukan menjadi KasirError::ItemTidakDitemukan.',
+    },
+    {
+      question: 'Mengapa pembayaran kedua pada transaksi yang sama mengembalikan error?',
+      options: [
+        'Karena status transaksi bukan Baru lagi',
+        'Karena metode pembayaran tidak dikenal',
+        'Karena HashMap tidak bisa diubah',
+        'Karena Vec tidak bisa diakses',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pembayaran hanya boleh saat status Baru.',
+        'Salah. Metode sendiri valid.',
+        'Salah. HashMap bisa diubah.',
+        'Salah. Vec tetap bisa dibaca.',
+      ],
+      explanation:
+        'Aturan bisnis dinyatakan sebagai error yang bisa dikembalikan, bukan panic.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

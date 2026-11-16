@@ -1,0 +1,204 @@
+---
+title: '7.3 Path'
+description: 'Menunjuk item dengan path absolut, relatif, crate, super, dan aturan publik.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Path adalah alamat item di module tree. Sama seperti path file, path module menunjukkan lokasi dari crate root atau dari module saat ini.
+
+## Absolute dan relative
+
+Path absolut dimulai dari `crate`. Path relative dimulai dari module saat ini atau memakai `self` dan `super`.
+
+<RustPlayground
+  code={`mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {
+            println!("Tamu ditambahkan");
+        }
+    }
+}
+
+fn main() {
+    // absolute
+    crate::front_of_house::hosting::add_to_waitlist();
+
+    // relative dari crate root
+    front_of_house::hosting::add_to_waitlist();
+}`}
+  filename="src/main.rs"
+  label="Path absolut dan relative"
+/>
+
+Keduanya bekerja dari `main` karena `front_of_house`, `hosting`, dan `add_to_waitlist` semuanya bisa diakses.
+
+## Module private
+
+Kalau module tidak public, path dari luar tidak bisa melewatinya.
+
+<RustPlayground
+  code={`mod front_of_house {
+    mod hosting {
+        pub fn add_to_waitlist() {}
+    }
+}
+
+fn main() {
+    crate::front_of_house::hosting::add_to_waitlist();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error module private"
+/>
+
+Compiler menyebut `module hosting is private`. Membuat fungsi `pub` tidak cukup jika module di atasnya private.
+
+Kalau module public tetapi fungsinya private, error berpindah ke fungsi:
+
+<RustPlayground
+  code={`mod front_of_house {
+    pub mod hosting {
+        fn add_to_waitlist() {}
+    }
+}
+
+fn main() {
+    crate::front_of_house::hosting::add_to_waitlist();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error fungsi private"
+/>
+
+Pesan `function add_to_waitlist is private` menunjuk item terakhir di path. Visibilitas diperiksa di setiap langkah.
+
+## super
+
+`super` menunjuk module induk. Ini berguna untuk memanggil item di parent tanpa menulis path panjang dari crate root.
+
+<RustPlayground
+  code={`fn deliver_order() {
+    println!("Pesanan dikirim");
+}
+
+mod back_of_house {
+    pub fn fix_incorrect_order() {
+        cook_order();
+        super::deliver_order();
+    }
+
+    fn cook_order() {
+        println!("Pesanan dimasak ulang");
+    }
+}
+
+fn main() {
+    back_of_house::fix_incorrect_order();
+}`}
+  filename="src/main.rs"
+  label="Memakai super untuk module induk"
+/>
+
+`self` menunjuk module saat ini. Path seperti `self::cook_order()` sama dengan memanggil `cook_order()` dari module yang sama.
+
+## Field struct
+
+Visibilitas struct dan field diperiksa terpisah. Field private tidak bisa diakses dari luar module meskipun struct-nya public.
+
+<RustPlayground
+  code={`mod back_of_house {
+    pub struct Breakfast {
+        pub toast: String,
+        seasonal_fruit: String,
+    }
+
+    impl Breakfast {
+        pub fn summer(toast: &str) -> Breakfast {
+            Breakfast {
+                toast: String::from(toast),
+                seasonal_fruit: String::from("peaches"),
+            }
+        }
+    }
+}
+
+fn main() {
+    let mut meal = back_of_house::Breakfast::summer("Rye");
+    meal.toast = String::from("Wheat");
+    println!("Toast: {}", meal.toast);
+
+    meal.seasonal_fruit = String::from("blueberries");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error field struct private"
+/>
+
+`toast` bisa diubah karena `pub`, tetapi `seasonal_fruit` private. Compiler menolak akses ke field itu.
+
+Enum berbeda: kalau enum public, semua variant-nya public. Kamu tidak bisa membuat sebagian variant private.
+
+:::note[Kalau di bahasa lain]
+Path module mirip namespace di PHP atau package path di Go. Perbedaannya, Rust memeriksa privasi di setiap segmen path. Di JavaScript, kamu bisa mengimpor nilai yang diekspor; di Rust, `pub` pada module dan item harus membuka jalan sampai item tujuan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Dari mana path absolut di dalam crate dimulai?',
+      options: ['crate', 'super', 'self', 'std'],
+      answer: 0,
+      optionNotes: [
+        'Benar. crate menunjuk root crate saat ini.',
+        'Salah. super menunjuk module induk.',
+        'Salah. self menunjuk module saat ini.',
+        'Salah. std adalah crate eksternal di standard library.',
+      ],
+      explanation:
+        'Path crate::... selalu dimulai dari crate root.',
+    },
+    {
+      question: 'Apa arti super::deliver_order()?',
+      options: [
+        'Memanggil deliver_order dari module induk',
+        'Memanggil deliver_order dari crate standard library',
+        'Membuat module baru',
+        'Mengimpor semua item',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. super naik satu level ke parent module.',
+        'Salah. Itu bukan std.',
+        'Salah. super tidak membuat module.',
+        'Salah. Glob memakai *.',
+      ],
+      explanation:
+        'super memendekkan path ke module induk.',
+    },
+    {
+      question: 'Mengapa field seasonal_fruit tidak bisa diakses dari main?',
+      options: [
+        'Karena field itu private terhadap module back_of_house',
+        'Karena field String tidak bisa diubah',
+        'Karena struct Breakfast tidak punya method',
+        'Karena main bukan fungsi public',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Field tanpa pub hanya bisa diakses di module yang sesuai.',
+        'Salah. String bisa diubah jika binding mutable.',
+        'Salah. Method tidak membuka field private.',
+        'Salah. main adalah titik masuk program.',
+      ],
+      explanation:
+        'Visibilitas field diatur terpisah dari visibilitas struct.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

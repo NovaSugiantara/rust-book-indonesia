@@ -1,0 +1,268 @@
+---
+title: '8.1 Vector'
+description: 'Menyimpan daftar dinamis dengan Vec, index, get, iterasi, dan enum.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+`Vec<T>` menyimpan banyak nilai bertipe sama dalam urutan. Ukurannya bisa bertambah dan berkurang. Ini collection pertama yang menggantikan array berukuran tetap.
+
+## Membuat vector
+
+Vector kosong membutuhkan anotasi tipe karena compiler belum tahu isinya.
+
+<RustPlayground
+  code={`fn main() {
+    let v: Vec<i32> = Vec::new();
+    println!("{v:?}");
+}`}
+  filename="src/main.rs"
+  label="Vector kosong dengan anotasi tipe"
+/>
+
+Kalau ada nilai awal, compiler bisa menyimpulkan tipe. Makro `vec!` membuat vector dengan isi langsung:
+
+<RustPlayground
+  code={`fn main() {
+    let v = vec![1, 2, 3];
+    println!("{v:?}");
+}`}
+  filename="src/main.rs"
+  label="Vector dengan nilai awal"
+/>
+
+## Menambah elemen
+
+`push` menambahkan elemen di akhir. Variabel harus mutable.
+
+<RustPlayground
+  code={`fn main() {
+    let mut v = Vec::new();
+
+    v.push(5);
+    v.push(6);
+    v.push(7);
+    v.push(8);
+
+    println!("{v:?}");
+}`}
+  filename="src/main.rs"
+  label="Menambah elemen dengan push"
+/>
+
+## Index dan get
+
+Ada dua cara membaca elemen:
+
+<RustPlayground
+  code={`fn main() {
+    let v = vec![1, 2, 3, 4, 5];
+
+    let third: &i32 = &v[2];
+    println!("The third element is {third}");
+
+    let third: Option<&i32> = v.get(2);
+    match third {
+        Some(third) => println!("The third element is {third}"),
+        None => println!("There is no third element."),
+    }
+}`}
+  filename="src/main.rs"
+  label="Membaca elemen dengan index dan get"
+/>
+
+Index `v[2]` menghasilkan reference dan panic kalau indeks di luar batas. `get(2)` mengembalikan `Option<&T>`, sehingga kamu bisa menangani `None` tanpa crash. Untuk input dari pengguna, `get` biasanya lebih aman.
+
+Index di luar batas tidak dikompilasi? Tidak, ia dikompilasi lalu panic saat runtime. Contohnya:
+
+```rust
+let v = vec![1, 2, 3];
+let x = v[99];
+```
+
+Pesan runtime menyebut `index out of bounds`. Ini berbeda dari error compile; compiler tidak tahu nilai indeks saat runtime.
+
+## Borrow saat push
+
+Reference ke elemen tidak boleh hidup bersamaan dengan perubahan struktur vector.
+
+<RustPlayground
+  code={`fn main() {
+    let mut v = vec![1, 2, 3, 4, 5];
+
+    let first = &v[0];
+
+    v.push(6);
+
+    println!("The first element is: {first}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error meminjam elemen saat vector diubah"
+/>
+
+Compiler melaporkan `cannot borrow v as mutable because it is also borrowed as immutable`. `push` bisa memindahkan seluruh isi vector ke alokasi baru, sehingga `first` akan menunjuk memory lama. Borrow checker mencegahnya.
+
+## Iterasi
+
+Untuk membaca semua elemen, gunakan `for`:
+
+<RustPlayground
+  code={`fn main() {
+    let v = vec![100, 32, 57];
+
+    for i in &v {
+        println!("{i}");
+    }
+}`}
+  filename="src/main.rs"
+  label="Iterasi vector secara immutable"
+/>
+
+Untuk mengubah setiap elemen, iterasi mutable dan dereference:
+
+<RustPlayground
+  code={`fn main() {
+    let mut v = vec![100, 32, 57];
+
+    for i in &mut v {
+        *i += 50;
+    }
+
+    println!("{v:?}");
+}`}
+  filename="src/main.rs"
+  label="Iterasi vector secara mutable"
+/>
+
+`i` adalah `&mut i32`. Tanda `*` mengikuti reference ke nilai aslinya sebelum `+=`.
+
+## Menyimpan tipe berbeda dengan enum
+
+Vector hanya menyimpan satu tipe. Kalau perlu beberapa bentuk nilai, bungkus dalam enum.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum SpreadsheetCell {
+    Int(i32),
+    Float(f64),
+    Text(String),
+}
+
+fn main() {
+    let row = vec![
+        SpreadsheetCell::Int(3),
+        SpreadsheetCell::Text(String::from("blue")),
+        SpreadsheetCell::Float(10.12),
+    ];
+
+    println!("{row:?}");
+}`}
+  filename="src/main.rs"
+  label="Vector berisi enum dengan data berbeda"
+/>
+
+Semua elemen bertipe `SpreadsheetCell`, meskipun data di dalamnya berbeda. `match` bisa menangani setiap variant.
+
+## Drop
+
+Vector di-drop saat keluar dari scope. Semua elemennya juga di-drop.
+
+```rust
+{
+    let v = vec![1, 2, 3, 4];
+    // v valid di sini
+}
+// v dan isinya sudah di-drop
+```
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, array bisa menampung tipe campuran dan panjangnya dinamis. Di Go, slice punya backing array dan bisa tumbuh; `append` mengembalikan slice baru. Di PHP dan Python, array atau list juga dinamis. Rust memakai `Vec<T>` yang homogen dan memeriksa borrow saat strukturnya berubah.
+:::
+
+:::tip[Tips]
+Gunakan `get` untuk indeks yang berasal dari input. Gunakan `[]` hanya ketika kamu yakin indeks valid dan ingin program panic kalau asumsi itu salah.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa perbedaan v[2] dan v.get(2)?',
+      options: [
+        'v[2] menghasilkan reference dan panic jika di luar batas; get menghasilkan Option',
+        'v[2] menghasilkan Option; get panic',
+        'Keduanya selalu panic',
+        'Keduanya tidak bisa dipakai pada Vec',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Index langsung panic; get mengembalikan Option.',
+        'Salah. Justru sebaliknya.',
+        'Salah. get tidak panic untuk indeks di luar batas.',
+        'Salah. Keduanya API Vec.',
+      ],
+      explanation:
+        'Pilih get saat indeks berasal dari input yang mungkin salah.',
+    },
+    {
+      question: 'Mengapa push saat reference elemen masih hidup ditolak?',
+      options: [
+        'Karena push bisa mengalokasikan ulang dan membuat reference lama tidak valid',
+        'Karena Vec tidak bisa bertambah',
+        'Karena reference selalu mutable',
+        'Karena push hanya untuk String',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Borrow checker melindungi reference dari realokasi.',
+        'Salah. Vec memang bisa bertambah.',
+        'Salah. Reference immutable tidak mutable.',
+        'Salah. push ada pada Vec.',
+      ],
+      explanation:
+        'Perubahan struktur bisa memindahkan elemen di memory.',
+    },
+    {
+      question: 'Bagaimana menyimpan beberapa tipe berbeda dalam satu Vec?',
+      options: [
+        'Bungkus dalam enum yang sama',
+        'Gunakan Vec<String> untuk semua',
+        'Tambahkan tipe setelah nama variabel',
+        'Rust tidak mengizinkannya dengan cara apa pun',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Enum membuat semua elemen bertipe sama.',
+        'Salah. Itu mengubah semua nilai menjadi String.',
+        'Salah. Vec tetap homogen.',
+        'Salah. Enum atau trait object bisa dipakai.',
+      ],
+      explanation:
+        'Variant enum membawa data berbeda di bawah satu tipe enum.',
+    },
+    {
+      question: 'Apa yang terjadi pada isi Vec saat Vec di-drop?',
+      options: [
+        'Semua elemen ikut di-drop',
+        'Elemen tetap hidup selamanya',
+        'Elemen dipindahkan ke stack',
+        'Hanya pointer yang di-drop, elemen tidak',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Drop Vec menjatuhkan semua elemennya.',
+        'Salah. Tidak ada kebocoran otomatis seperti itu.',
+        'Salah. Elemen tidak dipindahkan ke stack saat drop.',
+        'Salah. Elemen ikut dibersihkan.',
+      ],
+      explanation:
+        'Drop berjalan berantai untuk collection dan isinya.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

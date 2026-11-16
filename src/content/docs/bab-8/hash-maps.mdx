@@ -1,0 +1,228 @@
+---
+title: '8.3 HashMap'
+description: 'Menyimpan key-value dengan HashMap, mengelola ownership, dan memakai entry API.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+`HashMap<K, V>` menyimpan pasangan key dan value. Kamu memakai key untuk mencari value, bukan indeks angka. Di backend, hash map sering dipakai untuk cache, indeks berdasarkan kode, dan rekap per kategori.
+
+## Membuat dan mengisi
+
+`HashMap` tidak ada di prelude, jadi harus diimpor dari `std::collections`.
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+
+fn main() {
+    let mut scores = HashMap::new();
+
+    scores.insert(String::from("Blue"), 10);
+    scores.insert(String::from("Yellow"), 50);
+
+    println!("{scores:?}");
+}`}
+  filename="src/main.rs"
+  label="Membuat dan mengisi HashMap"
+/>
+
+Key dan value harus bertipe sama di seluruh map. Pada contoh ini key adalah `String` dan value adalah `i32`.
+
+## Membaca nilai
+
+`get` mengembalikan `Option<&V>` karena key mungkin tidak ada.
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+
+fn main() {
+    let mut scores = HashMap::new();
+    scores.insert(String::from("Blue"), 10);
+
+    let team = String::from("Blue");
+    let score = scores.get(&team).copied().unwrap_or(0);
+
+    println!("Skor: {score}");
+}`}
+  filename="src/main.rs"
+  label="Membaca nilai dengan get"
+/>
+
+`copied()` mengubah `Option<&i32>` menjadi `Option<i32>` karena `i32` adalah `Copy`. `unwrap_or(0)` memberi nilai default saat key tidak ada.
+
+Iterasi menghasilkan pasangan key-value:
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+
+fn main() {
+    let mut scores = HashMap::new();
+    scores.insert(String::from("Blue"), 10);
+    scores.insert(String::from("Yellow"), 50);
+
+    for (key, value) in &scores {
+        println!("{key}: {value}");
+    }
+}`}
+  filename="src/main.rs"
+  label="Iterasi HashMap"
+/>
+
+Urutan iterasi tidak dijamin. Jangan mengandalkan urutan tertentu saat menampilkan atau memproses data.
+
+## Ownership
+
+Untuk nilai yang bukan `Copy` seperti `String`, `insert` memindahkan key dan value ke map.
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+
+fn main() {
+    let field_name = String::from("Favorite color");
+    let field_value = String::from("Blue");
+
+    let mut map = HashMap::new();
+    map.insert(field_name, field_value);
+
+    println!("{map:?}");
+}`}
+  filename="src/main.rs"
+  label="HashMap mengambil ownership key dan value"
+/>
+
+Setelah `insert`, `field_name` dan `field_value` tidak bisa dipakai lagi. Kalau kamu membutuhkan nilai aslinya, clone sebelum insert atau simpan reference dengan lifetime yang sesuai.
+
+## Menimpa nilai
+
+Key unik hanya punya satu value. `insert` kedua pada key yang sama akan menimpa nilai lama.
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+
+fn main() {
+    let mut scores = HashMap::new();
+
+    scores.insert(String::from("Blue"), 10);
+    scores.insert(String::from("Blue"), 25);
+
+    println!("{scores:?}");
+}`}
+  filename="src/main.rs"
+  label="Menimpa nilai dengan key yang sama"
+/>
+
+## Entry API
+
+`entry` memungkinkan kamu menambahkan value hanya jika key belum ada.
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+
+fn main() {
+    let mut scores = HashMap::new();
+    scores.insert(String::from("Blue"), 10);
+
+    scores.entry(String::from("Yellow")).or_insert(50);
+    scores.entry(String::from("Blue")).or_insert(50);
+
+    println!("{scores:?}");
+}`}
+  filename="src/main.rs"
+  label="Entry or_insert"
+/>
+
+`or_insert` mengembalikan mutable reference ke value. Kalau key sudah ada, value lama tidak diubah.
+
+Pola ini berguna untuk menghitung kemunculan:
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+
+fn main() {
+    let text = "hello world wonderful world";
+    let mut map = HashMap::new();
+
+    for word in text.split_whitespace() {
+        let count = map.entry(word).or_insert(0);
+        *count += 1;
+    }
+
+    println!("{map:?}");
+}`}
+  filename="src/main.rs"
+  label="Menghitung kata dengan entry"
+/>
+
+`count` adalah `&mut i32`. Tanda `*` dipakai untuk menambah nilai yang ditunjuk reference.
+
+## Hashing
+
+`HashMap` memakai hasher untuk menentukan posisi key. Default-nya memakai SipHash yang dirancang untuk ketahanan terhadap serangan hash flooding. Kalau kebutuhanmu berbeda, kamu bisa mengganti hasher, tetapi lakukan hanya setelah mengukur dan memahami risikonya.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, `Map` atau object sering dipakai untuk key-value. Di Go ada `map[K]V`. Di PHP array asosiatif, dan di Python `dict`. Rust memeriksa tipe key dan value, serta memindahkan nilai owned saat insert. Entry API Rust juga bisa dipakai untuk menambahkan atau memperbarui nilai dalam satu langkah.
+:::
+
+:::tip[Tips]
+Gunakan `get` dan `Option` untuk key yang mungkin tidak ada. Gunakan `entry` saat ingin menyisipkan nilai default atau menghitung secara akumulatif.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dikembalikan HashMap::get?',
+      options: ['Option<&V>', 'V', '&V', 'Result<V, E>'],
+      answer: 0,
+      optionNotes: [
+        'Benar. get mengembalikan Option karena key mungkin tidak ada.',
+        'Salah. Nilai tidak disalin otomatis.',
+        'Salah. Harus dibungkus Option.',
+        'Salah. Key yang tidak ada bukan error Result.',
+      ],
+      explanation:
+        'Option memaksa penanganan key yang tidak ditemukan.',
+    },
+    {
+      question: 'Apa yang terjadi pada String key setelah insert ke HashMap?',
+      options: [
+        'Key dipindahkan ke HashMap',
+        'Key disalin otomatis',
+        'Key tetap bisa dipakai karena String Copy',
+        'Key dihapus dari memory',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. HashMap mengambil ownership key owned.',
+        'Salah. Tidak ada clone otomatis.',
+        'Salah. String tidak Copy.',
+        'Salah. HashMap menyimpan key, bukan menghapusnya.',
+      ],
+      explanation:
+        'Gunakan clone atau reference dengan lifetime jika nilai asli masih dibutuhkan.',
+    },
+    {
+      question: 'Apa fungsi entry(key).or_insert(value)?',
+      options: [
+        'Menambahkan value jika key belum ada, lalu mengembalikan reference ke value',
+        'Selalu menimpa value lama',
+        'Menghapus key',
+        'Mengubah HashMap menjadi Vec',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. or_insert menyisipkan saat kosong dan mengembalikan &mut V.',
+        'Salah. Value lama dipertahankan.',
+        'Salah. Entry tidak menghapus key.',
+        'Salah. Tipe map tidak berubah.',
+      ],
+      explanation:
+        'Entry API mengurangi pengecekan ganda dan tetap ramah borrow checker.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

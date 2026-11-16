@@ -1,0 +1,172 @@
+---
+title: '9.3 Panic atau Result'
+description: 'Memilih panic atau Result, dengan aturan untuk library dan layanan backend.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Tidak semua kegagalan harus ditangani dengan cara yang sama. Panic menghentikan alur. `Result` memberi pemanggil pilihan. Pertanyaannya: kapan memakai yang mana?
+
+## Default untuk fungsi yang bisa gagal
+
+Saat menulis fungsi yang mungkin gagal karena input atau operasi eksternal, kembalikan `Result`. Pemanggil bisa memilih recovery, response HTTP, retry, atau panic.
+
+```rust
+fn parse_harga(input: &str) -> Result<u32, std::num::ParseIntError> {
+    input.parse()
+}
+```
+
+Input pengguna yang salah adalah kegagalan yang diharapkan. Jangan panic untuk itu.
+
+## Panic untuk invariant
+
+Panic masuk akal saat kode mendeteksi state yang seharusnya tidak mungkin terjadi dan melanjutkan bisa berbahaya. Contohnya tipe `Guess` yang hanya boleh berisi 1 sampai 100:
+
+<RustPlayground
+  code={`pub struct Guess {
+    value: i32,
+}
+
+impl Guess {
+    pub fn new(value: i32) -> Guess {
+        if !(1..=100).contains(&value) {
+            panic!("Guess value must be between 1 and 100, got {value}.");
+        }
+
+        Guess { value }
+    }
+
+    pub fn value(&self) -> i32 {
+        self.value
+    }
+}
+
+fn main() {
+    let tebakan = Guess::new(50);
+    println!("Tebakan valid: {}", tebakan.value());
+}`}
+  filename="src/main.rs"
+  label="Tipe Guess dengan validasi di constructor"
+/>
+
+Kalau `Guess::new(200)` dipanggil, program panic. Itu disengaja: memakai `Guess` di luar rentang berarti ada bug di kode pemanggil. Constructor memastikan nilai yang tersimpan selalu valid.
+
+Untuk input pengguna, lebih baik mengembalikan `Result`:
+
+```rust
+fn buat_guess(nilai: i32) -> Result<Guess, String> {
+    if (1..=100).contains(&nilai) {
+        Ok(Guess { value: nilai })
+    } else {
+        Err(format!("nilai {nilai} harus 1 sampai 100"))
+    }
+}
+```
+
+Perhatikan bahwa field `Guess` private. Kode luar tidak bisa membuat `Guess` dengan nilai sembarang; ia harus melewati constructor.
+
+## Contoh dan test
+
+`unwrap` dan `expect` sering dipakai di contoh, prototipe, dan test. Di test, panic berarti test gagal, dan itu memang perilaku yang diinginkan.
+
+Contoh `expect` untuk nilai yang dijamin valid:
+
+<RustPlayground
+  code={`use std::net::IpAddr;
+
+fn main() {
+    let home: IpAddr = "127.0.0.1"
+        .parse()
+        .expect("Hardcoded IP address should be valid");
+
+    println!("{home}");
+}`}
+  filename="src/main.rs"
+  label="Expect pada nilai hardcoded yang valid"
+/>
+
+Kalau string itu datang dari user, jangan gunakan `expect`. Tangani `Result` dan kembalikan response error.
+
+## Aturan untuk backend
+
+- Input request tidak valid: `Result`, response 4xx.
+- Record tidak ditemukan: `Result` atau `Option`, response 404.
+- Database sedang down: `Result`, response 5xx atau retry terkontrol.
+- Invariant internal rusak: panic boleh, karena melanjutkan bisa memperparah state.
+- Bug programmer seperti index di luar batas: panic adalah sinyal yang jelas.
+
+Server tidak boleh panic hanya karena satu request jelek. Kalau panic terjadi, request tersebut gagal, dan tergantung runtime serta strategi panic, thread atau proses bisa terpengaruh. Perlakukan panic sebagai insiden, bukan alur normal.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, PHP, dan Python, error biasanya berupa exception. Di Go, error dikembalikan sebagai nilai. Rust memakai `Result` untuk kegagalan yang bisa dipulihkan dan `panic!` untuk kondisi fatal. Perbandingan yang paling dekat: `Result` seperti error return Go, sedangkan `panic!` seperti fatal exception yang tidak ditangkap.
+:::
+
+:::caution[Hati-hati]
+Jangan memakai `unwrap` pada data dari request, file, database, atau jaringan. Semua sumber itu bisa gagal. Gunakan `?`, `match`, atau method yang mengembalikan response error.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Kapan panic lebih tepat?',
+      options: [
+        'Saat invariant internal rusak dan melanjutkan tidak aman',
+        'Saat user mengirim JSON yang tidak valid',
+        'Saat database mengembalikan nol baris',
+        'Saat request melebihi rate limit',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Panic untuk kondisi fatal yang tidak bisa dipulihkan.',
+        'Salah. JSON tidak valid adalah input error.',
+        'Salah. Nol baris adalah hasil normal.',
+        'Salah. Rate limit adalah kegagalan yang bisa ditangani.',
+      ],
+      explanation:
+        'Panic menandai bug atau kondisi yang tidak boleh dilanjutkan.',
+    },
+    {
+      question: 'Mengapa tipe Guess memakai field private?',
+      options: [
+        'Agar nilai hanya bisa dibuat lewat constructor yang memvalidasi',
+        'Agar nilai tidak bisa dibaca sama sekali',
+        'Agar Guess otomatis menjadi String',
+        'Agar panic tidak mungkin terjadi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Private field memaksa pemakaian constructor.',
+        'Salah. Method value bisa membaca nilai.',
+        'Salah. Tipe tidak berubah menjadi String.',
+        'Salah. Constructor tetap bisa panic pada nilai salah.',
+      ],
+      explanation:
+        'Tipe validasi memindahkan pengecekan ke satu tempat.',
+    },
+    {
+      question: 'Apa respons yang tepat untuk input pengguna yang gagal di-parse?',
+      options: [
+        'Kembalikan Err dan petakan ke response 4xx',
+        'Panic dan matikan server',
+        'Abaikan input tanpa memberi tahu client',
+        'Ulangi request tanpa batas',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Input salah adalah kegagalan yang diharapkan.',
+        'Salah. Satu input buruk tidak boleh mematikan layanan.',
+        'Salah. Client perlu tahu inputnya salah.',
+        'Salah. Retry tanpa batas bukan penanganan.',
+      ],
+      explanation:
+        'Result memberi jalur yang jelas menuju response error.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

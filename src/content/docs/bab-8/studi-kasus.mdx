@@ -1,0 +1,340 @@
+---
+title: '8.4 Studi kasus: Kasir Warung'
+description: 'Mengganti array tetap dengan Vec dan HashMap pada Kasir Warung.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Di Bab 7, Kasir Warung sudah punya module, tetapi daftar item masih array tiga. Sekarang kita memakai `Vec` untuk daftar pesanan dan `HashMap` untuk katalog menu. Jumlah item tidak lagi dibatasi tiga.
+
+## Model baru
+
+`MenuItem` menyimpan nama dan harga. `ItemPesanan` menyimpan kode menu dan jumlah. `Transaksi` memiliki katalog menu dan daftar item.
+
+<StudyCase title="Kasir Warung: Vec dan HashMap" intro="Memisahkan katalog menu dari daftar pesanan dan menghitung subtotal lewat lookup.">
+  <StudyCaseStep
+    title="Buat katalog menu"
+    goal="Menyimpan menu dalam HashMap berdasarkan kode."
+  >
+    Kode menu menjadi key. Nama dan harga menjadi value.
+
+    ```rust
+    use std::collections::HashMap;
+
+    #[derive(Debug, Clone)]
+    struct MenuItem {
+        nama: String,
+        harga: u32,
+    }
+
+    fn buat_menu() -> HashMap<String, MenuItem> {
+        let mut menu = HashMap::new();
+
+        menu.insert(
+            "KOPI".to_string(),
+            MenuItem {
+                nama: "Kopi".to_string(),
+                harga: 12_000,
+            },
+        );
+
+        menu.insert(
+            "ROTI".to_string(),
+            MenuItem {
+                nama: "Roti".to_string(),
+                harga: 8_000,
+            },
+        );
+
+        menu
+    }
+    ```
+
+    <Fragment slot="hint">
+      Key `String` dimiliki HashMap setelah insert. Kalau kamu masih membutuhkan string aslinya, clone sebelum insert.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Katalog menu sekarang bisa bertambah tanpa mengubah struct `Transaksi`.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Daftar pesanan dengan Vec"
+    goal="Menyimpan item pesanan dalam Vec dan menghitung subtotal dengan lookup menu."
+  >
+    `ItemPesanan` hanya menyimpan kode dan jumlah. Harga diambil dari katalog saat dihitung.
+
+    ```rust
+    #[derive(Debug)]
+    struct ItemPesanan {
+        kode: String,
+        jumlah: u32,
+    }
+
+    impl ItemPesanan {
+        fn baru(kode: &str, jumlah: u32) -> Self {
+            Self {
+                kode: kode.to_string(),
+                jumlah,
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    struct Transaksi {
+        pelanggan: String,
+        menu: HashMap<String, MenuItem>,
+        items: Vec<ItemPesanan>,
+    }
+
+    impl Transaksi {
+        fn subtotal(&self) -> u32 {
+            let mut subtotal = 0;
+
+            for item in &self.items {
+                if let Some(menu_item) = self.menu.get(&item.kode) {
+                    subtotal += menu_item.harga * item.jumlah;
+                }
+            }
+
+            subtotal
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      `self.menu.get(&item.kode)` mengembalikan `Option<&MenuItem>`. Gunakan `if let` untuk hanya menambah item yang kodenya ada.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Sekarang jumlah item tidak dibatasi tiga. `Vec` bisa bertambah, dan `HashMap` memberi lookup berdasarkan kode tanpa menelusuri seluruh menu.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Cetak struk"
+    goal="Mengambil nama dan harga dari menu saat mencetak."
+  >
+    Saat mencetak, setiap item dicari di menu. Item dengan kode yang tidak ada dilewati atau dilaporkan sebagai error nanti di Bab 9.
+
+    ```rust
+    impl Transaksi {
+        fn cetak(&self) {
+            println!("Pelanggan: {}", self.pelanggan);
+
+            for item in &self.items {
+                if let Some(menu_item) = self.menu.get(&item.kode) {
+                    let baris = menu_item.harga * item.jumlah;
+                    println!("{} x {} = Rp{baris}", menu_item.nama, item.jumlah);
+                }
+            }
+
+            println!("Subtotal: Rp{}", self.subtotal());
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      Jangan memakai `unwrap` pada `menu.get` karena kode dari input bisa saja tidak ada.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Item yang tidak ditemukan belum ditangani sebagai error. Itu akan diperbaiki di Bab 9 dengan `Result`.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+Playground ini memakai daftar item tetap, tetapi semua data disimpan dalam `Vec` dan `HashMap`.
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+
+#[derive(Debug, Clone)]
+struct MenuItem {
+    nama: String,
+    harga: u32,
+}
+
+#[derive(Debug)]
+struct ItemPesanan {
+    kode: String,
+    jumlah: u32,
+}
+
+impl ItemPesanan {
+    fn baru(kode: &str, jumlah: u32) -> Self {
+        Self {
+            kode: kode.to_string(),
+            jumlah,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Transaksi {
+    pelanggan: String,
+    menu: HashMap<String, MenuItem>,
+    items: Vec<ItemPesanan>,
+}
+
+impl Transaksi {
+    fn baru(pelanggan: String, menu: HashMap<String, MenuItem>, items: Vec<ItemPesanan>) -> Self {
+        Self {
+            pelanggan,
+            menu,
+            items,
+        }
+    }
+
+    fn subtotal(&self) -> u32 {
+        let mut subtotal = 0;
+
+        for item in &self.items {
+            if let Some(menu_item) = self.menu.get(&item.kode) {
+                subtotal += menu_item.harga * item.jumlah;
+            }
+        }
+
+        subtotal
+    }
+
+    fn cetak(&self) {
+        println!("========================================");
+        println!("           KASIR WARUNG BU SRI");
+        println!("        Jl. Melati No. 12, Bandung");
+        println!("Pelanggan: {}", self.pelanggan);
+        println!("========================================");
+
+        for item in &self.items {
+            if let Some(menu_item) = self.menu.get(&item.kode) {
+                let baris = menu_item.harga * item.jumlah;
+                println!("{} x {} = Rp{baris}", menu_item.nama, item.jumlah);
+            }
+        }
+
+        let subtotal = self.subtotal();
+        println!("----------------------------------------");
+        println!("Subtotal: Rp{subtotal}");
+        println!("========================================");
+    }
+}
+
+fn main() {
+    let mut menu = HashMap::new();
+    menu.insert(
+        "KOPI".to_string(),
+        MenuItem {
+            nama: "Kopi".to_string(),
+            harga: 12_000,
+        },
+    );
+    menu.insert(
+        "ROTI".to_string(),
+        MenuItem {
+            nama: "Roti".to_string(),
+            harga: 8_000,
+        },
+    );
+    menu.insert(
+        "NASI".to_string(),
+        MenuItem {
+            nama: "Nasi".to_string(),
+            harga: 15_000,
+        },
+    );
+
+    let items = vec![
+        ItemPesanan::baru("KOPI", 1),
+        ItemPesanan::baru("ROTI", 2),
+        ItemPesanan::baru("NASI", 1),
+    ];
+
+    let transaksi = Transaksi::baru(String::from("Bu Sri"), menu, items);
+    transaksi.cetak();
+}`}
+  filename="src/main.rs"
+  label="Kasir Warung dengan Vec dan HashMap"
+/>
+
+## Keadaan setelah Bab 8
+
+- Katalog menu memakai `HashMap<String, MenuItem>` dengan kode sebagai key.
+- Daftar pesanan memakai `Vec<ItemPesanan>` dan tidak lagi dibatasi tiga.
+- Harga diambil dari katalog saat subtotal dan cetak.
+- Item dengan kode yang tidak ada belum menghasilkan error; saat ini hanya dilewati.
+- Status dan metode pembayaran dari Bab 6 tetap ada di model lengkap.
+- Belum ada `Result` untuk input atau lookup yang gagal.
+
+:::note[Kalau di bahasa lain]
+`Vec` mirip array dinamis di JavaScript atau list di Python, serta slice yang bisa tumbuh di Go. `HashMap` mirip `Map` di JavaScript, `map` di Go, array asosiatif di PHP, atau `dict` di Python. Rust memeriksa tipe key-value dan memindahkan nilai owned saat insert.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa katalog menu memakai HashMap?',
+      options: [
+        'Karena harga dicari berdasarkan kode menu, bukan urutan',
+        'Karena HashMap menyimpan data berurutan',
+        'Karena HashMap tidak membutuhkan key',
+        'Karena Vec tidak bisa menyimpan struct',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. HashMap cocok untuk lookup berdasarkan key.',
+        'Salah. Urutan HashMap tidak dijamin.',
+        'Salah. HashMap justru membutuhkan key.',
+        'Salah. Vec bisa menyimpan struct.',
+      ],
+      explanation:
+        'Kode menu menjadi key yang stabil untuk mencari nama dan harga.',
+    },
+    {
+      question: 'Apa yang terjadi kalau kode item tidak ada di menu?',
+      options: [
+        'Lookup mengembalikan None dan item dilewati pada versi ini',
+        'Program panic otomatis',
+        'HashMap membuat item baru',
+        'Kode berubah menjadi harga nol',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. get mengembalikan None dan if let melewati item.',
+        'Salah. Tidak ada panic tanpa unwrap.',
+        'Salah. HashMap tidak membuat value otomatis.',
+        'Salah. Tidak ada konversi otomatis.',
+      ],
+      explanation:
+        'Bab 9 akan mengubah perilaku ini menjadi error yang bisa ditangani.',
+    },
+    {
+      question: 'Apa keuntungan Vec dibanding array tiga item?',
+      options: [
+        'Jumlah item bisa bertambah atau berkurang',
+        'Vec menyimpan tipe berbeda tanpa enum',
+        'Vec tidak memakai heap',
+        'Vec tidak membutuhkan ownership',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Vec memiliki panjang dinamis.',
+        'Salah. Vec tetap homogen.',
+        'Salah. Vec menyimpan data di heap.',
+        'Salah. Vec tetap mengikuti ownership.',
+      ],
+      explanation:
+        'Vec menghapus batas tiga item yang berasal dari array tetap.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

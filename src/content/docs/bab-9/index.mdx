@@ -1,0 +1,92 @@
+---
+title: 'Bab 9: Error handling'
+description: 'Panic, Result, operator ?, dan cara memilih error handling yang tepat untuk backend.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Error handling adalah bagian yang membedakan prototype dari layanan yang bisa dioperasikan. Rust memisahkan dua jenis kegagalan:
+
+- **panic** untuk kondisi yang tidak bisa dipulihkan atau melanggar invariant;
+- **Result** untuk kegagalan yang bisa dipulihkan dan harus ditangani pemanggil.
+
+Di backend, input pengguna yang salah, request yang tidak valid, dan record yang tidak ditemukan adalah kegagalan yang biasa. Itu bukan alasan untuk mematikan server. Sebaliknya, state internal yang mustahil, index di luar batas, atau asumsi yang rusak bisa menjadi panic.
+
+## Urutan bab
+
+1. [Panic](panic/) membahas panic, unwinding, abort, backtrace, dan kapan panic masuk akal.
+2. [Result](result/) membahas `Result`, `match`, `unwrap`, `expect`, propagasi `?`, dan error kustom.
+3. [Panic atau Result](panic-or-result/) membahas garis pemisah untuk library dan layanan.
+4. [Studi kasus: Kasir Warung](studi-kasus/) mengubah input dan lookup menjadi error yang bisa ditangani.
+
+:::note[Kenapa begini?]
+Server yang panic akan menghentikan proses atau setidaknya request yang sedang berjalan. Untuk kesalahan yang berasal dari input, response 4xx lebih tepat daripada mematikan layanan. `Result` membuat error menjadi bagian dari kontrak fungsi, sehingga pemanggil tidak bisa pura-pura tidak tahu.
+:::
+
+:::tip[Tips]
+Saat menulis fungsi yang bisa gagal, mulai dari `Result`. Tambahkan panic hanya untuk kondisi yang memang melanggar kontrak dan tidak masuk akal untuk dilanjutkan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Kapan panic lebih tepat daripada Result?',
+      options: [
+        'Saat invariant internal rusak dan melanjutkan berbahaya',
+        'Saat pengguna mengetik format yang salah',
+        'Saat record tidak ditemukan',
+        'Saat request rate limit',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Panic untuk kondisi yang tidak seharusnya terjadi dan tidak bisa dipulihkan.',
+        'Salah. Input salah adalah kegagalan yang diharapkan.',
+        'Salah. Record tidak ditemukan biasanya response 404.',
+        'Salah. Rate limit adalah kegagalan yang bisa ditangani.',
+      ],
+      explanation:
+        'Panic adalah sinyal bug atau kondisi fatal, bukan alur normal input pengguna.',
+    },
+    {
+      question: 'Apa keuntungan Result dibanding exception?',
+      options: [
+        'Kemungkinan gagal terlihat di tipe dan harus ditangani pemanggil',
+        'Result membuat program tidak pernah gagal',
+        'Result menghilangkan semua error',
+        'Result hanya bekerja di main',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Tipe Result memaksa penanganan eksplisit.',
+        'Salah. Result tetap bisa berisi Err.',
+        'Salah. Error tetap ada sebagai nilai.',
+        'Salah. Result bisa dipakai di banyak fungsi.',
+      ],
+      explanation:
+        'Error menjadi nilai yang terlihat di signature fungsi.',
+    },
+    {
+      question: 'Apa yang terjadi saat fungsi mengembalikan Err dan pemanggil memakai ?',
+      options: [
+        'Error dikembalikan lebih awal ke pemanggil fungsi',
+        'Error selalu menjadi panic',
+        'Error diabaikan',
+        'Program mengulang fungsi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. ? melakukan early return pada Err.',
+        'Salah. ? tidak otomatis panic.',
+        'Salah. Err tidak diabaikan.',
+        'Salah. Tidak ada pengulangan otomatis.',
+      ],
+      explanation:
+        '? mempersingkat match yang mengembalikan Err lebih awal.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

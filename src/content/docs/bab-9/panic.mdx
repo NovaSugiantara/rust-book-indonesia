@@ -1,0 +1,161 @@
+---
+title: '9.1 Panic'
+description: 'Panic, unwinding, abort, backtrace, dan batas penggunaan panic.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Panic adalah cara program menyatakan bahwa ia tidak bisa melanjutkan. Panic bisa dipicu langsung dengan `panic!` atau terjadi otomatis, misalnya saat mengakses indeks vector di luar batas.
+
+## Memicu panic
+
+```rust
+fn main() {
+    panic!("crash and burn");
+}
+```
+
+Output-nya menyebut lokasi panic dan pesan yang diberikan:
+
+```text
+thread 'main' panicked at src/main.rs:2:5:
+crash and burn
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+```
+
+Secara default, panic melakukan unwinding: Rust membersihkan stack dan data yang dimiliki fungsi yang dilewati. Setelah itu program berhenti.
+
+## Panic otomatis
+
+Akses indeks di luar batas juga panic:
+
+```rust
+fn main() {
+    let v = vec![1, 2, 3];
+    v[99];
+}
+```
+
+```text
+thread 'main' panicked at src/main.rs:4:6:
+index out of bounds: the len is 3 but the index is 99
+```
+
+Rust memilih panic daripada membaca memory di luar vector. Membaca memory yang bukan milik struktur bisa menjadi bug keamanan.
+
+Kalau kamu tidak ingin panic, gunakan `get` dan tangani `Option`:
+
+<RustPlayground
+  code={`fn main() {
+    let v = vec![1, 2, 3];
+
+    match v.get(99) {
+        Some(nilai) => println!("Nilai: {nilai}"),
+        None => println!("Indeks tidak ada, lanjutkan dengan aman"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Alternatif get untuk menghindari panic"
+/>
+
+## Backtrace
+
+Untuk melihat jejak fungsi yang menyebabkan panic, jalankan dengan environment variable:
+
+```console
+$ RUST_BACKTRACE=1 cargo run
+```
+
+Backtrace menampilkan daftar frame. Mulai dari atas, cari file yang kamu tulis sendiri. Frame di atasnya adalah kode yang dipanggil, frame di bawahnya adalah pemanggil.
+
+Debug symbol aktif pada build debug. Build release bisa menghilangkan sebagian informasi kecuali kamu mengaturnya.
+
+## Abort
+
+Unwinding membutuhkan kerja tambahan. Kalau ukuran binary atau perilaku saat panic lebih penting, kamu bisa memilih abort:
+
+```toml
+[profile.release]
+panic = 'abort'
+```
+
+Dengan abort, program berhenti tanpa membersihkan stack. Sistem operasi yang membersihkan memory proses. Ini bukan pengganti error handling; ini hanya mengubah cara proses berhenti.
+
+## Di backend
+
+Panic untuk input pengguna adalah pilihan buruk. Request dengan JSON rusak, path yang tidak valid, atau record yang tidak ditemukan adalah kegagalan normal. Kembalikan `Result`, lalu petakan ke response 4xx.
+
+Panic lebih masuk akal untuk invariant internal yang rusak, misalnya state yang seharusnya tidak mungkin terjadi. Pada server, panic dapat memutus request dan, tergantung runtime serta strategi panic, dapat memengaruhi thread atau proses. Jangan mengandalkan panic sebagai alur kontrol.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, exception yang tidak ditangkap bisa menghentikan proses Node. Di Python, exception yang tidak ditangani menghentikan program. Di PHP, fatal error menghentikan request. Go memakai `panic` untuk kondisi serupa, tetapi banyak error dikembalikan sebagai nilai. Rust memisahkan panic dan `Result` di tingkat tipe.
+:::
+
+:::caution[Hati-hati]
+Jangan memakai panic untuk menangani input yang salah. Itu membuat satu request buruk berpotensi mengganggu layanan, dan client tidak mendapat response error yang berguna.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang terjadi saat panic pada konfigurasi default?',
+      options: [
+        'Program unwinds, membersihkan stack, lalu berhenti',
+        'Program melanjutkan dengan nilai default',
+        'Error dikembalikan sebagai Result',
+        'Program mengulang fungsi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Default panic melakukan unwinding lalu berhenti.',
+        'Salah. Panic tidak memberi nilai default.',
+        'Salah. Panic bukan Result.',
+        'Salah. Tidak ada pengulangan otomatis.',
+      ],
+      explanation:
+        'Panic menandai kondisi yang tidak bisa dilanjutkan.',
+    },
+    {
+      question: 'Mengapa v[99] pada vector tiga elemen panic?',
+      options: [
+        'Karena indeks berada di luar batas dan Rust menolak akses memory tidak valid',
+        'Karena vector tidak bisa diindeks',
+        'Karena 99 bukan bilangan prima',
+        'Karena vector harus mutable',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rust memeriksa batas dan panic.',
+        'Salah. Vector bisa diindeks.',
+        'Salah. Nilai 99 tidak relevan sebagai bilangan prima.',
+        'Salah. Membaca tidak membutuhkan mutable.',
+      ],
+      explanation:
+        'Panic mencegah buffer overread.',
+    },
+    {
+      question: 'Apa fungsi panic = "abort" pada profil release?',
+      options: [
+        'Menghentikan proses tanpa unwinding saat panic',
+        'Mengubah panic menjadi Result',
+        'Menonaktifkan semua error',
+        'Membuat program selalu berhasil',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Abort menghentikan proses tanpa membersihkan stack.',
+        'Salah. Panic tetap panic.',
+        'Salah. Error tetap ada.',
+        'Salah. Abort bukan penanganan error.',
+      ],
+      explanation:
+        'Abort mengubah cara proses berhenti, bukan jenis error yang ditangani.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

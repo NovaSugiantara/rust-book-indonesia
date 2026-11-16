@@ -1,0 +1,158 @@
+---
+title: '7.5 Memisahkan module ke file'
+description: 'Memecah module ke file dan folder sesuai konvensi Cargo.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Module inline berguna untuk contoh kecil. Proyek nyata memisahkan module ke file agar setiap bagian mudah dicari.
+
+## Dari inline ke file
+
+Kode inline ini bisa dipindahkan tanpa mengubah path:
+
+<RustPlayground
+  code={`mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {
+            println!("Tamu ditambahkan");
+        }
+    }
+}
+
+use front_of_house::hosting;
+
+fn main() {
+    hosting::add_to_waitlist();
+}`}
+  filename="src/main.rs"
+  label="Module inline sebelum dipecah"
+/>
+
+Di proyek Cargo, bentuk file yang setara adalah:
+
+```text
+src/
+├── main.rs
+├── front_of_house.rs
+└── front_of_house/
+    └── hosting.rs
+```
+
+`src/main.rs` mendeklarasikan module:
+
+```rust
+mod front_of_house;
+
+use front_of_house::hosting;
+
+fn main() {
+    hosting::add_to_waitlist();
+}
+```
+
+`src/front_of_house.rs` mendeklarasikan submodule:
+
+```rust
+pub mod hosting;
+```
+
+`src/front_of_house/hosting.rs` berisi implementasinya:
+
+```rust
+pub fn add_to_waitlist() {
+    println!("Tamu ditambahkan");
+}
+```
+
+Compiler mencari module di beberapa lokasi. Untuk `mod garden;` di crate root, ia mencari `src/garden.rs` atau `src/garden/mod.rs`. Untuk `mod vegetables;` di `src/garden.rs`, ia mencari `src/garden/vegetables.rs` atau `src/garden/vegetables/mod.rs`.
+
+## Jangan mencampur dua lokasi
+
+Untuk satu module, pilih satu lokasi. Jangan membuat `src/garden.rs` dan `src/garden/mod.rs` sekaligus untuk module yang sama. Compiler bisa bingung dan error.
+
+Pola `mod.rs` masih valid, tetapi gaya yang lebih baru adalah `garden.rs` untuk module dan folder `garden/` untuk submodule. Pilih satu gaya dan konsisten.
+
+## Menjalankan
+
+Dari folder proyek:
+
+```console
+$ cargo run
+Tamu ditambahkan
+```
+
+Karena file module ikut dikompilasi, `cargo run` membaca seluruh module tree dari crate root.
+
+:::note[Kalau di bahasa lain]
+Di Go, satu folder biasanya satu package. Di JavaScript, folder dan file module mengikuti import path. Di Rust, module tree ditentukan oleh deklarasi `mod`, bukan hanya lokasi file. File tidak ikut dikompilasi kalau tidak dideklarasikan dari crate root atau module induk.
+:::
+
+:::caution[Hati-hati]
+Menambah file `.rs` saja tidak cukup. Kamu harus mendeklarasikannya dengan `mod` di module induk. Tanpa deklarasi, file itu tidak menjadi bagian crate.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Di mana compiler mencari isi mod garden; dari crate root?',
+      options: [
+        'src/garden.rs atau src/garden/mod.rs',
+        'src/main/garden.rs',
+        'Cargo.toml',
+        'target/debug/garden',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Dua lokasi itu dikenali untuk module dari crate root.',
+        'Salah. Path itu bukan konvensi module.',
+        'Salah. Cargo.toml bukan file module.',
+        'Salah. target/debug berisi hasil build.',
+      ],
+      explanation:
+        'Cargo dan rustc mengikuti konvensi lokasi module berdasarkan deklarasi mod.',
+    },
+    {
+      question: 'Apa yang harus dilakukan agar file module ikut dikompilasi?',
+      options: [
+        'Deklarasikan dengan mod di module induk',
+        'Letakkan di folder target',
+        'Tambahkan ke Cargo.lock',
+        'Beri nama dengan huruf besar',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Deklarasi mod menghubungkan file ke module tree.',
+        'Salah. target adalah hasil build.',
+        'Salah. Cargo.lock mencatat dependency.',
+        'Salah. Kapitalisasi nama bukan penentu.',
+      ],
+      explanation:
+        'File .rs yang tidak dideklarasikan tidak menjadi bagian crate.',
+    },
+    {
+      question: 'Mengapa tidak boleh ada src/garden.rs dan src/garden/mod.rs untuk module yang sama?',
+      options: [
+        'Karena dua lokasi itu konflik untuk satu module',
+        'Karena mod.rs hanya untuk test',
+        'Karena garden.rs harus berisi main',
+        'Karena Cargo melarang folder bernama garden',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pilih satu lokasi untuk satu module.',
+        'Salah. mod.rs adalah pola module yang valid.',
+        'Salah. File module tidak harus punya main.',
+        'Salah. Nama folder tidak dilarang.',
+      ],
+      explanation:
+        'Konvensi module mengharapkan satu sumber untuk satu deklarasi mod.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

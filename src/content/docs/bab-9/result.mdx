@@ -1,0 +1,277 @@
+---
+title: '9.2 Result'
+description: 'Menangani kegagalan dengan Result, match, operator ?, dan error kustom.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+`Result<T, E>` menyatakan operasi yang bisa berhasil atau gagal. `T` adalah nilai sukses, `E` adalah nilai error.
+
+```rust
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+```
+
+`Result` dan variant `Ok` serta `Err` sudah ada di prelude.
+
+## Match pada Result
+
+Fungsi `parse` mengubah string menjadi angka dan bisa gagal.
+
+<RustPlayground
+  code={`fn main() {
+    let hasil: Result<i32, _> = "42".parse();
+
+    match hasil {
+        Ok(angka) => println!("Angka: {angka}"),
+        Err(error) => println!("Gagal parse: {error}"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Match pada Result parse"
+/>
+
+`Err` berisi informasi kegagalan. Program tidak panic; pemanggil memutuskan apa yang harus dilakukan.
+
+Operasi file juga mengembalikan `Result`. Kode berikut membuka file dan memilih panic kalau gagal:
+
+```rust
+use std::fs::File;
+
+fn main() {
+    let hasil = File::open("hello.txt");
+
+    let file = match hasil {
+        Ok(file) => file,
+        Err(error) => panic!("Gagal membuka file: {error:?}"),
+    };
+}
+```
+
+Contoh file butuh filesystem, jadi tidak dijalankan di playground. Di server, panic seperti ini bukan response yang baik. Pilihan yang lebih tepat adalah mengembalikan error ke handler.
+
+## unwrap dan expect
+
+`unwrap` mengembalikan nilai `Ok` atau panic pada `Err`. `expect` sama, tetapi memberi pesan sendiri.
+
+```rust
+let file = File::open("hello.txt").expect("hello.txt harus ada");
+```
+
+Keduanya cocok untuk contoh, prototype, dan test. Untuk kode produksi, gunakan `match`, `?`, atau method yang menangani error secara eksplisit.
+
+## Propagasi dengan ?
+
+Operator `?` mengembalikan error lebih awal. Kalau nilainya `Ok`, isinya diambil dan eksekusi lanjut.
+
+<RustPlayground
+  code={`use std::num::ParseIntError;
+
+fn parse_dua(a: &str, b: &str) -> Result<(i32, i32), ParseIntError> {
+    let a: i32 = a.parse()?;
+    let b: i32 = b.parse()?;
+    Ok((a, b))
+}
+
+fn main() {
+    match parse_dua("10", "20") {
+        Ok((a, b)) => println!("{a} + {b} = {}", a + b),
+        Err(error) => println!("Input salah: {error}"),
+    }
+
+    match parse_dua("10", "abc") {
+        Ok((a, b)) => println!("{a} + {b} = {}", a + b),
+        Err(error) => println!("Input salah: {error}"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Propagasi error dengan operator tanya"
+/>
+
+`?` hanya bisa dipakai di fungsi yang mengembalikan tipe kompatibel. Kode berikut sengaja salah karena `main` mengembalikan `()`:
+
+<RustPlayground
+  code={`fn main() {
+    let angka: i32 = "42".parse()?;
+    println!("{angka}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error operator tanya di main"
+/>
+
+Pesan compiler menyarankan return type `Result<(), Box<dyn Error>>`. `?` juga bisa dipakai pada `Option` di fungsi yang mengembalikan `Option`.
+
+<RustPlayground
+  code={`fn last_char_of_first_line(text: &str) -> Option<char> {
+    text.lines().next()?.chars().last()
+}
+
+fn main() {
+    println!("{:?}", last_char_of_first_line("Hello, world\\nHow are you?"));
+    println!("{:?}", last_char_of_first_line(""));
+}`}
+  filename="src/main.rs"
+  label="Operator tanya pada Option"
+/>
+
+## Error kustom
+
+Fungsi bisa mengembalikan tipe error sendiri. Implementasikan `Display` dan `Error`, lalu gunakan `?` jika ada konversi yang sesuai.
+
+<RustPlayground
+  code={`use std::fmt;
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+enum HitungError {
+    Kosong,
+    BukanAngka(ParseIntError),
+}
+
+impl fmt::Display for HitungError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Kosong => write!(f, "nilai kosong"),
+            Self::BukanAngka(error) => write!(f, "bukan angka: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for HitungError {}
+
+impl From<ParseIntError> for HitungError {
+    fn from(error: ParseIntError) -> Self {
+        Self::BukanAngka(error)
+    }
+}
+
+fn parse_positif(input: &str) -> Result<u32, HitungError> {
+    if input.trim().is_empty() {
+        return Err(HitungError::Kosong);
+    }
+
+    let angka: u32 = input.trim().parse()?;
+    Ok(angka)
+}
+
+fn main() {
+    match parse_positif("42") {
+        Ok(angka) => println!("Angka: {angka}"),
+        Err(error) => println!("Error: {error}"),
+    }
+
+    match parse_positif("abc") {
+        Ok(angka) => println!("Angka: {angka}"),
+        Err(error) => println!("Error: {error}"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Error kustom dengan From dan operator tanya"
+/>
+
+`?` memanggil konversi `From` dari error yang dihasilkan operasi ke tipe error fungsi. Di contoh ini `ParseIntError` menjadi `HitungError::BukanAngka`.
+
+## main yang mengembalikan Result
+
+`main` boleh mengembalikan `Result<(), E>`. Kalau `Err`, proses keluar dengan status nonzero.
+
+```rust
+use std::error::Error;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let file = File::open("hello.txt")?;
+    Ok(())
+}
+```
+
+`Box<dyn Error>` berarti error apa pun yang mengimplementasikan `Error`. Ini praktis untuk aplikasi kecil, tetapi layanan biasanya memakai tipe error sendiri agar bisa memetakan status HTTP.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, PHP, dan Python, kegagalan biasanya berupa exception yang dilempar dan ditangkap `try/catch`. Di Go, error dikembalikan sebagai nilai dan diperiksa secara eksplisit. Rust memakai `Result` seperti Go, tetapi dengan operator `?` dan konversi `From`. Perbedaannya, `Result` terlihat di tipe sehingga pemanggil tidak bisa lupa bahwa operasi bisa gagal.
+:::
+
+:::tip[Tips]
+Gunakan `?` untuk meneruskan error yang tidak bisa ditangani di fungsi saat ini. Tangani error di tempat yang punya cukup konteks untuk memilih response atau tindakan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa isi variant Err pada Result?',
+      options: ['Informasi kegagalan', 'Nilai sukses', 'Selalu unit', 'String kosong'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Err membawa tipe error yang ditentukan fungsi.',
+        'Salah. Nilai sukses ada di Ok.',
+        'Salah. Tipe error bisa beragam.',
+        'Salah. Err tidak selalu string kosong.',
+      ],
+      explanation:
+        'Result memisahkan nilai sukses dan informasi error.',
+    },
+    {
+      question: 'Apa yang dilakukan operator ? pada Err?',
+      options: [
+        'Mengembalikan error lebih awal dari fungsi',
+        'Mengubah Err menjadi panic',
+        'Mengabaikan error',
+        'Mengulang pemanggilan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. ? melakukan early return.',
+        'Salah. Err tidak otomatis panic.',
+        'Salah. Error tidak diabaikan.',
+        'Salah. Tidak ada retry otomatis.',
+      ],
+      explanation:
+        '? mempersingkat pola match yang mengembalikan Err.',
+    },
+    {
+      question: 'Kapan unwrap sebaiknya dihindari?',
+      options: [
+        'Saat error mungkin terjadi dan pemanggil seharusnya bisa menanganinya',
+        'Saat menulis test',
+        'Saat prototipe cepat',
+        'Saat nilai dijamin Ok',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. unwrap membuat program panic pada Err.',
+        'Salah. Test sering memakai unwrap untuk menandai kegagalan.',
+        'Salah. Prototipe boleh memakai unwrap sebagai placeholder.',
+        'Salah. Kalau benar-benar dijamin Ok, unwrap masih bisa dipertimbangkan.',
+      ],
+      explanation:
+        'Untuk input pengguna dan I/O, unwrap sering menjadi sumber panic yang tidak perlu.',
+    },
+    {
+      question: 'Apa peran impl From<ParseIntError> pada error kustom?',
+      options: [
+        'Memungkinkan ? mengonversi ParseIntError ke tipe error fungsi',
+        'Membuat error menjadi panic',
+        'Menghapus error',
+        'Mengubah Result menjadi Option',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. ? memakai From untuk konversi error.',
+        'Salah. From tidak memicu panic.',
+        'Salah. Konversi bukan penghapusan.',
+        'Salah. From tidak mengubah Result menjadi Option.',
+      ],
+      explanation:
+        'Satu tipe error bisa menampung beberapa jenis error dari operasi berbeda.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

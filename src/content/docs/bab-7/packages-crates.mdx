@@ -1,0 +1,109 @@
+---
+title: '7.1 Package dan crate'
+description: 'Membedakan package Cargo, binary crate, library crate, dan crate root.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Dua istilah ini sering tertukar: package dan crate. Package adalah bundel yang diatur Cargo. Crate adalah unit yang dikompilasi compiler Rust.
+
+## Crate
+
+Crate adalah jumlah kode terkecil yang dianggap compiler pada satu waktu. Saat kamu menjalankan `rustc main.rs`, file itu adalah satu crate. Crate bisa berisi module, dan module bisa berada di file lain yang ikut dikompilasi.
+
+Ada dua jenis crate:
+
+- **Binary crate** menghasilkan executable dan wajib punya fungsi `main`.
+- **Library crate** tidak punya `main` dan tidak menghasilkan executable. Kode ini dipakai crate lain.
+
+Program yang kamu tulis sejauh ini adalah binary crate. Crate `rand` adalah library crate.
+
+## Package
+
+Package adalah bundel satu atau lebih crate beserta `Cargo.toml`. Cargo membaca manifest itu untuk tahu cara membangun crate di dalamnya.
+
+Satu package boleh punya banyak binary crate, tetapi paling banyak satu library crate. Package harus punya minimal satu crate.
+
+<RustPlayground
+  code={`fn main() {
+    println!("File ini adalah crate root dari binary crate.");
+}`}
+  filename="src/main.rs"
+  label="Crate root binary sederhana"
+/>
+
+## Konvensi Cargo
+
+Saat kamu menjalankan `cargo new my-project`, Cargo membuat package dengan binary crate:
+
+```console
+$ cargo new my-project
+     Created binary (application) `my-project` package
+$ ls my-project
+Cargo.toml
+src
+$ ls my-project/src
+main.rs
+```
+
+`src/main.rs` adalah crate root untuk binary crate dengan nama package. Kalau package juga punya `src/lib.rs`, file itu adalah crate root untuk library crate. Cargo bisa membangun keduanya dari package yang sama.
+
+Binary tambahan bisa diletakkan di `src/bin`. Setiap file di sana menjadi binary crate terpisah. Ini berguna kalau satu package punya beberapa alat CLI, tetapi untuk satu layanan biasanya satu binary sudah cukup.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, package npm bisa berisi banyak module dan entry point. Di Go, module adalah kumpulan package, dan package adalah kumpulan file dalam satu folder. Di PHP, package Composer dan namespace punya peran yang agak mirip. Di Rust, package adalah unit Cargo, sedangkan crate adalah unit kompilasi. Satu package dapat menghasilkan lebih dari satu crate.
+:::
+
+:::tip[Tips]
+Kalau kamu bingung harus menaruh kode di mana, mulai dari `src/main.rs` untuk menjalankan aplikasi dan `src/lib.rs` untuk logika yang bisa dites. Pisahkan module berdasarkan domain, bukan berdasarkan jenis file.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang wajib dimiliki binary crate?',
+      options: ['Fungsi main', 'File Cargo.toml', 'Module lib', 'Minimal satu dependency'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Eksekusi binary dimulai dari main.',
+        'Salah. Cargo.toml milik package, bukan syarat binary crate itu sendiri.',
+        'Salah. Binary crate tidak membutuhkan lib module.',
+        'Salah. Binary crate bisa tanpa dependency.',
+      ],
+      explanation:
+        'Binary crate menghasilkan executable dan membutuhkan titik masuk main.',
+    },
+    {
+      question: 'Apa yang menjadi crate root library pada package Cargo biasa?',
+      options: ['src/lib.rs', 'src/main.rs', 'Cargo.lock', 'target/debug'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Cargo memakai src/lib.rs sebagai crate root library.',
+        'Salah. src/main.rs adalah crate root binary.',
+        'Salah. Cargo.lock mencatat dependency.',
+        'Salah. target/debug berisi hasil build.',
+      ],
+      explanation:
+        'Kalau package memiliki src/lib.rs, Cargo membuat library crate dari file itu.',
+    },
+    {
+      question: 'Di mana binary crate tambahan biasanya diletakkan?',
+      options: ['src/bin', 'tests/lib', 'Cargo.lock', 'src/assets'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Setiap file di src/bin menjadi binary crate terpisah.',
+        'Salah. tests dipakai untuk integration test.',
+        'Salah. Cargo.lock bukan folder kode.',
+        'Salah. src/assets bukan konvensi binary.',
+      ],
+      explanation:
+        'Cargo mengenali file di src/bin sebagai binary crate tambahan.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

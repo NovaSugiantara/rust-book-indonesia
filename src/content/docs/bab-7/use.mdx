@@ -1,0 +1,227 @@
+---
+title: '7.4 Use'
+description: 'Membuat shortcut path dengan use, alias, glob, dan pub use.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Path panjang membuat kode sulit dibaca. `use` membawa path ke scope sehingga kamu bisa memakai nama yang lebih pendek.
+
+## Use module
+
+Daripada menulis path penuh setiap kali, impor module-nya.
+
+<RustPlayground
+  code={`mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {
+            println!("Tamu ditambahkan");
+        }
+    }
+}
+
+use crate::front_of_house::hosting;
+
+fn main() {
+    hosting::add_to_waitlist();
+}`}
+  filename="src/main.rs"
+  label="Use untuk module"
+/>
+
+`use` hanya membuat shortcut. Ia tidak mengubah visibilitas. Kalau item private, `use` tidak akan menyelamatkan akses.
+
+## Scope use
+
+`use` berlaku di scope tempat ia ditulis. Module lain tidak otomatis melihat shortcut itu.
+
+<RustPlayground
+  code={`mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {}
+    }
+}
+
+use crate::front_of_house::hosting;
+
+mod customer {
+    pub fn eat_at_restaurant() {
+        hosting::add_to_waitlist();
+    }
+}
+
+fn main() {}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error use tidak terlihat di module lain"
+/>
+
+Compiler menyebut `cannot find module or crate hosting in this scope`. Tambahkan `use crate::front_of_house::hosting;` di dalam module `customer`, atau gunakan path lengkap.
+
+## Use item langsung
+
+Kamu bisa mengimpor fungsi atau tipe langsung, bukan hanya module.
+
+<RustPlayground
+  code={`mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {
+            println!("Tamu ditambahkan");
+        }
+    }
+}
+
+use crate::front_of_house::hosting::add_to_waitlist;
+
+fn main() {
+    add_to_waitlist();
+}`}
+  filename="src/main.rs"
+  label="Use untuk fungsi"
+/>
+
+Untuk fungsi, mengimpor module induk sering lebih jelas karena pemanggil masih melihat asal fungsi. Untuk tipe seperti `HashMap`, mengimpor tipe langsung adalah kebiasaan umum.
+
+## Alias
+
+Kalau dua item punya nama sama, gunakan `as` untuk memberi nama berbeda.
+
+<RustPlayground
+  code={`use std::fmt::Result;
+use std::io::Result as IoResult;
+
+fn tampilkan() -> Result {
+    Ok(())
+}
+
+fn baca() -> IoResult<()> {
+    Ok(())
+}
+
+fn main() {
+    let _ = tampilkan();
+    let _ = baca();
+}`}
+  filename="src/main.rs"
+  label="Alias dengan as"
+/>
+
+Alias juga berguna saat nama asli terlalu panjang atau terlalu umum.
+
+## pub use
+
+`pub use` membuat re-export. Item yang diimpor menjadi bagian dari API module saat ini.
+
+<RustPlayground
+  code={`mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {
+            println!("Tamu ditambahkan");
+        }
+    }
+}
+
+pub use crate::front_of_house::hosting;
+
+fn main() {
+    hosting::add_to_waitlist();
+}`}
+  filename="src/main.rs"
+  label="Re-export dengan pub use"
+/>
+
+Dalam library, `pub use` sering dipakai untuk menyusun API yang nyaman tanpa membocorkan struktur module internal.
+
+## Glob
+
+Glob `*` mengimpor semua item public dari sebuah module.
+
+<RustPlayground
+  code={`use std::collections::*;
+
+fn main() {
+    let mut nilai = HashMap::new();
+    nilai.insert("Bir", 10);
+
+    let daftar: Vec<&str> = vec!["satu", "dua"];
+
+    println!("{nilai:?} {daftar:?}");
+}`}
+  filename="src/main.rs"
+  label="Glob import"
+/>
+
+Glob berguna untuk prelude atau test, tetapi untuk kode aplikasi biasanya terlalu luas. Kamu sulit melihat asal nama dan konflik antar import.
+
+:::note[Kalau di bahasa lain]
+`use` mirip `import` di JavaScript atau Python, `use` di PHP, dan `import` di Go. Bedanya, `use` di Rust tidak mengubah visibilitas dan hanya berlaku di scope tempat ia ditulis. `pub use` mirip re-export dari barrel file JavaScript.
+:::
+
+:::tip[Tips]
+Impor module induk untuk fungsi, dan impor tipe langsung untuk struct atau enum yang sering dipakai. Hindari glob di kode aplikasi kecuali ada alasan yang jelas.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dilakukan use crate::front_of_house::hosting;?',
+      options: [
+        'Membuat shortcut hosting di scope saat ini',
+        'Membuat module hosting menjadi public',
+        'Memindahkan module hosting ke crate root',
+        'Menghapus module front_of_house',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. use hanya membawa path ke scope.',
+        'Salah. Visibilitas diatur pub.',
+        'Salah. Module tidak dipindahkan.',
+        'Salah. Tidak ada yang dihapus.',
+      ],
+      explanation:
+        'use adalah alias path, bukan perubahan struktur module.',
+    },
+    {
+      question: 'Mengapa hosting::add_to_waitlist gagal di dalam module customer?',
+      options: [
+        'Karena use di crate root tidak otomatis terlihat di module lain',
+        'Karena add_to_waitlist tidak public',
+        'Karena module customer tidak punya main',
+        'Karena use hanya berlaku untuk tipe',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Setiap module punya scope import sendiri.',
+        'Salah. Fungsi itu public.',
+        'Salah. Module customer tidak butuh main.',
+        'Salah. use berlaku untuk path, termasuk fungsi.',
+      ],
+      explanation:
+        'Tambahkan use di module customer atau tulis path lengkap.',
+    },
+    {
+      question: 'Apa fungsi pub use?',
+      options: [
+        'Mengimpor item sekaligus mengekspornya kembali',
+        'Membuat semua item module private',
+        'Menjalankan fungsi saat import',
+        'Mengganti nama crate',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. pub use adalah re-export.',
+        'Salah. pub use membuka akses, bukan menutup.',
+        'Salah. Import tidak menjalankan fungsi.',
+        'Salah. Nama crate tidak diubah.',
+      ],
+      explanation:
+        'Re-export berguna untuk membentuk API public yang rapi.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

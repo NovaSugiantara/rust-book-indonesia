@@ -1,0 +1,215 @@
+---
+title: '7.6 Studi kasus: Kasir Warung'
+description: 'Memecah Kasir Warung menjadi library dan binary dengan module yang jelas.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Sampai Bab 6, Kasir Warung adalah satu file besar. Bab ini memecahnya menjadi library dan binary. Binary hanya mengurus input terminal dan menjalankan alur. Library menyimpan model, aturan transaksi, dan laporan.
+
+<StudyCase title="Kasir Warung: dari satu file ke package" intro="Memisahkan model, transaksi, dan laporan ke module, lalu membuat binary memakai library.">
+  <StudyCaseStep
+    title="Tentukan batas module"
+    goal="Memisahkan menu, transaksi, dan laporan berdasarkan tanggung jawab."
+  >
+    `menu` menyimpan item dan nama menu. `transaksi` menyimpan pelanggan, item, status, dan pembayaran. `laporan` mencetak struk. `main` hanya membaca input dan memanggil library.
+
+    ```text
+    kasir_warung/
+    ├── Cargo.toml
+    └── src/
+        ├── lib.rs
+        ├── main.rs
+        ├── menu.rs
+        ├── transaksi.rs
+        └── laporan.rs
+    ```
+
+    <Fragment slot="hint">
+      Jangan membuat module `utils`. Beri nama sesuai domain yang diurus.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Batas module mengikuti alasan perubahan. Kalau aturan transaksi berubah, kamu membuka `transaksi.rs`, bukan mencari di satu file panjang.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Buat crate library"
+    goal="Mendeklarasikan module public dari lib.rs."
+  >
+    `src/lib.rs` menjadi crate root library. Module yang perlu dipakai binary diekspos dengan `pub mod`.
+
+    ```rust
+    pub mod laporan;
+    pub mod menu;
+    pub mod transaksi;
+    ```
+
+    `main.rs` bisa memakai library lewat nama package:
+
+    ```rust
+    use kasir_warung::transaksi::Transaksi;
+
+    fn main() {
+        let transaksi = Transaksi::contoh();
+        kasir_warung::laporan::cetak(&transaksi);
+    }
+    ```
+
+    <Fragment slot="hint">
+      Nama crate library sama dengan nama package di Cargo.toml, yaitu `kasir_warung`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Binary crate dan library crate berada dalam satu package. Binary memakai library lewat `use kasir_warung::...`, bukan `use crate::...`, karena keduanya crate berbeda.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Pindahkan kode"
+    goal="Memindahkan struct dan method tanpa mengubah perilaku."
+  >
+    `menu.rs` berisi `ItemPesanan` dan method-nya. `transaksi.rs` berisi `Transaksi`, status, dan metode pembayaran. `laporan.rs` berisi fungsi cetak.
+
+    ```rust
+    // src/menu.rs
+    pub struct ItemPesanan {
+        pub nama: String,
+        pub harga: u32,
+        pub jumlah: u32,
+    }
+
+    impl ItemPesanan {
+        pub fn baru(nama: &str, harga: u32, jumlah: u32) -> Self {
+            Self {
+                nama: nama.to_string(),
+                harga,
+                jumlah,
+            }
+        }
+
+        pub fn subtotal(&self) -> u32 {
+            self.harga * self.jumlah
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      Tambahkan `pub` pada tipe dan method yang dipakai module lain. Field yang tidak perlu diakses dari luar sebaiknya tetap private.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Setelah pemindahan, `cargo run` harus menghasilkan struk yang sama. Perubahan struktur tidak boleh mengubah output.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Demo module inline
+
+Playground tidak bisa membuat banyak file, tetapi bisa menunjukkan module tree yang sama dalam satu file.
+
+<RustPlayground
+  code={`mod kasir_warung {
+    pub mod menu {
+        pub fn nama_warung() -> &'static str {
+            "Kasir Warung Bu Sri"
+        }
+    }
+
+    pub mod laporan {
+        use super::menu;
+
+        pub fn cetak_header() {
+            println!("=== {} ===", menu::nama_warung());
+        }
+    }
+}
+
+fn main() {
+    kasir_warung::laporan::cetak_header();
+}`}
+  filename="src/main.rs"
+  label="Module inline dengan pub dan use"
+/>
+
+## Keadaan setelah Bab 7
+
+- Proyek memiliki `src/lib.rs` dan `src/main.rs` dalam satu package.
+- `menu`, `transaksi`, dan `laporan` menjadi module terpisah.
+- Tipe dan method yang dipakai binary diekspos dengan `pub`.
+- Binary memakai library lewat nama package `kasir_warung`.
+- Perilaku struk tidak berubah dari Bab 6.
+- Masih memakai array tiga item. `Vec` baru muncul di Bab 8.
+- Belum ada error handling dengan `Result`.
+
+:::note[Kalau di bahasa lain]
+Pemisahan library dan binary mirip package npm dengan entry point library plus CLI, Go module dengan package library dan folder `cmd`, atau service Laravel dengan command Artisan. Bedanya, Cargo menganggap binary dan library sebagai dua crate yang dikompilasi terpisah.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa binary memakai use kasir_warung::transaksi::Transaksi?',
+      options: [
+        'Karena binary dan library adalah crate berbeda dalam satu package',
+        'Karena Transaksi berada di crate standard library',
+        'Karena main tidak boleh memakai module',
+        'Karena Cargo melarang use crate',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Binary mengakses library lewat nama package.',
+        'Salah. Transaksi adalah tipe proyek ini.',
+        'Salah. Main bisa memakai module lewat library.',
+        'Salah. use crate tetap valid di dalam library.',
+      ],
+      explanation:
+        'Dari binary, library crate adalah dependency eksternal meskipun satu package.',
+    },
+    {
+      question: 'Apa yang harus ditambahkan agar tipe di menu.rs bisa dipakai transaksi.rs?',
+      options: [
+        'pub pada tipe dan field atau method yang perlu diakses',
+        'main pada menu.rs',
+        'Cargo.lock baru',
+        'Nama file dengan huruf besar',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. pub membuka akses antar module.',
+        'Salah. File module tidak butuh main.',
+        'Salah. Cargo.lock bukan pengatur visibilitas.',
+        'Salah. Nama file tidak mengubah privasi.',
+      ],
+      explanation:
+        'Module lain hanya bisa memakai item yang public dan berada di path yang public.',
+    },
+    {
+      question: 'Apa tujuan memisahkan laporan.rs dari transaksi.rs?',
+      options: [
+        'Memisahkan cara mencetak dari aturan perhitungan transaksi',
+        'Membuat program lebih cepat',
+        'Menghapus kebutuhan test',
+        'Membuat semua field public',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Batas module mengikuti tanggung jawab.',
+        'Salah. Kecepatan bukan alasan utamanya.',
+        'Salah. Test tetap dibutuhkan.',
+        'Salah. Pemisahan file tidak membuka field.',
+      ],
+      explanation:
+        'Laporan bisa berubah tanpa mengubah aturan transaksi, dan sebaliknya.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

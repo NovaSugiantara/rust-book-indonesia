@@ -53,7 +53,7 @@ Kasir Warung dimulai sebagai CLI di Bab 1 dan tumbuh menjadi layanan backend. Se
 
 Aturan peta:
 
-- Bab 4 sampai 6 sudah ditulis. Jangan menulis bab 7 sampai 21 sebelum ada tugas khusus untuk bab itu.
+- Bab 4 sampai 9 sudah ditulis. Jangan menulis bab 10 sampai 21 sebelum ada tugas khusus untuk bab itu.
 - Setiap bab yang menyentuh Kasir Warung harus meninggalkan kode yang bisa dijalankan dan output contoh yang benar.
 - Jangan memakai fitur dari bab yang belum diajarkan tanpa penjelasan singkat. Kalau terpaksa, jelaskan alasannya di callout.
 - Bab 4 dan 5 mengubah cara data transaksi disimpan. Jangan mempertahankan array harga dari Bab 3 kalau struct sudah tersedia.
@@ -167,6 +167,26 @@ src/
 │   │   ├── defining-enums.mdx
 │   │   ├── match.mdx
 │   │   ├── if-let.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-7/
+│   │   ├── index.mdx
+│   │   ├── packages-crates.mdx
+│   │   ├── modules.mdx
+│   │   ├── paths.mdx
+│   │   ├── use.mdx
+│   │   ├── files.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-8/
+│   │   ├── index.mdx
+│   │   ├── vectors.mdx
+│   │   ├── strings.mdx
+│   │   ├── hash-maps.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-9/
+│   │   ├── index.mdx
+│   │   ├── panic.mdx
+│   │   ├── result.mdx
+│   │   ├── panic-or-result.mdx
 │   │   └── studi-kasus.mdx
 │   ├── capstone/
 │   │   ├── index.mdx
@@ -680,6 +700,89 @@ Kontrak setelah Bab 6:
 - Array tiga item masih dipakai; `Vec` baru dibahas di Bab 8.
 - Belum ada `Result` atau error handling untuk pembayaran.
 - Metode bayar masih dipilih di kode, belum dibaca dari input.
+
+### Keadaan setelah Bab 7
+
+Bab 7 memecah Kasir Warung menjadi package dengan library crate dan binary crate. Logika pindah ke `src/lib.rs` dan module domain, sementara `src/main.rs` hanya mengatur alur terminal.
+
+```text
+kasir_warung/
+├── Cargo.toml
+└── src/
+    ├── lib.rs
+    ├── main.rs
+    ├── menu.rs
+    ├── transaksi.rs
+    └── laporan.rs
+```
+
+Kontrak setelah Bab 7:
+
+- `lib.rs` mengekspor `menu`, `transaksi`, dan `laporan` dengan `pub mod`.
+- Binary memakai library lewat `use kasir_warung::...`.
+- Tipe dan method yang dipakai lintas module diberi `pub`; detail internal tetap private.
+- Output struk tidak berubah dari Bab 6.
+- Masih memakai array tiga item. `Vec` baru muncul di Bab 8.
+- Belum ada `Result` untuk error yang bisa dipulihkan.
+
+### Keadaan setelah Bab 8
+
+Bab 8 mengganti array tetap dengan collection dinamis. Katalog menu disimpan di `HashMap<String, MenuItem>`, sedangkan daftar pesanan disimpan di `Vec<ItemPesanan>`.
+
+```rust
+struct MenuItem {
+    nama: String,
+    harga: u32,
+}
+
+struct ItemPesanan {
+    kode: String,
+    jumlah: u32,
+}
+
+struct Transaksi {
+    pelanggan: String,
+    menu: HashMap<String, MenuItem>,
+    items: Vec<ItemPesanan>,
+}
+```
+
+Kontrak setelah Bab 8:
+
+- Jumlah item tidak lagi dibatasi tiga.
+- Harga dicari dari katalog menu berdasarkan kode.
+- Item dengan kode yang tidak ada saat ini dilewati; belum ada error `Result`.
+- `String` untuk nama menu dan kode item dimiliki oleh struct.
+- Status dan metode pembayaran dari Bab 6 tetap ada di model lengkap.
+- Belum ada penanganan error input dan lookup yang eksplisit.
+
+### Keadaan setelah Bab 9
+
+Bab 9 mengubah kegagalan input, lookup menu, dan pembayaran menjadi nilai `Result`. Panic tidak lagi dipakai untuk input pengguna.
+
+```rust
+#[derive(Debug)]
+enum KasirError {
+    InputTidakValid(String),
+    ItemTidakDitemukan(String),
+    PembayaranGagal(String),
+}
+
+fn parse_jumlah(input: &str) -> Result<usize, KasirError>;
+fn subtotal(&self) -> Result<u32, KasirError>;
+fn bayar(&mut self, metode: MetodeBayar) -> Result<(), KasirError>;
+```
+
+Kontrak setelah Bab 9:
+
+- `KasirError` mengimplementasikan `Display` dan `Error`.
+- `parse_jumlah` mengembalikan `Err` untuk input kosong, bukan angka, atau di luar rentang.
+- Lookup menu memakai `ok_or_else` untuk menghasilkan `ItemTidakDitemukan`.
+- `subtotal` dan `cetak` bisa mengembalikan `Result`.
+- Metode bayar tetap enum dan disimpan sebagai `Option`; pembayaran kedua menghasilkan error.
+- Panic hanya untuk invariant internal yang rusak, bukan input pengguna.
+- `Vec` dan `HashMap` tetap dipakai.
+- Belum ada handler HTTP; pemetaan error ke status HTTP masuk Capstone.
 
 ### Aturan untuk bab berikutnya
 

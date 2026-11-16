@@ -1,0 +1,148 @@
+---
+title: '7.2 Module'
+description: 'Mengelompokkan kode dengan mod, module bertingkat, privacy, dan module tree.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Module mengelompokkan definisi yang berhubungan dan menentukan batas privasi. Module bisa berisi fungsi, struct, enum, konstanta, trait, dan module lain.
+
+## Module sederhana
+
+Contoh restoran memisahkan front of house dan back of house. Setiap bagian punya tanggung jawab sendiri.
+
+<RustPlayground
+  code={`mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {
+            println!("Menambah tamu ke daftar tunggu");
+        }
+    }
+
+    pub mod serving {
+        pub fn take_order() {
+            println!("Mencatat pesanan");
+        }
+    }
+}
+
+fn main() {
+    front_of_house::hosting::add_to_waitlist();
+    front_of_house::serving::take_order();
+}`}
+  filename="src/main.rs"
+  label="Module bertingkat dalam satu file"
+/>
+
+Module bisa didefinisikan inline dengan kurung kurawal. Nanti kita akan memindahkannya ke file terpisah.
+
+## Module tree
+
+Module membentuk pohon di bawah module `crate`. Untuk contoh restoran, bentuknya seperti ini:
+
+```text
+crate
+└── front_of_house
+    ├── hosting
+    │   ├── add_to_waitlist
+    │   └── seat_at_table
+    └── serving
+        ├── take_order
+        ├── serve_order
+        └── take_payment
+```
+
+`hosting` dan `serving` adalah sibling. Keduanya child dari `front_of_house`. Seluruh pohon berada di bawah `crate`.
+
+## Privacy
+
+Secara default, item di dalam module private terhadap module induk. Untuk membuka akses, gunakan `pub`.
+
+Kalau `hosting` private, module lain tidak bisa memanggil isinya meskipun fungsinya public. Kalau `hosting` public tetapi fungsinya private, fungsi tetap tidak bisa dipanggil dari luar. Keduanya harus public.
+
+<RustPlayground
+  code={`mod front_of_house {
+    pub mod hosting {
+        fn add_to_waitlist() {
+            println!("Fungsi ini private");
+        }
+    }
+}
+
+fn main() {
+    front_of_house::hosting::add_to_waitlist();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error memanggil fungsi private"
+/>
+
+Pesan compiler menyebut `function add_to_waitlist is private`. Perbaikan yang benar bukan sekadar menambahkan `pub` di sembarang tempat. Pikirkan apakah fungsi itu memang bagian dari API module.
+
+:::note[Kalau di bahasa lain]
+Module Rust mirip namespace atau package di bahasa lain, tetapi ada perbedaan penting: privasi adalah default, dan path module adalah bagian dari desain API. Di JavaScript, export harus ditulis eksplisit; di Rust, `pub` adalah kebalikannya, yaitu membuka item yang default-nya private.
+:::
+
+:::tip[Tips]
+Jaga permukaan public tetap kecil. Buka tipe dan fungsi yang memang dibutuhkan pemakai module. Detail implementasi sebaiknya tetap private agar bisa berubah tanpa memecahkan kode lain.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang membentuk module tree?',
+      options: [
+        'Module crate dan module yang dideklarasikan di dalamnya',
+        'Daftar dependency di Cargo.toml',
+        'File target/debug',
+        'Semua file test',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Module tree dimulai dari crate dan bercabang ke module.',
+        'Salah. Dependency bukan struktur module.',
+        'Salah. target/debug adalah hasil build.',
+        'Salah. Test bukan bagian dari module tree produksi.',
+      ],
+      explanation:
+        'Module tree menunjukkan hubungan parent, child, dan sibling antar module.',
+    },
+    {
+      question: 'Apa status privasi item module secara default?',
+      options: ['Private', 'Public', 'Hanya untuk test', 'Tergantung nama file'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Item private kecuali ditandai pub.',
+        'Salah. pub harus ditulis eksplisit.',
+        'Salah. Test bukan penentu privasi.',
+        'Salah. Nama file tidak membuka akses.',
+      ],
+      explanation:
+        'Rust memilih private sebagai default agar detail implementasi tidak bocor.',
+    },
+    {
+      question: 'Mengapa module public dan fungsi private tetap tidak bisa dipanggil dari luar?',
+      options: [
+        'Karena akses butuh module dan item sama-sama public',
+        'Karena fungsi private tidak bisa dijalankan sama sekali',
+        'Karena module public menghapus fungsi',
+        'Karena fungsi harus berada di main',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Kedua lapisan visibilitas harus mengizinkan akses.',
+        'Salah. Fungsi private tetap bisa dipanggil dari dalam module.',
+        'Salah. Module public tidak menghapus fungsi.',
+        'Salah. Fungsi tidak harus di main.',
+      ],
+      explanation:
+        'Visibilitas diperiksa di setiap langkah path, bukan hanya di item terakhir.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

@@ -1,0 +1,91 @@
+---
+title: 'Bab 7: Package, crate, dan module'
+description: 'Mengorganisasi proyek Rust dengan package, crate, module, path, dan use.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Sampai Bab 6, semua kode ada di satu file atau satu crate kecil. Proyek backend tidak bertahan lama dengan cara itu. Kamu perlu memisahkan menu, transaksi, laporan, konfigurasi, dan handler agar batas tanggung jawabnya jelas.
+
+Bab ini membahas sistem module Rust: package, crate, module, path, `use`, dan `pub`. Setelah bab ini, Kasir Warung akan dipecah menjadi library dan binary yang bisa dijalankan dengan `cargo run`.
+
+## Urutan bab
+
+1. [Package dan crate](packages-crates/) membedakan package, binary crate, library crate, dan crate root.
+2. [Module](modules/) membahas `mod`, nested module, privacy, dan module tree.
+3. [Path](paths/) membahas `crate`, `super`, `self`, dan aturan `pub`.
+4. [Use](use/) membahas shortcut path, alias, glob, dan `pub use`.
+5. [Memisahkan file](files/) membahas `mod` yang menunjuk ke file dan folder.
+6. [Studi kasus: Kasir Warung](studi-kasus/) memecah proyek menjadi library dan binary.
+
+:::note[Kenapa begini?]
+Module bukan sekadar folder. Module adalah batas privasi. Kode di dalam module private terhadap module induk secara default. Compiler memakai batas itu untuk mencegah bagian lain mengambil detail implementasi yang seharusnya tidak stabil.
+:::
+
+:::tip[Tips]
+Mulai dari batas domain, bukan dari jenis file. `menu`, `transaksi`, dan `laporan` lebih mudah dijelaskan daripada `utils`, `helpers`, dan `misc`.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa perbedaan package dan crate?',
+      options: [
+        'Package adalah bundel Cargo; crate adalah unit kompilasi Rust',
+        'Package adalah file Rust; crate adalah Cargo.toml',
+        'Keduanya sama persis',
+        'Crate hanya berisi test',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Package berisi satu atau lebih crate dan Cargo.toml.',
+        'Salah. File Rust adalah source, bukan package.',
+        'Salah. Package dan crate adalah konsep berbeda.',
+        'Salah. Crate berisi kode program atau library.',
+      ],
+      explanation:
+        'Satu package bisa memiliki binary crate dan library crate sekaligus.',
+    },
+    {
+      question: 'Apakah isi module private secara default?',
+      options: [
+        'Ya, item private terhadap module induk kecuali ditandai pub',
+        'Tidak, semua item public',
+        'Hanya fungsi yang private',
+        'Hanya struct yang private',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Privasi adalah default di sistem module Rust.',
+        'Salah. Kamu harus memakai pub untuk mengekspos item.',
+        'Salah. Semua jenis item mengikuti aturan privasi.',
+        'Salah. Struct dan field juga punya aturan privasi.',
+      ],
+      explanation:
+        'pub membuka akses; tanpa pub, item hanya bisa dipakai di module yang sesuai.',
+    },
+    {
+      question: 'Apa fungsi use?',
+      options: [
+        'Membuat shortcut path agar tidak ditulis berulang',
+        'Mengompilasi crate',
+        'Membuat module otomatis public',
+        'Menghapus module dari tree',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. use membawa path ke scope.',
+        'Salah. Kompilasi dilakukan rustc atau Cargo.',
+        'Salah. use tidak mengubah visibilitas.',
+        'Salah. use tidak menghapus module.',
+      ],
+      explanation:
+        'use hanya memendekkan path; aturan privasi tetap berlaku.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

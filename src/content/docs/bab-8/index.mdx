@@ -1,0 +1,79 @@
+---
+title: 'Bab 8: Collection umum'
+description: 'Vector, String, dan HashMap untuk menyimpan banyak data di Rust.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Sampai Bab 7, Kasir Warung memakai array berukuran tetap. Itu cukup untuk tiga item contoh, tetapi tidak untuk daftar pesanan yang jumlahnya berubah. Bab ini membahas tiga collection yang paling sering dipakai: `Vec<T>`, `String`, dan `HashMap<K, V>`.
+
+Di backend, ketiganya muncul terus: daftar item response, nama dan teks, cache berdasarkan kunci, rekap transaksi, dan hasil query yang dikelompokkan. Kunci memakai collection dengan benar adalah memahami kapan data dimiliki, dipinjam, atau dipindahkan.
+
+## Urutan bab
+
+1. [Vector](vectors/) membahas daftar dinamis, indexing, `get`, iterasi, dan enum untuk tipe berbeda.
+2. [String](strings/) membahas UTF-8, `String` vs `&str`, penggabungan, dan mengapa string tidak bisa diindeks dengan angka.
+3. [HashMap](hash-maps/) membahas key-value, ownership, entry API, dan rekap kata.
+4. [Studi kasus: Kasir Warung](studi-kasus/) mengganti array dengan `Vec` dan menu dengan `HashMap`.
+
+:::caution[Hati-hati]
+Collection memiliki data di heap. Operasi seperti `push` bisa mengubah alokasi, sehingga reference ke elemen tidak boleh hidup bersamaan dengan perubahan struktur. Borrow checker akan menolak kombinasi yang berbahaya.
+:::
+
+:::tip[Tips]
+Pilih collection dari bentuk datanya. Butuh urutan berdasarkan indeks, pakai `Vec`. Butuh teks, pakai `String` atau `&str`. Butuh pencarian berdasarkan kunci, pakai `HashMap`.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Collection mana yang menyimpan banyak nilai bertipe sama secara berurutan?',
+      options: ['Vec<T>', 'HashMap<K, V>', 'Option<T>', 'Result<T, E>'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Vec menyimpan elemen bertipe sama dalam urutan.',
+        'Salah. HashMap menyimpan pasangan key-value.',
+        'Salah. Option menyatakan ada atau tidak ada satu nilai.',
+        'Salah. Result menyatakan sukses atau error.',
+      ],
+      explanation:
+        'Vec cocok untuk daftar item seperti baris pesanan.',
+    },
+    {
+      question: 'Collection mana yang menyimpan pasangan key dan value?',
+      options: ['HashMap<K, V>', 'Vec<T>', 'String', 'Array'],
+      answer: 0,
+      optionNotes: [
+        'Benar. HashMap memetakan key ke value.',
+        'Salah. Vec menyimpan urutan nilai.',
+        'Salah. String menyimpan teks.',
+        'Salah. Array menyimpan elemen berurutan.',
+      ],
+      explanation:
+        'HashMap dipakai saat pencarian berdasarkan kunci lebih penting daripada urutan.',
+    },
+    {
+      question: 'Mengapa array tetap dipakai di awal studi kasus?',
+      options: [
+        'Karena jumlah item masih dibatasi dan Vec baru diajarkan di Bab 8',
+        'Karena array selalu lebih baik daripada Vec',
+        'Karena Vec tidak bisa menyimpan struct',
+        'Karena array tidak punya panjang',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini soal urutan materi dan batas latihan.',
+        'Salah. Vec lebih fleksibel untuk jumlah dinamis.',
+        'Salah. Vec bisa menyimpan struct.',
+        'Salah. Array punya panjang tetap.',
+      ],
+      explanation:
+        'Setelah Bab 8, daftar item tidak perlu dibatasi tiga lagi.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />
