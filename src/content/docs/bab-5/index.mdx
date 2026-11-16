@@ -1,0 +1,89 @@
+---
+title: 'Bab 5: Menggunakan struct'
+description: 'Mengelompokkan data terkait dengan struct, field, tuple struct, dan instance.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Struct mengelompokkan beberapa nilai yang saling berhubungan menjadi satu tipe. Bedanya dengan tuple: setiap field punya nama. Nama field membuat kode lebih mudah dibaca dan lebih sulit tertukar.
+
+Di backend, struct adalah bentuk paling dasar untuk memodelkan data: item menu, pesanan, transaksi, konfigurasi, dan response internal. Bab ini mulai dari struct sederhana, lalu berakhir dengan method dan studi kasus Kasir Warung.
+
+## Urutan bab
+
+1. [Mendefinisikan dan membuat instance](defining-structs/) membahas field, shorthand, update syntax, tuple struct, dan unit-like struct.
+2. [Contoh program dengan struct](example-structs/) merefaktor program luas persegi panjang dan memakai Debug.
+3. [Method](method-syntax/) membahas `impl`, `&self`, `&mut self`, dan associated function.
+4. [Studi kasus: Kasir Warung](studi-kasus/) mengganti array terpisah dengan struct transaksi.
+
+:::note[Kenapa begini?]
+Data yang saling berhubungan sebaiknya disimpan bersama. Kalau lebar dan tinggi disimpan sebagai dua variabel terpisah, tidak ada yang mencegah kode menukar urutannya. Struct memberi nama dan tipe pada setiap bagian, sehingga kesalahan seperti itu lebih cepat terlihat.
+:::
+
+:::tip[Tips]
+Mulai dari struct yang kecil. Tambahkan field hanya ketika ada kebutuhan nyata. Struct dengan sepuluh field sering kali merupakan tanda bahwa data itu sebaiknya dipecah menjadi beberapa tipe.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa kelebihan struct dibanding tuple?',
+      options: [
+        'Setiap field punya nama sehingga maknanya jelas',
+        'Struct selalu lebih cepat',
+        'Struct tidak membutuhkan tipe',
+        'Struct tidak bisa berisi String',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Nama field membuat akses dan pembacaan lebih jelas.',
+        'Salah. Kecepatan bukan alasan utama memilih struct.',
+        'Salah. Setiap field struct punya tipe.',
+        'Salah. Struct boleh berisi String.',
+      ],
+      explanation:
+        'Tuple mengandalkan urutan; struct mengandalkan nama field.',
+    },
+    {
+      question: 'Di mana method didefinisikan?',
+      options: [
+        'Di dalam blok impl untuk tipe tersebut',
+        'Di dalam struct sebelum field',
+        'Di file terpisah tanpa impl',
+        'Di dalam fungsi main',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Method berada di blok impl.',
+        'Salah. Struct hanya mendefinisikan field.',
+        'Salah. Method tetap butuh impl.',
+        'Salah. Method tidak didefinisikan di dalam main.',
+      ],
+      explanation:
+        'Blok impl mengaitkan fungsi dan method dengan tipe.',
+    },
+    {
+      question: 'Apa yang dimaksud instance struct?',
+      options: [
+        'Nilai konkret yang mengisi field struct dengan data',
+        'Nama tipe struct',
+        'File Cargo.toml',
+        'Method yang belum dipanggil',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Instance adalah nilai dari tipe struct.',
+        'Salah. Nama tipe bukan instance.',
+        'Salah. Cargo.toml bukan instance struct.',
+        'Salah. Method adalah perilaku, bukan instance.',
+      ],
+      explanation:
+        'Struct adalah cetakan; instance adalah nilai yang dibuat dari cetakan itu.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

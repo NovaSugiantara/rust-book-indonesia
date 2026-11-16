@@ -1,0 +1,251 @@
+---
+title: '6.1 Mendefinisikan enum'
+description: 'Enum, variant dengan data, method pada enum, dan Option<T>.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Enum mendefinisikan tipe yang nilainya hanya boleh salah satu dari beberapa variant. Setiap variant bisa membawa data sendiri.
+
+## Enum sederhana
+
+Contoh klasik adalah jenis alamat IP. Sebuah alamat hanya bisa IPv4 atau IPv6, tidak keduanya.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum IpAddrKind {
+    V4,
+    V6,
+}
+
+fn route(ip_kind: IpAddrKind) {
+    println!("Routing untuk {ip_kind:?}");
+}
+
+fn main() {
+    let four = IpAddrKind::V4;
+    let six = IpAddrKind::V6;
+
+    route(four);
+    route(six);
+}`}
+  filename="src/main.rs"
+  label="Enum sederhana dengan dua variant"
+/>
+
+Variant diakses lewat nama enum: `IpAddrKind::V4`. `V4` dan `V6` adalah nilai dengan tipe yang sama, yaitu `IpAddrKind`.
+
+## Variant yang membawa data
+
+Variant bisa membawa data. Ini menghindari struct tambahan yang menyimpan enum dan nilai secara terpisah.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum IpAddr {
+    V4(String),
+    V6(String),
+}
+
+fn main() {
+    let home = IpAddr::V4(String::from("127.0.0.1"));
+    let loopback = IpAddr::V6(String::from("::1"));
+
+    println!("{home:?}");
+    println!("{loopback:?}");
+}`}
+  filename="src/main.rs"
+  label="Variant enum dengan data String"
+/>
+
+Setiap variant bisa memiliki tipe dan jumlah data yang berbeda.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum IpAddr {
+    V4(u8, u8, u8, u8),
+    V6(String),
+}
+
+fn main() {
+    let home = IpAddr::V4(127, 0, 0, 1);
+    let loopback = IpAddr::V6(String::from("::1"));
+
+    println!("{home:?}");
+    println!("{loopback:?}");
+}`}
+  filename="src/main.rs"
+  label="Variant dengan jumlah data berbeda"
+/>
+
+Nama variant juga berfungsi sebagai constructor. `IpAddr::V4(...)` memanggil fungsi yang menghasilkan nilai enum.
+
+Contoh lain, `Message`, menunjukkan variant tanpa data, variant dengan field bernama, dan variant dengan tuple:
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum Message {
+    Quit,
+    Move { x: i32, y: i32 },
+    Write(String),
+    ChangeColor(i32, i32, i32),
+}
+
+fn main() {
+    let pesan = Message::Write(String::from("halo"));
+    println!("{pesan:?}");
+}`}
+  filename="src/main.rs"
+  label="Enum dengan berbagai bentuk data"
+/>
+
+Enum juga bisa punya method lewat `impl`, sama seperti struct.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum Message {
+    Quit,
+    Write(String),
+}
+
+impl Message {
+    fn call(&self) {
+        println!("Pesan diproses: {self:?}");
+    }
+}
+
+fn main() {
+    let pesan = Message::Write(String::from("halo"));
+    pesan.call();
+}`}
+  filename="src/main.rs"
+  label="Method pada enum"
+/>
+
+## Option
+
+Rust tidak memiliki null. Sebagai gantinya, standard library menyediakan `Option<T>`:
+
+```rust
+enum Option<T> {
+    None,
+    Some(T),
+}
+```
+
+`Option` dan kedua variant-nya sudah ada di prelude, jadi bisa dipakai tanpa `Option::`:
+
+<RustPlayground
+  code={`fn main() {
+    let some_number = Some(5);
+    let some_char = Some('e');
+    let absent_number: Option<i32> = None;
+
+    println!("{some_number:?} {some_char:?} {absent_number:?}");
+}`}
+  filename="src/main.rs"
+  label="Nilai Some dan None"
+/>
+
+Tipe `Some(5)` adalah `Option<i32>`, sedangkan `Some('e')` adalah `Option<char>`. `None` membutuhkan anotasi tipe karena compiler tidak bisa menebak tipe isi yang tidak ada.
+
+`Option<T>` bukan `T`. Kamu tidak bisa langsung memakai `Option<i8>` dalam operasi `i8`:
+
+<RustPlayground
+  code={`fn main() {
+    let x: i8 = 5;
+    let y: Option<i8> = Some(5);
+
+    let sum = x + y;
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error menambahkan Option ke angka"
+/>
+
+Compiler melaporkan bahwa `Add<Option<i8>>` tidak diimplementasikan untuk `i8`. Pesan ini memaksa kamu mengambil nilai dari `Option` dan menangani `None` terlebih dahulu.
+
+:::note[Kalau di bahasa lain]
+Di TypeScript, pilihan seperti ini sering dimodelkan dengan discriminated union dan `null` atau `undefined`. Di Go, enum biasanya berupa konstanta bertipe dan `nil` untuk pointer atau interface. Di PHP, enum punya variant dan bisa memiliki nilai backed. Rust menyatukan pilihan dan data di enum, lalu memakai `Option` untuk kemungkinan tidak ada nilai. Tidak ada `null` implisit.
+:::
+
+:::caution[Hati-hati]
+Jangan memakai `unwrap()` pada `Option` hanya untuk mendapatkan nilai. Kalau `None`, program panic. Gunakan `match`, `if let`, atau method yang punya perilaku jelas untuk nilai kosong.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang membedakan enum dari struct?',
+      options: [
+        'Enum memilih satu variant, struct menggabungkan semua field',
+        'Enum tidak bisa punya method',
+        'Struct tidak bisa berisi String',
+        'Enum selalu disimpan di heap',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Enum adalah pilihan, struct adalah gabungan.',
+        'Salah. Enum bisa punya method lewat impl.',
+        'Salah. Struct bisa berisi String.',
+        'Salah. Enum bisa disimpan di stack atau heap tergantung isi.',
+      ],
+      explanation:
+        'Nilai enum hanya satu variant pada satu waktu.',
+    },
+    {
+      question: 'Apa tipe dari Some(5)?',
+      options: ['Option<i32>', 'i32', 'Option<char>', 'String'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Angka 5 menghasilkan Option<i32> secara inferensi.',
+        'Salah. Some membungkus nilai dalam Option.',
+        'Salah. 5 bukan char.',
+        'Salah. Some tidak menghasilkan String.',
+      ],
+      explanation:
+        'Option<T> membungkus nilai T; tipe T ditentukan dari isi Some.',
+    },
+    {
+      question: 'Mengapa None membutuhkan anotasi tipe?',
+      options: [
+        'Karena None tidak membawa informasi tentang tipe isi',
+        'Karena None selalu bertipe String',
+        'Karena Option tidak punya tipe',
+        'Karena None tidak boleh dipakai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler perlu tahu Option<T> yang dimaksud.',
+        'Salah. None bukan String.',
+        'Salah. Option punya parameter tipe.',
+        'Salah. None valid.',
+      ],
+      explanation:
+        'Tanpa isi Some, compiler tidak punya petunjuk untuk menentukan T.',
+    },
+    {
+      question: 'Mengapa Option<i8> tidak bisa langsung ditambahkan ke i8?',
+      options: [
+        'Karena Option<i8> dan i8 adalah tipe berbeda',
+        'Karena i8 terlalu kecil',
+        'Karena penjumlahan tidak didukung Rust',
+        'Karena Option hanya untuk teks',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Nilai harus diambil dari Option lebih dulu.',
+        'Salah. Ukuran bukan penyebabnya.',
+        'Salah. Penjumlahan i8 didukung.',
+        'Salah. Option bisa membungkus banyak tipe.',
+      ],
+      explanation:
+        'Compiler memaksa penanganan Some dan None sebelum operasi pada nilai T.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

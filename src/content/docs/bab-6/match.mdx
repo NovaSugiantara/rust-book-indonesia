@@ -1,0 +1,280 @@
+---
+title: '6.2 Match'
+description: 'Mencocokkan enum dan Option dengan match, binding data, dan catch-all.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+`match` membandingkan sebuah nilai dengan beberapa pattern, lalu menjalankan arm pertama yang cocok. Berbeda dari `if`, nilai yang dicocokkan tidak harus boolean. `match` bekerja pada enum, angka, string, dan pattern lain.
+
+Di backend, `match` sering dipakai untuk memetakan status internal ke response HTTP, memilih penanganan error, atau menentukan langkah berikutnya dari sebuah event. Karena compiler memaksa semua variant ditangani, menambah status baru akan langsung menunjukkan tempat kode yang perlu diperbarui.
+
+## Match pada enum
+
+Contoh mesin koin: setiap variant menghasilkan nilai dalam sen.
+
+<RustPlayground
+  code={`enum Coin {
+    Penny,
+    Nickel,
+    Dime,
+    Quarter,
+}
+
+fn value_in_cents(coin: Coin) -> u8 {
+    match coin {
+        Coin::Penny => 1,
+        Coin::Nickel => 5,
+        Coin::Dime => 10,
+        Coin::Quarter => 25,
+    }
+}
+
+fn main() {
+    println!("{}", value_in_cents(Coin::Dime));
+}`}
+  filename="src/main.rs"
+  label="Match pada enum Coin"
+/>
+
+Setiap arm punya pattern dan expression. Nilai dari arm yang cocok menjadi nilai seluruh `match`. Kalau arm butuh beberapa baris, gunakan blok:
+
+<RustPlayground
+  code={`enum Coin {
+    Penny,
+    Nickel,
+}
+
+fn value_in_cents(coin: Coin) -> u8 {
+    match coin {
+        Coin::Penny => {
+            println!("Lucky penny!");
+            1
+        }
+        Coin::Nickel => 5,
+    }
+}
+
+fn main() {
+    println!("{}", value_in_cents(Coin::Penny));
+}`}
+  filename="src/main.rs"
+  label="Arm match dengan beberapa baris"
+/>
+
+## Binding data variant
+
+Pattern bisa mengambil data dari dalam variant. Contoh `Quarter` membawa negara bagian.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum UsState {
+    Alabama,
+    Alaska,
+}
+
+enum Coin {
+    Penny,
+    Nickel,
+    Dime,
+    Quarter(UsState),
+}
+
+fn value_in_cents(coin: Coin) -> u8 {
+    match coin {
+        Coin::Penny => 1,
+        Coin::Nickel => 5,
+        Coin::Dime => 10,
+        Coin::Quarter(state) => {
+            println!("State quarter from {state:?}!");
+            25
+        }
+    }
+}
+
+fn main() {
+    println!("{}", value_in_cents(Coin::Quarter(UsState::Alaska)));
+}`}
+  filename="src/main.rs"
+  label="Match yang mengambil data dari variant"
+/>
+
+Pattern `Coin::Quarter(state)` mengikat nilai `UsState` ke variabel `state` di dalam arm. Data itu hanya tersedia kalau variant yang cocok adalah `Quarter`.
+
+## Match pada Option
+
+`Option<T>` juga enum. `match` memaksa kamu menangani `Some` dan `None`.
+
+<RustPlayground
+  code={`fn plus_one(x: Option<i32>) -> Option<i32> {
+    match x {
+        None => None,
+        Some(i) => Some(i + 1),
+    }
+}
+
+fn main() {
+    let five = Some(5);
+    let six = plus_one(five);
+    let none = plus_one(None);
+
+    println!("{six:?} {none:?}");
+}`}
+  filename="src/main.rs"
+  label="Match pada Option"
+/>
+
+Kalau satu arm lupa ditulis, compiler menolak. `match` harus exhaustive.
+
+<RustPlayground
+  code={`fn plus_one(x: Option<i32>) -> Option<i32> {
+    match x {
+        Some(i) => Some(i + 1),
+    }
+}
+
+fn main() {
+    let five = Some(5);
+    println!("{:?}", plus_one(five));
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error match yang belum lengkap"
+/>
+
+Pesan `non-exhaustive patterns: None not covered` menunjukkan variant yang belum ditangani. Compiler bahkan menyarankan arm `None => todo!()`.
+
+## Catch-all
+
+Kalau hanya beberapa nilai yang perlu perlakuan khusus, gunakan catch-all. Pattern `other` mengikat nilai lain, sedangkan `_` mengabaikannya.
+
+<RustPlayground
+  code={`fn main() {
+    let dice_roll = 9;
+
+    match dice_roll {
+        3 => tambah_topi(),
+        7 => lepas_topi(),
+        other => pindahkan(other),
+    }
+
+    fn tambah_topi() {}
+    fn lepas_topi() {}
+    fn pindahkan(_langkah: u8) {}
+}`}
+  filename="src/main.rs"
+  label="Catch-all dengan binding"
+/>
+
+Catch-all harus berada di arm terakhir. Kalau diletakkan lebih awal, arm setelahnya tidak akan pernah dicapai.
+
+Kalau nilainya tidak perlu dipakai, gunakan `_`:
+
+<RustPlayground
+  code={`fn main() {
+    let dice_roll = 9;
+
+    match dice_roll {
+        3 => tambah_topi(),
+        7 => lepas_topi(),
+        _ => ulangi(),
+    }
+
+    fn tambah_topi() {}
+    fn lepas_topi() {}
+    fn ulangi() {}
+}`}
+  filename="src/main.rs"
+  label="Catch-all dengan underscore"
+/>
+
+:::note[Kalau di bahasa lain]
+`match` terasa seperti `switch`, tetapi ada dua perbedaan besar: pattern bisa membawa data, dan compiler memaksa semua kemungkinan ditangani. Di TypeScript, discriminated union dengan `switch` juga bisa memberi pemeriksaan yang mirip, tetapi exhaustiveness tidak selalu dipaksa oleh compiler. Di Go, `switch` tidak memaksa semua nilai enum ditangani.
+:::
+
+:::tip[Tips]
+Gunakan `match` saat kamu ingin compiler memaksa semua kemungkinan. Gunakan `if let` nanti kalau hanya satu pola yang peduli dan sisanya boleh diabaikan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang terjadi kalau match tidak menangani semua variant?',
+      options: [
+        'Compiler menolak dengan non-exhaustive patterns',
+        'Program mengembalikan nilai default',
+        'Variant yang tidak ditangani menjadi None',
+        'Program berjalan tetapi mencetak peringatan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Match harus mencakup semua kemungkinan.',
+        'Salah. Tidak ada nilai default otomatis.',
+        'Salah. Match tidak mengubah variant.',
+        'Salah. Ini error kompilasi, bukan warning runtime.',
+      ],
+      explanation:
+        'Exhaustiveness mencegah kasus terlewat saat enum bertambah.',
+    },
+    {
+      question: 'Apa yang dilakukan pola Coin::Quarter(state)?',
+      options: [
+        'Mencocokkan variant Quarter dan mengikat data di dalamnya ke state',
+        'Mengabaikan semua variant Quarter',
+        'Mengubah Quarter menjadi Penny',
+        'Membuat variant baru',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pattern membuka data variant.',
+        'Salah. Pattern ini justru menangani Quarter.',
+        'Salah. Variant tidak berubah.',
+        'Salah. Pattern bukan constructor.',
+      ],
+      explanation:
+        'Binding memungkinkan arm memakai data yang dibawa variant.',
+    },
+    {
+      question: 'Apa perbedaan other dan _ pada catch-all?',
+      options: [
+        'other mengikat nilai, _ mengabaikannya',
+        'other hanya untuk angka, _ untuk teks',
+        'Keduanya identik',
+        '_ harus berada di awal match',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. other memberi nama nilai; _ tidak.',
+        'Salah. Keduanya bisa menangani berbagai tipe.',
+        'Salah. Perbedaannya adalah binding.',
+        'Salah. Catch-all harus di akhir.',
+      ],
+      explanation:
+        'Gunakan _ kalau nilai tidak dipakai agar tidak ada warning variabel tidak terpakai.',
+    },
+    {
+      question: 'Mengapa match pada Option membantu mencegah null error?',
+      options: [
+        'Karena Some dan None harus ditangani sebelum nilai T dipakai',
+        'Karena Option selalu berisi nilai',
+        'Karena None otomatis menjadi nol',
+        'Karena match menghapus Option',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler memaksa penanganan kedua variant.',
+        'Salah. None berarti tidak ada nilai.',
+        'Salah. None bukan nol.',
+        'Salah. Match tidak menghapus tipe.',
+      ],
+      explanation:
+        'Nilai T hanya bisa diambil dari Some setelah kamu menangani kemungkinan None.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

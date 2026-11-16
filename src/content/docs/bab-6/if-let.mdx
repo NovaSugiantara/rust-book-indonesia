@@ -1,0 +1,201 @@
+---
+title: '6.3 If let dan let else'
+description: 'Menangani satu pola dengan if let, else, dan let else tanpa boilerplate match.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+`match` selalu meminta semua kemungkinan ditangani. Kadang kita hanya peduli pada satu variant dan ingin mengabaikan sisanya. `if let` membuat kasus itu lebih ringkas.
+
+## if let
+
+Kode ini memakai `match` hanya untuk menangani `Some`:
+
+<RustPlayground
+  code={`fn main() {
+    let config_max = Some(3u8);
+
+    match config_max {
+        Some(max) => println!("The maximum is configured to be {max}"),
+        _ => (),
+    }
+}`}
+  filename="src/main.rs"
+  label="Match yang hanya peduli pada Some"
+/>
+
+Arm `_ => ()` hanya boilerplate. Dengan `if let`, kita bisa menulisnya lebih singkat:
+
+<RustPlayground
+  code={`fn main() {
+    let config_max = Some(3u8);
+
+    if let Some(max) = config_max {
+        println!("The maximum is configured to be {max}");
+    }
+}`}
+  filename="src/main.rs"
+  label="if let untuk satu pola"
+/>
+
+`if let` mengambil pattern dan expression. Kalau pattern cocok, variabel di pattern terikat dan blok dijalankan. Kalau tidak cocok, blok dilewati.
+
+`if let` kehilangan pemeriksaan exhaustive dari `match`. Gunakan `match` kalau semua kemungkinan memang perlu ditangani. Gunakan `if let` kalau hanya satu kemungkinan yang relevan.
+
+## if let dengan else
+
+`else` pada `if let` menangani semua nilai yang tidak cocok.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum UsState {
+    Alabama,
+    Alaska,
+}
+
+enum Coin {
+    Penny,
+    Nickel,
+    Dime,
+    Quarter(UsState),
+}
+
+fn main() {
+    let coin = Coin::Penny;
+    let mut count = 0;
+
+    if let Coin::Quarter(state) = coin {
+        println!("State quarter from {state:?}!");
+    } else {
+        count += 1;
+        println!("Bukan quarter. Count: {count}");
+    }
+}`}
+  filename="src/main.rs"
+  label="if let dengan else"
+/>
+
+## let else
+
+`let else` dipakai saat kamu ingin tetap berada di jalur utama kalau pattern cocok, dan keluar dari fungsi kalau tidak cocok. Blok `else` wajib divergence: harus `return`, `break`, `continue`, atau panic.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum UsState {
+    Alabama,
+    Alaska,
+}
+
+enum Coin {
+    Penny,
+    Nickel,
+    Quarter(UsState),
+}
+
+fn nama_state(coin: Coin) -> Option<String> {
+    let Coin::Quarter(state) = coin else {
+        return None;
+    };
+
+    Some(format!("{state:?}"))
+}
+
+fn main() {
+    println!("{:?}", nama_state(Coin::Quarter(UsState::Alaska)));
+    println!("{:?}", nama_state(Coin::Penny));
+}`}
+  filename="src/main.rs"
+  label="let else untuk jalur utama"
+/>
+
+Setelah `let else`, `state` tersedia di scope luar. Kamu tidak perlu indentasi tambahan untuk sisa fungsi.
+
+Kalau blok `else` tidak keluar dari fungsi, compiler menolak:
+
+<RustPlayground
+  code={`fn main() {
+    let Some(x) = Some(3) else {
+        println!("tidak ada nilai");
+    };
+
+    println!("{x}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error let else tanpa divergence"
+/>
+
+Pesan compiler menyebut `else` harus menghasilkan `!` atau keluar dari fungsi. Tambahkan `return`, `break`, atau panic sesuai konteks.
+
+:::note[Kalau di bahasa lain]
+Di TypeScript, kamu sering memakai optional chaining atau early return setelah pengecekan null. Di Go, pola `if err != nil` juga keluar lebih awal. `let else` menaruh penanganan kasus gagal di awal, lalu membiarkan jalur utama tetap rata. Bedanya, pattern Rust harus cocok dengan tipe enum, bukan sekadar pengecekan null.
+:::
+
+:::tip[Tips]
+Pilih `match` kalau semua variant penting. Pilih `if let` kalau satu variant cukup. Pilih `let else` kalau kasus gagal harus keluar dari fungsi dan sisanya adalah jalur normal.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dilakukan if let Some(max) = config_max?',
+      options: [
+        'Menjalankan blok hanya jika nilainya Some, sambil mengikat max',
+        'Menjalankan blok untuk semua nilai',
+        'Mengubah Option menjadi i32',
+        'Membuat Option baru',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. if let menjalankan blok saat pattern cocok.',
+        'Salah. Nilai None akan melewati blok.',
+        'Salah. max hanya tersedia di dalam blok.',
+        'Salah. Tidak ada Option baru yang dibuat.',
+      ],
+      explanation:
+        'if let adalah cara ringkas menangani satu pattern.',
+    },
+    {
+      question: 'Apa syarat blok else pada let else?',
+      options: [
+        'Harus keluar dari fungsi atau divergence',
+        'Harus mencetak pesan',
+        'Harus mengembalikan nilai default',
+        'Boleh kosong tanpa efek',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. else harus return, break, continue, atau panic.',
+        'Salah. Mencetak saja tidak cukup.',
+        'Salah. let else tidak mengembalikan nilai default.',
+        'Salah. Blok kosong tidak divergence.',
+      ],
+      explanation:
+        'let else menjaga jalur utama tetap berjalan hanya saat pattern cocok.',
+    },
+    {
+      question: 'Kapan match lebih baik daripada if let?',
+      options: [
+        'Saat semua kemungkinan variant perlu ditangani secara eksplisit',
+        'Saat hanya satu variant yang peduli',
+        'Saat program tidak punya enum',
+        'Saat ingin menghindari kurung kurawal',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. match memberi pemeriksaan exhaustive.',
+        'Salah. Itu kasus if let.',
+        'Salah. match tetap bisa dipakai pada nilai lain.',
+        'Salah. Kurung kurawal bukan alasan utama.',
+      ],
+      explanation:
+        'match memaksa semua kasus ditangani, sehingga aman saat enum bertambah.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

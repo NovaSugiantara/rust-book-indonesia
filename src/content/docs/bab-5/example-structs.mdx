@@ -1,0 +1,235 @@
+---
+title: '5.2 Contoh program dengan struct'
+description: 'Merefaktor program luas persegi panjang dari variabel terpisah menjadi struct dan Debug.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Contoh klasik untuk struct adalah menghitung luas persegi panjang. Kita mulai dari variabel terpisah, lalu memperbaiki struktur datanya.
+
+## Variabel terpisah
+
+Versi pertama menerima lebar dan tinggi sebagai dua parameter. Kode ini benar, tetapi hubungan antara kedua nilai tidak terlihat dari signature fungsi.
+
+<RustPlayground
+  code={`fn main() {
+    let width1 = 30;
+    let height1 = 50;
+
+    println!(
+        "The area of the rectangle is {} square pixels.",
+        area(width1, height1)
+    );
+}
+
+fn area(width: u32, height: u32) -> u32 {
+    width * height
+}`}
+  filename="src/main.rs"
+  label="Luas persegi panjang dengan dua variabel"
+/>
+
+## Tuple
+
+Tuple mengelompokkan nilai, tetapi elemennya tidak punya nama.
+
+<RustPlayground
+  code={`fn main() {
+    let rect1 = (30, 50);
+
+    println!(
+        "The area of the rectangle is {} square pixels.",
+        area(rect1)
+    );
+}
+
+fn area(dimensions: (u32, u32)) -> u32 {
+    dimensions.0 * dimensions.1
+}`}
+  filename="src/main.rs"
+  label="Luas persegi panjang dengan tuple"
+/>
+
+Tuple lebih ringkas, tetapi `dimensions.0` dan `dimensions.1` tidak menjelaskan mana lebar dan mana tinggi.
+
+## Struct
+
+Struct memberi nama pada setiap bagian dan membuat hubungannya eksplisit. Fungsi `area` meminjam `Rectangle`, jadi `main` tetap memiliki nilai aslinya.
+
+<RustPlayground
+  code={`struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let rect1 = Rectangle {
+        width: 30,
+        height: 50,
+    };
+
+    println!(
+        "The area of the rectangle is {} square pixels.",
+        area(&rect1)
+    );
+}
+
+fn area(rectangle: &Rectangle) -> u32 {
+    rectangle.width * rectangle.height
+}`}
+  filename="src/main.rs"
+  label="Luas persegi panjang dengan struct"
+/>
+
+Mengakses field dari struct yang dipinjam tidak memindahkan nilai field. Inilah alasan fungsi biasanya menerima `&Rectangle` ketika hanya perlu membaca.
+
+## Debug
+
+`println!` dengan `{}` memakai trait `Display`. Struct tidak punya implementasi `Display` otomatis, jadi kode berikut gagal:
+
+<RustPlayground
+  code={`struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let rect1 = Rectangle {
+        width: 30,
+        height: 50,
+    };
+
+    println!("rect1 is {rect1}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error struct tanpa implementasi Display"
+/>
+
+Pesan compiler menyebut `Rectangle doesn't implement std::fmt::Display`. Untuk debugging, gunakan `{:?}` dan derive `Debug`:
+
+<RustPlayground
+  code={`#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let rect1 = Rectangle {
+        width: 30,
+        height: 50,
+    };
+
+    println!("rect1 is {rect1:?}");
+}`}
+  filename="src/main.rs"
+  label="Struct dengan derive Debug"
+/>
+
+`{:#?}` menampilkan format yang lebih rapi untuk struct besar.
+
+`dbg!` mencetak ke stderr, menyertakan file dan baris, lalu mengembalikan ownership nilai.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let scale = 2;
+    let rect1 = Rectangle {
+        width: dbg!(30 * scale),
+        height: 50,
+    };
+
+    dbg!(&rect1);
+}`}
+  filename="src/main.rs"
+  label="Mencetak nilai dengan dbg"
+/>
+
+Karena `dbg!` mengembalikan nilai, `width` tetap mendapat hasil `30 * scale`. `dbg!(&rect1)` meminjam `rect1` supaya nilainya tidak dipindahkan.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, kamu biasanya mencetak object dengan `console.log`, dan runtime memilih representasi debug. Di Go, `%+v` dan `%#v` memberi detail struct. Di Rust, kamu memilih format `Display` atau `Debug` lewat placeholder `{}` atau `{:?}`. Untuk struct, implementasi `Debug` biasanya diturunkan dengan `#[derive(Debug)]`.
+:::
+
+:::tip[Tips]
+Gunakan `{:?}` untuk debugging, bukan untuk output yang dibaca pengguna akhir. Format Debug bisa berubah dan tidak dirancang sebagai tampilan produk.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa fungsi area menerima &Rectangle?',
+      options: [
+        'Karena fungsi hanya membaca field dan main tetap memiliki rectangle',
+        'Karena Rectangle selalu harus dipinjam',
+        'Karena struct tidak bisa dipindahkan',
+        'Karena reference lebih cepat dari nilai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Borrow cukup untuk membaca dan menghindari move.',
+        'Salah. Rectangle bisa dipindahkan kalau memang perlu.',
+        'Salah. Struct bisa dipindahkan.',
+        'Salah. Kecepatan bukan alasan utamanya.',
+      ],
+      explanation:
+        'Membaca field dari reference tidak memindahkan nilai field.',
+    },
+    {
+      question: 'Apa placeholder untuk format Debug?',
+      options: ['{:?}', '{}', '{:#}', '{:Display}'],
+      answer: 0,
+      optionNotes: [
+        'Benar. {:?} memakai Debug; {:#?} versi pretty.',
+        'Salah. {} memakai Display.',
+        'Salah. {:#} bukan format Debug yang dimaksud.',
+        'Salah. Tidak ada placeholder {:Display}.',
+      ],
+      explanation:
+        'Debug ditujukan untuk developer, sedangkan Display untuk pengguna.',
+    },
+    {
+      question: 'Mengapa println!("{}", rect1) gagal untuk struct tanpa derive?',
+      options: [
+        'Karena struct tidak punya implementasi Display',
+        'Karena struct tidak punya field',
+        'Karena println! hanya menerima angka',
+        'Karena struct selalu immutable',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Display tidak otomatis untuk struct.',
+        'Salah. Struct di contoh punya field.',
+        'Salah. println! bisa mencetak banyak tipe.',
+        'Salah. Mutability tidak menjadi penyebab error ini.',
+      ],
+      explanation:
+        'Kamu perlu derive Debug dan memakai {:?}, atau menulis implementasi Display sendiri.',
+    },
+    {
+      question: 'Ke stream mana dbg! mencetak output?',
+      options: ['stderr', 'stdout', 'File Cargo.toml', 'Database'],
+      answer: 0,
+      optionNotes: [
+        'Benar. dbg! menulis ke standard error.',
+        'Salah. println! yang menulis ke stdout.',
+        'Salah. dbg! tidak menulis file.',
+        'Salah. dbg! tidak menyentuh database.',
+      ],
+      explanation:
+        'Output debug dipisahkan dari output program utama yang mungkin diproses pipeline.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

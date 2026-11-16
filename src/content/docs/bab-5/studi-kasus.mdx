@@ -1,0 +1,462 @@
+---
+title: '5.4 Studi kasus: Kasir Warung'
+description: 'Mengganti array terpisah dengan struct ItemPesanan dan Transaksi.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Di Bab 4, Kasir Warung menyimpan nama pelanggan, harga, dan jumlah sebagai data terpisah. Sekarang kita mengelompokkannya menjadi struct. Tujuannya bukan sekadar merapikan kode, tetapi membuat compiler tahu bahwa harga dan jumlah adalah bagian dari satu item yang sama.
+
+## Struct untuk item dan transaksi
+
+`ItemPesanan` memiliki nama, harga satuan, dan jumlah. Method `subtotal` menghitung harga kali jumlah. `Transaksi` memiliki pelanggan, array item, dan jumlah item yang dipakai.
+
+<StudyCase title="Kasir Warung: data transaksi sebagai struct" intro="Membuat ItemPesanan dan Transaksi, lalu memindahkan perhitungan ke method.">
+  <StudyCaseStep
+    title="Buat ItemPesanan"
+    goal="Membuat struct item dengan constructor dan method subtotal."
+  >
+    Nama item adalah `String` yang dimiliki item. Constructor menerima `&str` lalu menyalinnya menjadi `String`. Ini clone yang disengaja karena item harus hidup lebih lama dari input.
+
+    ```rust
+    #[derive(Debug)]
+    struct ItemPesanan {
+        nama: String,
+        harga: u32,
+        jumlah: u32,
+    }
+
+    impl ItemPesanan {
+        fn baru(nama: &str, harga: u32, jumlah: u32) -> Self {
+            Self {
+                nama: nama.to_string(),
+                harga,
+                jumlah,
+            }
+        }
+
+        fn subtotal(&self) -> u32 {
+            self.harga * self.jumlah
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      `nama.to_string()` membuat `String` baru dari `&str`. Field lain memakai field init shorthand karena nama parameter sama dengan nama field.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Item sekarang memiliki data sendiri. `subtotal` memakai `&self` karena hanya membaca field.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Buat Transaksi"
+    goal="Mengelompokkan item dan menghitung total lewat method."
+  >
+    `Transaksi` menyimpan array tiga item dan jumlah item yang benar-benar dipakai. Method `subtotal` memakai slice `self.items[..self.jumlah_item]`.
+
+    ```rust
+    #[derive(Debug)]
+    struct Transaksi {
+        pelanggan: String,
+        items: [ItemPesanan; 3],
+        jumlah_item: usize,
+    }
+
+    impl Transaksi {
+        fn baru(pelanggan: String, items: [ItemPesanan; 3], jumlah_item: usize) -> Self {
+            Self {
+                pelanggan,
+                items,
+                jumlah_item,
+            }
+        }
+
+        fn subtotal(&self) -> u32 {
+            let mut subtotal = 0;
+
+            for item in &self.items[..self.jumlah_item] {
+                subtotal += item.subtotal();
+            }
+
+            subtotal
+        }
+
+        fn diskon(&self) -> u32 {
+            if self.subtotal() >= 40_000 {
+                self.subtotal() * 10 / 100
+            } else {
+                0
+            }
+        }
+
+        fn total(&self) -> u32 {
+            self.subtotal() - self.diskon()
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      `jumlah_item` membatasi bagian array yang dipakai. Ini menjaga batas 1 sampai 3 dari bab sebelumnya.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Transaksi memiliki item dan pelanggan. Method `subtotal`, `diskon`, dan `total` membuat perhitungan tetap dekat dengan data yang dihitung.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Cetak struk"
+    goal="Mencetak item dan total dari method Transaksi."
+  >
+    `cetak` membaca transaksi dan mencetak setiap item. Karena method hanya membaca, parameter `&self` sudah cukup dan `main` tetap memiliki transaksi.
+
+    ```rust
+    impl Transaksi {
+        fn cetak(&self) {
+            println!("========================================");
+            println!("           KASIR WARUNG BU SRI");
+            println!("        Jl. Melati No. 12, Bandung");
+            println!("Pelanggan: {}", self.pelanggan);
+            println!("========================================");
+
+            for item in &self.items[..self.jumlah_item] {
+                println!(
+                    "{} x {} = Rp{}",
+                    item.nama,
+                    item.jumlah,
+                    item.subtotal()
+                );
+            }
+
+            println!("----------------------------------------");
+            println!("Subtotal: Rp{}", self.subtotal());
+            println!("Diskon:   Rp{}", self.diskon());
+            println!("Total:    Rp{}", self.total());
+            println!("========================================");
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      Setelah struct dan method selesai, `main` cukup membuat item, membuat transaksi, lalu memanggil `cetak`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Kode lengkap versi playground ada di bawah. Perhatikan bahwa `main` tidak lagi menghitung index array secara manual.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+Playground tidak bisa membaca input, jadi jumlah item di-hardcode menjadi 3.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+struct ItemPesanan {
+    nama: String,
+    harga: u32,
+    jumlah: u32,
+}
+
+impl ItemPesanan {
+    fn baru(nama: &str, harga: u32, jumlah: u32) -> Self {
+        Self {
+            nama: nama.to_string(),
+            harga,
+            jumlah,
+        }
+    }
+
+    fn subtotal(&self) -> u32 {
+        self.harga * self.jumlah
+    }
+}
+
+#[derive(Debug)]
+struct Transaksi {
+    pelanggan: String,
+    items: [ItemPesanan; 3],
+    jumlah_item: usize,
+}
+
+impl Transaksi {
+    fn baru(pelanggan: String, items: [ItemPesanan; 3], jumlah_item: usize) -> Self {
+        Self {
+            pelanggan,
+            items,
+            jumlah_item,
+        }
+    }
+
+    fn subtotal(&self) -> u32 {
+        let mut subtotal = 0;
+
+        for item in &self.items[..self.jumlah_item] {
+            subtotal += item.subtotal();
+        }
+
+        subtotal
+    }
+
+    fn diskon(&self) -> u32 {
+        if self.subtotal() >= 40_000 {
+            self.subtotal() * 10 / 100
+        } else {
+            0
+        }
+    }
+
+    fn total(&self) -> u32 {
+        self.subtotal() - self.diskon()
+    }
+
+    fn cetak(&self) {
+        println!("========================================");
+        println!("           KASIR WARUNG BU SRI");
+        println!("        Jl. Melati No. 12, Bandung");
+        println!("Pelanggan: {}", self.pelanggan);
+        println!("========================================");
+
+        for item in &self.items[..self.jumlah_item] {
+            println!(
+                "{} x {} = Rp{}",
+                item.nama,
+                item.jumlah,
+                item.subtotal()
+            );
+        }
+
+        println!("----------------------------------------");
+        println!("Subtotal: Rp{}", self.subtotal());
+        println!("Diskon:   Rp{}", self.diskon());
+        println!("Total:    Rp{}", self.total());
+        println!("========================================");
+    }
+}
+
+fn main() {
+    let items = [
+        ItemPesanan::baru("Kopi", 12_000, 1),
+        ItemPesanan::baru("Roti", 8_000, 2),
+        ItemPesanan::baru("Nasi", 15_000, 1),
+    ];
+
+    let transaksi = Transaksi::baru(String::from("Bu Sri"), items, 3);
+    transaksi.cetak();
+}`}
+  filename="src/main.rs"
+  label="Kasir Warung dengan struct dan method"
+/>
+
+## Kode lokal lengkap
+
+Versi lokal tetap meminta jumlah barang, lalu memakai struct untuk menyimpan item.
+
+```rust
+use std::io;
+
+#[derive(Debug)]
+struct ItemPesanan {
+    nama: String,
+    harga: u32,
+    jumlah: u32,
+}
+
+impl ItemPesanan {
+    fn baru(nama: &str, harga: u32, jumlah: u32) -> Self {
+        Self {
+            nama: nama.to_string(),
+            harga,
+            jumlah,
+        }
+    }
+
+    fn subtotal(&self) -> u32 {
+        self.harga * self.jumlah
+    }
+}
+
+#[derive(Debug)]
+struct Transaksi {
+    pelanggan: String,
+    items: [ItemPesanan; 3],
+    jumlah_item: usize,
+}
+
+impl Transaksi {
+    fn baru(pelanggan: String, items: [ItemPesanan; 3], jumlah_item: usize) -> Self {
+        Self {
+            pelanggan,
+            items,
+            jumlah_item,
+        }
+    }
+
+    fn subtotal(&self) -> u32 {
+        let mut subtotal = 0;
+
+        for item in &self.items[..self.jumlah_item] {
+            subtotal += item.subtotal();
+        }
+
+        subtotal
+    }
+
+    fn diskon(&self) -> u32 {
+        if self.subtotal() >= 40_000 {
+            self.subtotal() * 10 / 100
+        } else {
+            0
+        }
+    }
+
+    fn total(&self) -> u32 {
+        self.subtotal() - self.diskon()
+    }
+
+    fn cetak(&self) {
+        println!("========================================");
+        println!("           KASIR WARUNG BU SRI");
+        println!("        Jl. Melati No. 12, Bandung");
+        println!("Pelanggan: {}", self.pelanggan);
+        println!("========================================");
+
+        for item in &self.items[..self.jumlah_item] {
+            println!(
+                "{} x {} = Rp{}",
+                item.nama,
+                item.jumlah,
+                item.subtotal()
+            );
+        }
+
+        println!("----------------------------------------");
+        println!("Subtotal: Rp{}", self.subtotal());
+        println!("Diskon:   Rp{}", self.diskon());
+        println!("Total:    Rp{}", self.total());
+        println!("========================================");
+    }
+}
+
+fn main() {
+    let mut jumlah_barang: usize = 0;
+
+    loop {
+        println!("Jumlah barang (1-3):");
+
+        let mut input = String::new();
+
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Gagal membaca input");
+
+        let jumlah: usize = match input.trim().parse() {
+            Ok(angka) => angka,
+            Err(_) => {
+                println!("Masukkan angka, bukan teks. Coba lagi.");
+                continue;
+            }
+        };
+
+        match jumlah {
+            1..=3 => {
+                jumlah_barang = jumlah;
+                break;
+            }
+            _ => println!("Jumlah harus 1 sampai 3. Coba lagi."),
+        }
+    }
+
+    let items = [
+        ItemPesanan::baru("Kopi", 12_000, 1),
+        ItemPesanan::baru("Roti", 8_000, 2),
+        ItemPesanan::baru("Nasi", 15_000, 1),
+    ];
+
+    let transaksi = Transaksi::baru(String::from("Bu Sri"), items, jumlah_barang);
+    transaksi.cetak();
+}
+```
+
+## Keadaan setelah Bab 5
+
+- `ItemPesanan` memiliki nama, harga, dan jumlah; method `subtotal` mengubah perilaku item menjadi satu tempat.
+- `Transaksi` memiliki pelanggan, array tiga item, dan jumlah item yang dipakai.
+- Perhitungan subtotal, diskon, dan total menjadi method.
+- `String` pelanggan dan nama item dimiliki oleh struct.
+- Masih memakai array berukuran tetap tiga. `Vec` baru muncul di Bab 8.
+- Belum ada status pesanan, pembayaran, atau error handling dengan `Result`.
+
+:::note[Kenapa begini?]
+Struct membuat hubungan antar field terlihat jelas. Kalau `harga` dan `jumlah` bukan bagian dari item yang sama, kode mudah menukar item atau memakai harga dari baris yang salah. Method juga membuat aturan perhitungan menempel pada data yang dihitung.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa fungsi associated function ItemPesanan::baru?',
+      options: [
+        'Membuat instance ItemPesanan dari parameter',
+        'Menghitung pajak',
+        'Membaca input terminal',
+        'Menghapus item dari array',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Constructor membuat instance baru.',
+        'Salah. Pajak tidak dihitung di constructor.',
+        'Salah. Input dibaca di main.',
+        'Salah. Array tidak dihapus oleh constructor.',
+      ],
+      explanation:
+        'Associated function tidak punya self karena dipakai sebelum instance ada.',
+    },
+    {
+      question: 'Mengapa Transaksi masih memakai array tiga item?',
+      options: [
+        'Karena Vec baru dibahas di Bab 8 dan batas item masih 1 sampai 3',
+        'Karena array selalu lebih baik daripada Vec',
+        'Karena struct tidak bisa berisi collection',
+        'Karena Rust melarang jumlah item lebih dari tiga',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini keputusan urutan materi, bukan batasan bahasa.',
+        'Salah. Vec lebih fleksibel untuk jumlah dinamis.',
+        'Salah. Struct bisa berisi Vec nanti.',
+        'Salah. Rust tidak punya batas tiga item.',
+      ],
+      explanation:
+        'Array dipakai agar materi sesuai urutan buku; Bab 8 akan memperkenalkan Vec.',
+    },
+    {
+      question: 'Apa yang dilakukan &self pada method cetak?',
+      options: [
+        'Meminjam transaksi untuk dibaca tanpa mengambil ownership',
+        'Menyalin seluruh transaksi',
+        'Menghapus transaksi setelah cetak',
+        'Mengubah semua field transaksi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. cetak hanya membaca field.',
+        'Salah. Tidak ada clone otomatis.',
+        'Salah. Borrow tidak menghapus data.',
+        'Salah. &self tidak memberi izin menulis.',
+      ],
+      explanation:
+        'Method yang hanya mencetak data cukup meminjam instance secara immutable.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

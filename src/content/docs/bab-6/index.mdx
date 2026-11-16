@@ -1,0 +1,89 @@
+---
+title: 'Bab 6: Enum dan pattern matching'
+description: 'Enum, Option, match, if let, dan let else untuk memodelkan pilihan data.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Struct dipakai saat beberapa nilai harus ada bersama. Enum dipakai saat sebuah nilai hanya boleh menjadi salah satu dari beberapa kemungkinan. Di backend, enum muncul sebagai status pesanan, metode pembayaran, tipe event, dan hasil operasi.
+
+Rust juga memakai enum untuk sesuatu yang di bahasa lain sering memakai null: `Option<T>`. Dengan `Option`, kemungkinan nilai kosong menjadi bagian dari tipe dan harus ditangani.
+
+## Urutan bab
+
+1. [Mendefinisikan enum](defining-enums/) membahas variant, data di variant, method, dan Option.
+2. [Match](match/) membahas pencocokan pattern, binding, dan exhaustiveness.
+3. [If let dan let else](if-let/) membahas cara ringkas menangani satu pola.
+4. [Studi kasus: Kasir Warung](studi-kasus/) menambahkan status pesanan dan metode pembayaran.
+
+:::note[Kenapa begini?]
+Enum membatasi nilai yang valid. Kalau status hanya boleh `Baru`, `Diproses`, `Selesai`, atau `Dibatalkan`, memakai enum mencegah nilai seperti `"selesai "` atau `"unknown"` masuk tanpa sengaja. Compiler juga bisa memaksa semua kemungkinan ditangani saat memakai `match`.
+:::
+
+:::tip[Tips]
+Saat memilih antara struct dan enum, tanyakan apakah data harus ada bersamaan atau hanya salah satu. `Transaksi` punya banyak field sekaligus, jadi struct. Status transaksi hanya satu dari beberapa nilai, jadi enum.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Kapan enum lebih tepat daripada struct?',
+      options: [
+        'Saat nilai hanya boleh menjadi salah satu dari beberapa kemungkinan',
+        'Saat semua field harus ada bersamaan',
+        'Saat data harus disimpan di heap',
+        'Saat fungsi tidak mengembalikan nilai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Enum memodelkan pilihan yang saling eksklusif.',
+        'Salah. Itu kasus struct.',
+        'Salah. Lokasi memory bukan pembeda utama.',
+        'Salah. Nilai balik fungsi bukan alasan memilih enum.',
+      ],
+      explanation:
+        'Enum membuat himpunan kemungkinan nilai menjadi bagian dari tipe.',
+    },
+    {
+      question: 'Apa keuntungan Option<T> dibanding null?',
+      options: [
+        'Nilai kosong harus ditangani sebelum nilai T dipakai',
+        'Option selalu lebih kecil dari T',
+        'Option menghilangkan semua error runtime',
+        'Option membuat semua field menjadi mutable',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Option memisahkan ada dan tidak ada sebagai dua variant.',
+        'Salah. Ukuran bukan alasan utamanya.',
+        'Salah. Option bukan jaminan bebas error.',
+        'Salah. Option tidak mengubah mutability field.',
+      ],
+      explanation:
+        'Compiler memaksa kamu menangani Some dan None sebelum memakai isinya.',
+    },
+    {
+      question: 'Bagaimana nilai enum diakses?',
+      options: [
+        'Lewat nama variant, misalnya Status::Baru',
+        'Lewat indeks angka seperti array',
+        'Lewat nama field struct',
+        'Lewat nama file',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Variant berada di namespace enum.',
+        'Salah. Enum bukan array.',
+        'Salah. Enum tidak punya field seperti struct.',
+        'Salah. Nama file tidak menentukan variant.',
+      ],
+      explanation:
+        'Variant diakses dengan path Enum::Variant.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

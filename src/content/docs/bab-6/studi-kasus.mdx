@@ -1,0 +1,584 @@
+---
+title: '6.4 Studi kasus: Kasir Warung'
+description: 'Menambahkan status pesanan, metode pembayaran, dan diskon opsional dengan enum dan match.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Di Bab 5, transaksi sudah memiliki item dan perhitungan. Sekarang kita menambahkan status pesanan dan metode pembayaran. Keduanya adalah pilihan terbatas, jadi enum lebih tepat daripada string bebas.
+
+<StudyCase title="Kasir Warung: status dan pembayaran" intro="Menambahkan enum status, enum metode bayar, dan diskon yang mungkin belum ada.">
+  <StudyCaseStep
+    title="Buat enum status dan metode bayar"
+    goal="Membuat StatusPesanan dan MetodeBayar dengan label yang aman."
+  >
+    Status pesanan tidak boleh berupa string bebas. Dengan enum, nilai yang tidak dikenal tidak bisa masuk.
+
+    ```rust
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum StatusPesanan {
+        Baru,
+        Diproses,
+        Selesai,
+        Dibatalkan,
+    }
+
+    impl StatusPesanan {
+        fn label(self) -> &'static str {
+            match self {
+                Self::Baru => "baru",
+                Self::Diproses => "diproses",
+                Self::Selesai => "selesai",
+                Self::Dibatalkan => "dibatalkan",
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum MetodeBayar {
+        Tunai,
+        Qris,
+        Transfer,
+    }
+
+    impl MetodeBayar {
+        fn label(self) -> &'static str {
+            match self {
+                Self::Tunai => "tunai",
+                Self::Qris => "QRIS",
+                Self::Transfer => "transfer",
+            }
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      Gunakan `match self` di dalam method label. Compiler akan meminta semua variant ditangani.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Enum membuat status dan metode bayar menjadi tipe tersendiri, bukan teks yang bisa salah ketik.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Tambahkan status ke Transaksi"
+    goal="Menyimpan status, metode bayar opsional, dan diskon opsional."
+  >
+    `Transaksi` mendapat tiga field baru. `Option` dipakai karena metode bayar dan diskon belum tentu ada.
+
+    ```rust
+    struct Transaksi {
+        pelanggan: String,
+        items: [ItemPesanan; 3],
+        jumlah_item: usize,
+        status: StatusPesanan,
+        metode_bayar: Option<MetodeBayar>,
+        diskon: Option<u32>,
+    }
+
+    impl Transaksi {
+        fn bayar(&mut self, metode: MetodeBayar) {
+            self.metode_bayar = Some(metode);
+            self.status = StatusPesanan::Selesai;
+            self.diskon = self.hitung_diskon();
+        }
+
+        fn hitung_diskon(&self) -> Option<u32> {
+            if self.subtotal() >= 40_000 {
+                Some(self.subtotal() * 10 / 100)
+            } else {
+                None
+            }
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      `Some(nilai)` berarti ada nilai, `None` berarti tidak ada. Jangan memakai angka 0 sebagai pengganti "tidak ada diskon" jika kamu ingin membedakan keduanya.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Status awal adalah `Baru`, metode bayar `None`, dan diskon `None`. Setelah `bayar`, status menjadi `Selesai` dan diskon dihitung.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Cetak status dengan match dan let else"
+    goal="Menampilkan status dan metode pembayaran tanpa string bebas."
+  >
+    Gunakan `match` untuk status, `if let` atau `let else` untuk metode pembayaran.
+
+    ```rust
+    impl Transaksi {
+        fn cetak_status(&self) {
+            let Some(metode) = self.metode_bayar else {
+                println!("Status: {} (belum dibayar)", self.status.label());
+                return;
+            };
+
+            println!("Status: {} via {}", self.status.label(), metode.label());
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      Blok `else` pada `let else` harus keluar dari fungsi. Di sini kita memakai `return` setelah mencetak status belum dibayar.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Kalau `metode_bayar` bernilai `Some`, jalur utama mencetak status dan metode. Kalau `None`, fungsi berhenti lebih awal.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+Versi ini memakai tiga item dan langsung membayar dengan QRIS agar bisa dijalankan tanpa input terminal.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+struct ItemPesanan {
+    nama: String,
+    harga: u32,
+    jumlah: u32,
+}
+
+impl ItemPesanan {
+    fn baru(nama: &str, harga: u32, jumlah: u32) -> Self {
+        Self {
+            nama: nama.to_string(),
+            harga,
+            jumlah,
+        }
+    }
+
+    fn subtotal(&self) -> u32 {
+        self.harga * self.jumlah
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StatusPesanan {
+    Baru,
+    Diproses,
+    Selesai,
+    Dibatalkan,
+}
+
+impl StatusPesanan {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Baru => "baru",
+            Self::Diproses => "diproses",
+            Self::Selesai => "selesai",
+            Self::Dibatalkan => "dibatalkan",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MetodeBayar {
+    Tunai,
+    Qris,
+    Transfer,
+}
+
+impl MetodeBayar {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Tunai => "tunai",
+            Self::Qris => "QRIS",
+            Self::Transfer => "transfer",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Transaksi {
+    pelanggan: String,
+    items: [ItemPesanan; 3],
+    jumlah_item: usize,
+    status: StatusPesanan,
+    metode_bayar: Option<MetodeBayar>,
+    diskon: Option<u32>,
+}
+
+impl Transaksi {
+    fn baru(pelanggan: String, items: [ItemPesanan; 3], jumlah_item: usize) -> Self {
+        Self {
+            pelanggan,
+            items,
+            jumlah_item,
+            status: StatusPesanan::Baru,
+            metode_bayar: None,
+            diskon: None,
+        }
+    }
+
+    fn subtotal(&self) -> u32 {
+        let mut subtotal = 0;
+
+        for item in &self.items[..self.jumlah_item] {
+            subtotal += item.subtotal();
+        }
+
+        subtotal
+    }
+
+    fn hitung_diskon(&self) -> Option<u32> {
+        if self.subtotal() >= 40_000 {
+            Some(self.subtotal() * 10 / 100)
+        } else {
+            None
+        }
+    }
+
+    fn total(&self) -> u32 {
+        let diskon = match self.diskon {
+            Some(nilai) => nilai,
+            None => 0,
+        };
+
+        self.subtotal() - diskon
+    }
+
+    fn bayar(&mut self, metode: MetodeBayar) {
+        self.metode_bayar = Some(metode);
+        self.status = StatusPesanan::Selesai;
+        self.diskon = self.hitung_diskon();
+    }
+
+    fn cetak_status(&self) {
+        let Some(metode) = self.metode_bayar else {
+            println!("Status: {} (belum dibayar)", self.status.label());
+            return;
+        };
+
+        println!("Status: {} via {}", self.status.label(), metode.label());
+    }
+
+    fn cetak(&self) {
+        println!("========================================");
+        println!("           KASIR WARUNG BU SRI");
+        println!("        Jl. Melati No. 12, Bandung");
+        println!("Pelanggan: {}", self.pelanggan);
+        println!("========================================");
+
+        for item in &self.items[..self.jumlah_item] {
+            println!(
+                "{} x {} = Rp{}",
+                item.nama,
+                item.jumlah,
+                item.subtotal()
+            );
+        }
+
+        let diskon = match self.diskon {
+            Some(nilai) => nilai,
+            None => 0,
+        };
+
+        println!("----------------------------------------");
+        println!("Subtotal: Rp{}", self.subtotal());
+        println!("Diskon:   Rp{diskon}");
+        println!("Total:    Rp{}", self.total());
+        self.cetak_status();
+        println!("========================================");
+    }
+}
+
+fn main() {
+    let items = [
+        ItemPesanan::baru("Kopi", 12_000, 1),
+        ItemPesanan::baru("Roti", 8_000, 2),
+        ItemPesanan::baru("Nasi", 15_000, 1),
+    ];
+
+    let mut transaksi = Transaksi::baru(String::from("Bu Sri"), items, 3);
+    transaksi.bayar(MetodeBayar::Qris);
+    transaksi.cetak();
+}`}
+  filename="src/main.rs"
+  label="Kasir Warung dengan status dan pembayaran"
+/>
+
+## Kode lokal lengkap
+
+Versi lokal tetap membaca jumlah barang dari terminal, lalu membayar dengan QRIS untuk demonstrasi. Bagian enum dan struct sama dengan versi playground.
+
+```rust
+use std::io;
+
+#[derive(Debug)]
+struct ItemPesanan {
+    nama: String,
+    harga: u32,
+    jumlah: u32,
+}
+
+impl ItemPesanan {
+    fn baru(nama: &str, harga: u32, jumlah: u32) -> Self {
+        Self {
+            nama: nama.to_string(),
+            harga,
+            jumlah,
+        }
+    }
+
+    fn subtotal(&self) -> u32 {
+        self.harga * self.jumlah
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StatusPesanan {
+    Baru,
+    Diproses,
+    Selesai,
+    Dibatalkan,
+}
+
+impl StatusPesanan {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Baru => "baru",
+            Self::Diproses => "diproses",
+            Self::Selesai => "selesai",
+            Self::Dibatalkan => "dibatalkan",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MetodeBayar {
+    Tunai,
+    Qris,
+    Transfer,
+}
+
+impl MetodeBayar {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Tunai => "tunai",
+            Self::Qris => "QRIS",
+            Self::Transfer => "transfer",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Transaksi {
+    pelanggan: String,
+    items: [ItemPesanan; 3],
+    jumlah_item: usize,
+    status: StatusPesanan,
+    metode_bayar: Option<MetodeBayar>,
+    diskon: Option<u32>,
+}
+
+impl Transaksi {
+    fn baru(pelanggan: String, items: [ItemPesanan; 3], jumlah_item: usize) -> Self {
+        Self {
+            pelanggan,
+            items,
+            jumlah_item,
+            status: StatusPesanan::Baru,
+            metode_bayar: None,
+            diskon: None,
+        }
+    }
+
+    fn subtotal(&self) -> u32 {
+        let mut subtotal = 0;
+
+        for item in &self.items[..self.jumlah_item] {
+            subtotal += item.subtotal();
+        }
+
+        subtotal
+    }
+
+    fn hitung_diskon(&self) -> Option<u32> {
+        if self.subtotal() >= 40_000 {
+            Some(self.subtotal() * 10 / 100)
+        } else {
+            None
+        }
+    }
+
+    fn total(&self) -> u32 {
+        let diskon = match self.diskon {
+            Some(nilai) => nilai,
+            None => 0,
+        };
+
+        self.subtotal() - diskon
+    }
+
+    fn bayar(&mut self, metode: MetodeBayar) {
+        self.metode_bayar = Some(metode);
+        self.status = StatusPesanan::Selesai;
+        self.diskon = self.hitung_diskon();
+    }
+
+    fn cetak_status(&self) {
+        let Some(metode) = self.metode_bayar else {
+            println!("Status: {} (belum dibayar)", self.status.label());
+            return;
+        };
+
+        println!("Status: {} via {}", self.status.label(), metode.label());
+    }
+
+    fn cetak(&self) {
+        println!("========================================");
+        println!("           KASIR WARUNG BU SRI");
+        println!("        Jl. Melati No. 12, Bandung");
+        println!("Pelanggan: {}", self.pelanggan);
+        println!("========================================");
+
+        for item in &self.items[..self.jumlah_item] {
+            println!(
+                "{} x {} = Rp{}",
+                item.nama,
+                item.jumlah,
+                item.subtotal()
+            );
+        }
+
+        let diskon = match self.diskon {
+            Some(nilai) => nilai,
+            None => 0,
+        };
+
+        println!("----------------------------------------");
+        println!("Subtotal: Rp{}", self.subtotal());
+        println!("Diskon:   Rp{diskon}");
+        println!("Total:    Rp{}", self.total());
+        self.cetak_status();
+        println!("========================================");
+    }
+}
+
+fn main() {
+    let mut jumlah_barang: usize = 0;
+
+    loop {
+        println!("Jumlah barang (1-3):");
+
+        let mut input = String::new();
+
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Gagal membaca input");
+
+        let jumlah: usize = match input.trim().parse() {
+            Ok(angka) => angka,
+            Err(_) => {
+                println!("Masukkan angka, bukan teks. Coba lagi.");
+                continue;
+            }
+        };
+
+        match jumlah {
+            1..=3 => {
+                jumlah_barang = jumlah;
+                break;
+            }
+            _ => println!("Jumlah harus 1 sampai 3. Coba lagi."),
+        }
+    }
+
+    let items = [
+        ItemPesanan::baru("Kopi", 12_000, 1),
+        ItemPesanan::baru("Roti", 8_000, 2),
+        ItemPesanan::baru("Nasi", 15_000, 1),
+    ];
+
+    let mut transaksi = Transaksi::baru(String::from("Bu Sri"), items, jumlah_barang);
+    transaksi.bayar(MetodeBayar::Qris);
+    transaksi.cetak();
+}
+```
+
+## Keadaan setelah Bab 6
+
+- Status pesanan memakai enum `StatusPesanan`.
+- Metode pembayaran memakai enum `MetodeBayar` dan disimpan sebagai `Option<MetodeBayar>`.
+- Diskon disimpan sebagai `Option<u32>`; `None` berarti tidak ada diskon.
+- `match` dipakai untuk label status, perhitungan diskon, dan total.
+- `let else` dipakai untuk menangani transaksi yang belum dibayar.
+- Array tiga item masih dipakai. `Vec` baru muncul di Bab 8.
+- Belum ada error handling `Result` dan belum ada input metode bayar dari terminal.
+
+:::note[Kalau di bahasa lain]
+Di TypeScript, status seperti ini sering menjadi discriminated union. Di PHP, enum bisa menjadi tipe tersendiri. Di Go, enum biasanya berupa konstanta bertipe. Rust memakai enum dengan data dan `Option` untuk nilai yang mungkin tidak ada. Bedanya, compiler memaksa semua variant ditangani saat memakai `match`.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa status pesanan memakai enum, bukan String?',
+      options: [
+        'Karena hanya ada beberapa status valid dan compiler bisa memaksa semuanya ditangani',
+        'Karena String tidak bisa disimpan di struct',
+        'Karena enum lebih cepat dari String',
+        'Karena status tidak perlu ditampilkan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Enum membatasi nilai dan membuat match exhaustive.',
+        'Salah. String bisa disimpan di struct.',
+        'Salah. Kecepatan bukan alasan utama.',
+        'Salah. Status tetap ditampilkan lewat method label.',
+      ],
+      explanation:
+        'Enum mencegah status seperti "selesai " atau "unknown" masuk tanpa sengaja.',
+    },
+    {
+      question: 'Apa arti metode_bayar: Option<MetodeBayar>?',
+      options: [
+        'Transaksi mungkin sudah dibayar dengan metode tertentu atau belum dibayar',
+        'Transaksi pasti sudah dibayar',
+        'Metode bayar selalu Tunai',
+        'Transaksi tidak punya metode bayar',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Some berisi metode, None berarti belum dibayar.',
+        'Salah. Some belum tentu terisi.',
+        'Salah. Metode ditentukan saat pembayaran.',
+        'Salah. Tipe Option menyatakan kemungkinan ada atau tidak ada.',
+      ],
+      explanation:
+        'Option membuat keadaan belum dibayar menjadi bagian dari tipe.',
+    },
+    {
+      question: 'Apa yang dilakukan let Some(metode) = self.metode_bayar else { return; }?',
+      options: [
+        'Melanjutkan jalur utama bila sudah dibayar, atau keluar dari fungsi bila belum',
+        'Membuat metode bayar baru',
+        'Mengubah Option menjadi String',
+        'Menghapus transaksi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. let else menjaga happy path dan keluar saat None.',
+        'Salah. Tidak ada metode baru yang dibuat.',
+        'Salah. Hasil binding adalah MetodeBayar, bukan String.',
+        'Salah. Transaksi tidak dihapus.',
+      ],
+      explanation:
+        'let else membuat penanganan kasus kosong singkat dan jelas.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

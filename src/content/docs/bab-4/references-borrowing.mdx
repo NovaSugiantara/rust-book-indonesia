@@ -1,0 +1,285 @@
+---
+title: '4.2 Reference dan borrowing'
+description: 'Meminjam nilai dengan & dan &mut, aturan borrow, serta dangling reference.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Reference memungkinkan fungsi memakai nilai tanpa mengambil ownership. Membuat reference disebut borrowing, meminjam. Nilai tetap dimiliki pemilik aslinya, dan peminjam harus mengembalikannya sebelum nilai itu hilang.
+
+## Reference immutable
+
+Fungsi `calculate_length` hanya perlu membaca `String`. Ia tidak perlu memiliki string itu.
+
+<RustPlayground
+  code={`fn main() {
+    let s1 = String::from("hello");
+
+    let len = calculate_length(&s1);
+
+    println!("The length of '{s1}' is {len}.");
+}
+
+fn calculate_length(s: &String) -> usize {
+    s.len()
+}`}
+  filename="src/main.rs"
+  label="Meminjam String dengan reference"
+/>
+
+`&s1` membuat reference ke `s1`. Tanda `&` pada tipe parameter, `&String`, menyatakan bahwa fungsi menerima reference, bukan nilai penuh. Setelah fungsi selesai, `s1` tetap menjadi pemilik dan masih bisa dipakai.
+
+Reference tidak memiliki data. Saat reference keluar dari scope, nilai yang dipinjam tidak di-drop. Yang di-drop hanya pemilik aslinya ketika pemilik itu keluar dari scope.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, dua variabel bisa menunjuk object yang sama tanpa compiler melacak siapa yang sedang membacanya. Di Go, pointer dan slice juga bisa membawa akses ke data yang sama. Di PHP, `&$variabel` membuat alias. Rust tetap memakai reference, tetapi compiler melacak peminjaman dan menolak kombinasi yang bisa membuat data berubah saat masih dibaca.
+:::
+
+## Tidak bisa mengubah lewat reference immutable
+
+Reference immutable hanya untuk membaca. Kode berikut mencoba mengubah `String` lewat `&String`:
+
+<RustPlayground
+  code={`fn main() {
+    let s = String::from("hello");
+
+    change(&s);
+}
+
+fn change(some_string: &String) {
+    some_string.push_str(", world");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mengubah data lewat reference immutable"
+/>
+
+Pesan compiler menyebut `cannot borrow *some_string as mutable`. Bagian help menyarankan `&mut String`. Reference immutable tidak memberi izin menulis, sama seperti variabel immutable.
+
+## Mutable reference
+
+Untuk mengubah data lewat pinjaman, pemilik dan reference harus mutable.
+
+<RustPlayground
+  code={`fn main() {
+    let mut s = String::from("hello");
+
+    change(&mut s);
+}
+
+fn change(some_string: &mut String) {
+    some_string.push_str(", world");
+}`}
+  filename="src/main.rs"
+  label="Mutable reference"
+/>
+
+`&mut s` memberi izin menulis. Signature `&mut String` juga memberi tahu pembaca bahwa fungsi ini akan mengubah nilai yang dipinjam.
+
+## Satu mutable reference
+
+Saat kamu punya mutable reference, tidak boleh ada reference lain ke nilai yang sama pada waktu bersamaan.
+
+<RustPlayground
+  code={`fn main() {
+    let mut s = String::from("hello");
+
+    let r1 = &mut s;
+    let r2 = &mut s;
+
+    println!("{r1}, {r2}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error dua mutable reference"
+/>
+
+Compiler melaporkan `cannot borrow s as mutable more than once at a time`. Baris `r1` adalah pinjaman pertama, `r2` adalah pinjaman kedua, dan `println!` memakai keduanya sehingga kedua pinjaman masih hidup.
+
+Aturan ini mencegah data race. Data race terjadi saat dua pointer mengakses data yang sama, minimal satu menulis, dan tidak ada sinkronisasi. Rust menolak bentuk kode itu sejak kompilasi.
+
+Kalau pinjaman tidak saling tumpang tindih, dua mutable reference tetap bisa dibuat:
+
+<RustPlayground
+  code={`fn main() {
+    let mut s = String::from("hello");
+
+    {
+        let r1 = &mut s;
+        println!("{r1}");
+    }
+
+    let r2 = &mut s;
+    println!("{r2}");
+}`}
+  filename="src/main.rs"
+  label="Mutable reference di scope terpisah"
+/>
+
+## Mutable dan immutable bersamaan
+
+Kamu juga tidak bisa mencampur mutable reference dengan immutable reference yang masih dipakai.
+
+<RustPlayground
+  code={`fn main() {
+    let mut s = String::from("hello");
+
+    let r1 = &s;
+    let r2 = &s;
+    let r3 = &mut s;
+
+    println!("{r1}, {r2}, and {r3}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mutable dan immutable reference bersamaan"
+/>
+
+Pesan `cannot borrow s as mutable because it is also borrowed as immutable` menunjukkan bahwa `r3` mencoba menulis saat `r1` dan `r2` masih membaca.
+
+Namun, umur reference berakhir pada penggunaan terakhirnya. Kode berikut boleh karena `r1` dan `r2` sudah selesai dipakai sebelum `r3` dibuat:
+
+<RustPlayground
+  code={`fn main() {
+    let mut s = String::from("hello");
+
+    let r1 = &s;
+    let r2 = &s;
+    println!("{r1} and {r2}");
+
+    let r3 = &mut s;
+    println!("{r3}");
+}`}
+  filename="src/main.rs"
+  label="Borrow berakhir setelah penggunaan terakhir"
+/>
+
+Ini disebut non-lexical lifetimes. Compiler melihat pemakaian sebenarnya, bukan hanya kurung kurawal.
+
+## Dangling reference
+
+Reference tidak boleh hidup lebih lama dari nilai yang dipinjam. Kode berikut mencoba mengembalikan reference ke `String` lokal:
+
+<RustPlayground
+  code={`fn main() {
+    let reference_to_nothing = dangle();
+}
+
+fn dangle() -> &String {
+    let s = String::from("hello");
+
+    &s
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error dangling reference"
+/>
+
+Compiler menolak dengan `missing lifetime specifier`. Bagian help menjelaskan bahwa tipe balik berisi borrowed value, tetapi tidak ada nilai yang bisa dipinjam setelah fungsi selesai. `s` di-drop saat `dangle` berakhir, jadi reference akan menunjuk memory yang sudah tidak valid.
+
+Solusinya adalah mengembalikan `String` langsung, sehingga ownership ikut pindah:
+
+<RustPlayground
+  code={`fn main() {
+    let string = no_dangle();
+    println!("{string}");
+}
+
+fn no_dangle() -> String {
+    let s = String::from("hello");
+    s
+}`}
+  filename="src/main.rs"
+  label="Mengembalikan String tanpa dangling reference"
+/>
+
+## Aturan reference
+
+- Pada satu waktu, kamu boleh punya satu mutable reference atau banyak immutable reference.
+- Reference harus selalu valid.
+
+Aturan ini yang membuat Rust bisa menjamin tidak ada data race pada kode yang lolos compiler.
+
+Di backend, aturan ini terasa saat handler dan helper membaca body request yang sama, saat state cache dipinjam untuk dibaca, dan saat worker perlu akses eksklusif untuk menulis. Kalau dua bagian kode perlu menulis state yang sama, solusinya bukan menghapus aturan borrow, melainkan memilih sinkronisasi seperti `Mutex` atau `RwLock` di bab concurrency.
+
+:::caution[Hati-hati]
+Kalau borrow checker menolak kode, jangan langsung memakai `clone`. Periksa dulu apakah pinjaman bisa dipersempit, dipisah ke scope lain, atau diganti dengan fungsi yang menerima reference.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa arti &s pada pemanggilan fungsi?',
+      options: [
+        'Membuat reference yang meminjam s tanpa mengambil ownership',
+        'Menyalin seluruh isi s',
+        'Memindahkan ownership s',
+        'Menghapus s setelah fungsi selesai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. & membuat reference borrow.',
+        'Salah. Reference tidak menyalin data heap.',
+        'Salah. Ownership tetap pada pemilik asli.',
+        'Salah. Borrow tidak menghapus pemilik.',
+      ],
+      explanation:
+        'Peminjam memakai data, tetapi pemilik tetap bertanggung jawab membersihkannya.',
+    },
+    {
+      question: 'Berapa mutable reference yang boleh aktif pada satu nilai?',
+      options: ['Satu', 'Dua', 'Sebanyak yang dibutuhkan', 'Tidak boleh ada'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Hanya satu mutable reference pada satu waktu.',
+        'Salah. Dua mutable reference bisa menyebabkan data race.',
+        'Salah. Jumlahnya dibatasi compiler.',
+        'Salah. Satu mutable reference diperbolehkan.',
+      ],
+      explanation:
+        'Aturan ini mencegah dua penulis mengubah data yang sama secara bersamaan.',
+    },
+    {
+      question: 'Mengapa dua immutable reference diperbolehkan?',
+      options: [
+        'Karena pembaca tidak mengubah data sehingga tidak mengganggu pembaca lain',
+        'Karena immutable reference selalu lebih cepat',
+        'Karena compiler menyalin data untuk setiap reference',
+        'Karena immutable reference tidak punya lifetime',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Banyak pembaca aman selama tidak ada penulis.',
+        'Salah. Kecepatan bukan alasan aturannya.',
+        'Salah. Reference tidak menyalin data.',
+        'Salah. Immutable reference tetap punya lifetime.',
+      ],
+      explanation:
+        'Aturan borrow memisahkan pembacaan bersamaan dari penulisan eksklusif.',
+    },
+    {
+      question: 'Apa masalah pada fungsi yang mengembalikan &String ke String lokal?',
+      options: [
+        'Reference akan menunjuk data yang sudah di-drop, sehingga dangling',
+        'String lokal otomatis menjadi static',
+        'Compiler akan memindahkan String ke heap',
+        'Tidak ada masalah, Rust mengizinkannya',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Nilai lokal di-drop saat fungsi selesai.',
+        'Salah. String lokal tidak menjadi static.',
+        'Salah. String sudah di heap, tetapi kepemilikannya tetap lokal.',
+        'Salah. Compiler menolak dengan lifetime error.',
+      ],
+      explanation:
+        'Rust memastikan reference tidak hidup lebih lama dari nilai yang dipinjam.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

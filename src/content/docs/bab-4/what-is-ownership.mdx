@@ -1,0 +1,246 @@
+---
+title: '4.1 Apa itu ownership'
+description: 'Scope, heap, move, clone, dan Copy dalam aturan ownership Rust.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Ownership adalah seperangkat aturan tentang siapa yang bertanggung jawab membersihkan sebuah nilai. Rust memakai aturan ini untuk mengelola memory tanpa garbage collector. Compiler memeriksa aturannya, dan program yang melanggar tidak akan dikompilasi.
+
+## Scope
+
+Scope adalah rentang program tempat sebuah nama valid. Variabel valid mulai dari deklarasi sampai akhir blok tempat ia berada.
+
+<RustPlayground
+  code={`fn main() {
+    {
+        let s = "hello";
+        println!("Di dalam scope: {s}");
+    }
+
+    // s tidak bisa dipakai di sini.
+}`}
+  filename="src/main.rs"
+  label="Scope variabel"
+/>
+
+String literal seperti `"hello"` disimpan langsung di binary. Nilainya immutable dan ukurannya diketahui saat kompilasi.
+
+## String dan heap
+
+`String` adalah teks yang bisa bertambah panjang. Isinya disimpan di heap karena ukurannya baru diketahui saat program berjalan.
+
+<RustPlayground
+  code={`fn main() {
+    let mut s = String::from("hello");
+    s.push_str(", world!");
+
+    println!("{s}");
+}`}
+  filename="src/main.rs"
+  label="String yang bisa diubah"
+/>
+
+`String` terdiri dari tiga bagian di stack: pointer ke data di heap, panjang, dan kapasitas. Data teksnya sendiri ada di heap. Saat `s` keluar dari scope, Rust memanggil `drop` dan memory heap itu dikembalikan ke allocator.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, Python, dan Go, memory biasanya dibersihkan garbage collector atau runtime. Kamu tidak menentukan kapan object dihapus. Di Rust, waktu drop ditentukan oleh scope dan ownership, lalu diperiksa compiler. PHP memakai reference counting dengan cycle collector; referensi `&$var` di PHP adalah alias ke variabel yang sama. Borrow Rust juga semacam pinjaman, tetapi compiler memeriksa umur dan aturan peminjamannya.
+:::
+
+## Move
+
+Menyalin sebuah `String` ke variabel lain tidak menyalin seluruh isi heap. Yang disalin adalah pointer, panjang, dan kapasitas di stack. Setelah assignment, variabel pertama tidak lagi valid.
+
+<RustPlayground
+  code={`fn main() {
+    let s1 = String::from("hello");
+    let s2 = s1;
+
+    println!("{s2}");
+}`}
+  filename="src/main.rs"
+  label="Memindahkan ownership String"
+/>
+
+Kode di atas berjalan karena hanya `s2` yang dipakai setelah move. Kalau `s1` dipakai lagi, compiler menolak:
+
+<RustPlayground
+  code={`fn main() {
+    let s1 = String::from("hello");
+    let s2 = s1;
+
+    println!("{s1}, world!");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error memakai nilai setelah move"
+/>
+
+Pesan compiler menyebut `borrow of moved value: s1`. Bagian `move occurs` menunjukkan baris `let s2 = s1;`, dan `value borrowed here after move` menunjukkan tempat kamu memakai `s1`. Rust sengaja membatalkan `s1` supaya tidak ada dua pemilik yang mencoba menghapus heap yang sama.
+
+Move juga terjadi saat nilai dikirim ke fungsi:
+
+<RustPlayground
+  code={`fn tampilkan(pesan: String) {
+    println!("{pesan}");
+}
+
+fn main() {
+    let pesan = String::from("halo dari handler");
+    tampilkan(pesan);
+
+    println!("{pesan}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error memakai String setelah dipindahkan ke fungsi"
+/>
+
+Fungsi `tampilkan` mengambil ownership `String`. Setelah pemanggilan, `main` tidak boleh memakai `pesan` lagi.
+
+## Clone
+
+Kalau kamu benar-benar butuh dua salinan data heap, gunakan `clone`. Clone eksplisit, jadi pembaca kode tahu ada penyalinan.
+
+<RustPlayground
+  code={`fn main() {
+    let s1 = String::from("hello");
+    let s2 = s1.clone();
+
+    println!("s1 = {s1}, s2 = {s2}");
+}`}
+  filename="src/main.rs"
+  label="Clone String secara eksplisit"
+/>
+
+Clone bisa mahal untuk data besar. Di backend, clone body request atau hasil query biasanya perlu alasan yang jelas. Kalau fungsi hanya membaca data, lebih baik meminjam dengan reference.
+
+## Copy
+
+Tipe sederhana yang ukurannya tetap dan seluruhnya disimpan di stack bisa mengimplementasikan trait `Copy`. Assignment pada tipe `Copy` menyalin nilainya, bukan memindahkannya.
+
+<RustPlayground
+  code={`fn main() {
+    let x = 5;
+    let y = x;
+
+    println!("x = {x}, y = {y}");
+}`}
+  filename="src/main.rs"
+  label="Integer memakai Copy"
+/>
+
+Integer, boolean, float, char, dan tuple yang seluruh isinya `Copy` tidak dipindahkan. `String` tidak `Copy` karena memiliki data heap.
+
+## Fungsi dan return value
+
+Ownership juga berpindah saat fungsi mengembalikan nilai.
+
+<RustPlayground
+  code={`fn buat_pesan() -> String {
+    let pesan = String::from("dari fungsi");
+    pesan
+}
+
+fn main() {
+    let pesan = buat_pesan();
+    println!("{pesan}");
+}`}
+  filename="src/main.rs"
+  label="Mengembalikan ownership dari fungsi"
+/>
+
+Nilai `pesan` dipindahkan keluar dari `buat_pesan` dan menjadi milik variabel di `main`. Tidak ada penyalinan heap.
+
+Buku juga menunjukkan cara mengembalikan ownership lewat tuple, misalnya `(String, usize)`. Itu bekerja, tetapi memaksa pemanggil menerima kembali nilai yang tadinya dikirim. Reference di halaman berikutnya menghindari upacara itu.
+
+## Kenapa ini penting untuk backend
+
+Bayangkan handler menerima body request sebagai `String`. Kalau handler meneruskan `String` ke fungsi lain, fungsi itu mengambil ownership. Kalau setelahnya handler masih membutuhkan body, ia harus meminjam (`&str`), mengembalikan nilai, atau clone dengan sadar. Compiler memaksa keputusan ini terlihat.
+
+:::caution[Hati-hati]
+Jangan menambahkan clone hanya untuk membuat compiler diam. Tanyakan dulu: apakah data ini benar-benar perlu dimiliki dua tempat? Kalau tidak, ubah fungsi agar menerima reference.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang terjadi pada s1 setelah let s2 = s1; untuk String?',
+      options: [
+        's1 tidak valid lagi karena nilainya dipindahkan ke s2',
+        's1 dan s2 sama-sama memiliki heap yang sama',
+        'Isi heap langsung dihapus',
+        's1 otomatis menjadi clone',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Assignment memindahkan ownership String.',
+        'Salah. Dua owner akan menimbulkan double free.',
+        'Salah. Heap baru dihapus saat owner yang valid keluar dari scope.',
+        'Salah. Clone harus ditulis eksplisit.',
+      ],
+      explanation:
+        'Rust menyalin pointer, panjang, dan kapasitas di stack, lalu membatalkan variabel lama.',
+    },
+    {
+      question: 'Kapan clone sebaiknya dipakai?',
+      options: [
+        'Saat dua pemilik benar-benar dibutuhkan dan biayanya dapat diterima',
+        'Setiap kali compiler memberi error borrow',
+        'Setiap kali fungsi menerima parameter',
+        'Saat ingin menghindari semua reference',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Clone adalah keputusan sadar untuk menyalin data heap.',
+        'Salah. Clone bisa menutupi masalah desain dan menambah biaya.',
+        'Salah. Parameter biasanya cukup meminjam.',
+        'Salah. Menghindari reference akan membuat kode penuh clone.',
+      ],
+      explanation:
+        'Clone berguna, tetapi sebaiknya bukan reaksi otomatis terhadap borrow checker.',
+    },
+    {
+      question: 'Mengapa integer bisa dipakai setelah let y = x;?',
+      options: [
+        'Karena integer mengimplementasikan Copy dan disalin di stack',
+        'Karena integer selalu disimpan di heap',
+        'Karena compiler membuat garbage collector',
+        'Karena integer tidak punya owner',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Tipe Copy disalin, bukan dipindahkan.',
+        'Salah. Integer sederhana disimpan di stack.',
+        'Salah. Rust tidak memakai garbage collector.',
+        'Salah. Integer tetap punya owner.',
+      ],
+      explanation:
+        'Copy membuat assignment menyalin nilai secara trivial, sehingga kedua variabel tetap valid.',
+    },
+    {
+      question: 'Apa pesan utama compiler saat memakai String setelah dipindahkan?',
+      options: [
+        'borrow of moved value',
+        'cannot find function',
+        'missing lifetime specifier',
+        'non-exhaustive patterns',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler menyebut nilai yang dipinjam setelah move.',
+        'Salah. Itu error nama fungsi yang tidak ada.',
+        'Salah. Itu error lifetime, bukan move.',
+        'Salah. Itu error match yang belum lengkap.',
+      ],
+      explanation:
+        'Error E0382 muncul karena variabel lama sudah tidak memiliki nilai setelah move.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

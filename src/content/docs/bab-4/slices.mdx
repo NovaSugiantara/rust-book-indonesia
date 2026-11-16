@@ -1,0 +1,216 @@
+---
+title: '4.3 Slice'
+description: 'String slice, array slice, dan cara meminjam sebagian data tanpa menyalin.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Slice adalah reference ke sebagian data yang berurutan. Slice tidak memiliki data itu. Ia hanya menunjuk awal dan panjang bagian yang dipinjam.
+
+## Masalah indeks tanpa slice
+
+Misalkan kita ingin mengambil kata pertama dari sebuah kalimat. Versi pertama mengembalikan indeks akhir kata:
+
+<RustPlayground
+  code={`fn first_word(s: &String) -> usize {
+    let bytes = s.as_bytes();
+
+    for (i, &item) in bytes.iter().enumerate() {
+        if item == b' ' {
+            return i;
+        }
+    }
+
+    s.len()
+}
+
+fn main() {
+    let kalimat = String::from("halo dunia");
+    let akhir = first_word(&kalimat);
+
+    println!("Kata pertama berakhir di indeks {akhir}");
+}`}
+  filename="src/main.rs"
+  label="Mencari akhir kata pertama dengan indeks"
+/>
+
+Kode ini berjalan, tetapi indeks tidak terikat pada isi `String`. Kalau `kalimat` diubah, indeks lama bisa menunjuk posisi yang sudah tidak bermakna. Compiler tidak bisa menolong karena `usize` tidak tahu apa pun tentang `String` asalnya.
+
+## String slice
+
+String slice bertipe `&str`. Ia menunjuk sebagian `String` tanpa menyalin isinya.
+
+<RustPlayground
+  code={`fn first_word(s: &str) -> &str {
+    let bytes = s.as_bytes();
+
+    for (i, &item) in bytes.iter().enumerate() {
+        if item == b' ' {
+            return &s[0..i];
+        }
+    }
+
+    &s[..]
+}
+
+fn main() {
+    let kalimat = String::from("halo dunia");
+    let kata = first_word(&kalimat);
+
+    println!("Kata pertama: {kata}");
+}`}
+  filename="src/main.rs"
+  label="String slice untuk kata pertama"
+/>
+
+Parameter `&str` lebih umum daripada `&String`. Kamu bisa mengirim `&String`, potongan `String`, atau string literal. Ini menghindari fungsi yang terlalu terikat pada satu tipe pemilik. Di handler backend, `&str` sering dipakai untuk path, query, atau nama field yang hanya perlu dibaca tanpa membuat `String` baru.
+
+Rentang slice memakai `awal..akhir`, dengan `akhir` tidak disertakan. Beberapa bentuk singkatnya:
+
+```rust
+let s = String::from("hello");
+
+let a = &s[0..2];
+let b = &s[..2];
+let c = &s[3..];
+let d = &s[..];
+```
+
+`&s[..]` mengambil seluruh string. `&s[3..]` mengambil dari indeks 3 sampai akhir. Untuk string, indeks harus berada di batas karakter UTF-8. Kalau kamu memotong di tengah karakter multibyte, program akan panic saat runtime.
+
+## Slice menjaga pinjaman
+
+Kalau slice masih dipakai, pemilik tidak boleh diubah secara mutable. Kode berikut mencoba mengosongkan `String` saat slice masih hidup:
+
+<RustPlayground
+  code={`fn first_word(s: &str) -> &str {
+    let bytes = s.as_bytes();
+
+    for (i, &item) in bytes.iter().enumerate() {
+        if item == b' ' {
+            return &s[0..i];
+        }
+    }
+
+    &s[..]
+}
+
+fn main() {
+    let mut s = String::from("hello world");
+
+    let word = first_word(&s);
+
+    s.clear();
+
+    println!("the first word is: {word}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mengubah String saat slice masih dipakai"
+/>
+
+Compiler melaporkan `cannot borrow s as mutable because it is also borrowed as immutable`. `word` meminjam `s` secara immutable, dan `s.clear()` membutuhkan mutable borrow. Keduanya tidak boleh hidup bersamaan. Ini mencegah slice menunjuk isi yang sudah dihapus.
+
+## Slice array
+
+Slice juga bekerja pada array dan collection lain. Tipe `&[T]` menunjuk sebagian elemen.
+
+<RustPlayground
+  code={`fn main() {
+    let a = [1, 2, 3, 4, 5];
+    let slice = &a[1..3];
+
+    assert_eq!(slice, &[2, 3]);
+    println!("{slice:?}");
+}`}
+  filename="src/main.rs"
+  label="Slice pada array"
+/>
+
+Slice array berguna saat fungsi hanya perlu membaca sebagian data, misalnya beberapa item pesanan dari array yang lebih besar.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, `slice` mengembalikan string atau array baru. Di PHP, `substr` mengembalikan string baru. Di Go, slicing string atau slice membuat descriptor yang menunjuk data yang sama. Rust memilih pendekatan pinjaman seperti Go, tetapi compiler ikut memeriksa apakah pemiliknya diubah saat slice masih dipakai.
+:::
+
+:::tip[Tips]
+Untuk parameter fungsi yang hanya membaca teks, gunakan `&str` alih-alih `&String`. Untuk data berurutan yang hanya dibaca, gunakan `&[T]`. Ini membuat fungsi lebih fleksibel dan menghindari clone.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa tipe dari potongan &s[0..5] pada String?',
+      options: ['&str', 'String', '&String', 'char'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Potongan String menghasilkan &str.',
+        'Salah. String memiliki data sendiri; slice hanya meminjam.',
+        'Salah. &String adalah reference ke seluruh String.',
+        'Salah. char adalah satu karakter Unicode.',
+      ],
+      explanation:
+        '&str adalah string slice, reference ke sebagian teks tanpa ownership.',
+    },
+    {
+      question: 'Mengapa fungsi lebih baik menerima &str daripada &String?',
+      options: [
+        'Karena &str menerima String, slice, dan string literal tanpa menyalin',
+        'Karena &str selalu lebih cepat',
+        'Karena &String tidak bisa dibaca',
+        'Karena &str menyimpan data di stack',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. &str lebih umum dan tetap berupa pinjaman.',
+        'Salah. Kecepatan bukan alasan utama di sini.',
+        'Salah. &String bisa dibaca.',
+        'Salah. Data String tetap di heap; slice hanya descriptor.',
+      ],
+      explanation:
+        'Parameter &str membuat API lebih fleksibel tanpa mengambil ownership.',
+    },
+    {
+      question: 'Apa yang terjadi kalau s.clear() dipanggil saat slice word masih dipakai?',
+      options: [
+        'Compiler menolak karena mutable borrow bertabrakan dengan immutable borrow',
+        'Slice otomatis diperbarui',
+        'String otomatis di-clone',
+        'Program berjalan dan slice menjadi kosong',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Borrow checker menolak perubahan saat slice masih meminjam.',
+        'Salah. Slice tidak diperbarui otomatis.',
+        'Salah. Tidak ada clone otomatis.',
+        'Salah. Kode tidak dikompilasi.',
+      ],
+      explanation:
+        'Slice menjaga data tetap valid selama pinjaman masih digunakan.',
+    },
+    {
+      question: 'Apa arti rentang 1..3 pada array?',
+      options: [
+        'Elemen indeks 1 dan 2',
+        'Elemen indeks 1, 2, dan 3',
+        'Elemen indeks 0 dan 1',
+        'Tiga elemen mulai indeks 1',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Batas akhir 3 tidak disertakan.',
+        'Salah. Indeks 3 tidak termasuk.',
+        'Salah. Rentang dimulai dari 1.',
+        'Salah. Hanya dua elemen.',
+      ],
+      explanation:
+        'Rentang .. berhenti sebelum batas akhir. Gunakan ..= jika ingin batas akhir ikut.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

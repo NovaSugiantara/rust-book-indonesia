@@ -53,7 +53,7 @@ Kasir Warung dimulai sebagai CLI di Bab 1 dan tumbuh menjadi layanan backend. Se
 
 Aturan peta:
 
-- Jangan menulis bab 4 sampai 21 sebelum ada tugas khusus untuk bab itu.
+- Bab 4 sampai 6 sudah ditulis. Jangan menulis bab 7 sampai 21 sebelum ada tugas khusus untuk bab itu.
 - Setiap bab yang menyentuh Kasir Warung harus meninggalkan kode yang bisa dijalankan dan output contoh yang benar.
 - Jangan memakai fitur dari bab yang belum diajarkan tanpa penjelasan singkat. Kalau terpaksa, jelaskan alasannya di callout.
 - Bab 4 dan 5 mengubah cara data transaksi disimpan. Jangan mempertahankan array harga dari Bab 3 kalau struct sudah tersedia.
@@ -149,6 +149,24 @@ src/
 │   │   ├── fungsi.mdx
 │   │   ├── komentar.mdx
 │   │   ├── control-flow.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-4/
+│   │   ├── index.mdx
+│   │   ├── what-is-ownership.mdx
+│   │   ├── references-borrowing.mdx
+│   │   ├── slices.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-5/
+│   │   ├── index.mdx
+│   │   ├── defining-structs.mdx
+│   │   ├── example-structs.mdx
+│   │   ├── method-syntax.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-6/
+│   │   ├── index.mdx
+│   │   ├── defining-enums.mdx
+│   │   ├── match.mdx
+│   │   ├── if-let.mdx
 │   │   └── studi-kasus.mdx
 │   ├── capstone/
 │   │   ├── index.mdx
@@ -540,6 +558,128 @@ Kontrak setelah Bab 3:
 - Batas tiga item berasal dari panjang array tetap. Bab 8 akan menggantinya dengan `Vec`.
 - Format mata uang masih sederhana, yaitu `Rp` diikuti angka tanpa pemisah ribuan.
 - Tipe `jumlah_barang` berubah dari `u32` di Bab 2 menjadi `usize` di Bab 3 karena dipakai sebagai indeks array.
+
+### Keadaan setelah Bab 4
+
+Bab 4 menambahkan nama pelanggan sebagai `String` dan mengubah fungsi baca menjadi peminjaman. `cetak_header` menerima `&str`, sedangkan `hitung_subtotal` menerima dua slice `&[u32]`. Array harga dan jumlah tetap dimiliki `main`; tidak ada clone.
+
+```rust
+fn cetak_header(nama: &str, jumlah_barang: usize) {
+    // mencetak header dan nama pelanggan
+}
+
+fn hitung_subtotal(harga: &[u32], jumlah: &[u32]) -> u32 {
+    let mut subtotal = 0;
+    for i in 0..harga.len() {
+        subtotal += harga[i] * jumlah[i];
+    }
+    subtotal
+}
+```
+
+Pemanggilan di `main` memakai potongan array:
+
+```rust
+let subtotal = hitung_subtotal(
+    &daftar_harga[..jumlah_barang],
+    &daftar_jumlah[..jumlah_barang],
+);
+```
+
+Kontrak setelah Bab 4:
+
+- Nama pelanggan dimiliki `main` sebagai `String`, lalu dipinjam sebagai `&str`.
+- Data item masih berupa dua array: `daftar_harga` dan `daftar_jumlah`.
+- Fungsi hanya membaca data dan tidak mengambil ownership.
+- Tidak ada clone otomatis. Clone hanya boleh muncul kalau ada dua pemilik independen.
+- Belum ada struct. Bab 5 akan mengganti array terpisah dengan struct.
+- Batas 3 item masih berlaku.
+
+### Keadaan setelah Bab 5
+
+Bab 5 mengganti array terpisah dengan struct. Data item sekarang dimiliki oleh `ItemPesanan`, dan `Transaksi` memiliki pelanggan, array tiga item, serta jumlah item yang dipakai.
+
+```rust
+#[derive(Debug)]
+struct ItemPesanan {
+    nama: String,
+    harga: u32,
+    jumlah: u32,
+}
+
+impl ItemPesanan {
+    fn baru(nama: &str, harga: u32, jumlah: u32) -> Self;
+    fn subtotal(&self) -> u32;
+}
+
+#[derive(Debug)]
+struct Transaksi {
+    pelanggan: String,
+    items: [ItemPesanan; 3],
+    jumlah_item: usize,
+}
+
+impl Transaksi {
+    fn baru(pelanggan: String, items: [ItemPesanan; 3], jumlah_item: usize) -> Self;
+    fn subtotal(&self) -> u32;
+    fn diskon(&self) -> u32;
+    fn total(&self) -> u32;
+    fn cetak(&self);
+}
+```
+
+Kontrak setelah Bab 5:
+
+- `ItemPesanan::baru` adalah associated function dan memiliki `nama` sebagai `String`.
+- `Transaksi` memiliki item dan pelanggan; tidak ada array harga terpisah.
+- Subtotal dihitung dengan method dan slice `self.items[..self.jumlah_item]`.
+- Diskon tetap 10 persen saat subtotal minimal 40.000.
+- Array masih berukuran tiga karena `Vec` baru dibahas di Bab 8.
+- Belum ada status pesanan, metode pembayaran, atau `Result`.
+
+### Keadaan setelah Bab 6
+
+Bab 6 menambahkan status pesanan dan metode pembayaran sebagai enum. `Transaksi` sekarang memiliki status, metode bayar opsional, dan diskon opsional.
+
+```rust
+enum StatusPesanan {
+    Baru,
+    Diproses,
+    Selesai,
+    Dibatalkan,
+}
+
+enum MetodeBayar {
+    Tunai,
+    Qris,
+    Transfer,
+}
+
+struct Transaksi {
+    pelanggan: String,
+    items: [ItemPesanan; 3],
+    jumlah_item: usize,
+    status: StatusPesanan,
+    metode_bayar: Option<MetodeBayar>,
+    diskon: Option<u32>,
+}
+```
+
+Perilaku utama:
+
+- `StatusPesanan::label` memakai `match` untuk semua variant.
+- `Transaksi::bayar` mengisi `metode_bayar` dan mengubah status menjadi `Selesai`.
+- `hitung_diskon` mengembalikan `Option<u32>`; `None` berarti tidak ada diskon.
+- `cetak_status` memakai `let else` untuk menangani transaksi yang belum dibayar.
+- `total` memakai `match` pada `Option<u32>`.
+
+Kontrak setelah Bab 6:
+
+- Status dan metode bayar tidak boleh berupa string bebas.
+- Diskon 10 persen tetap diberikan saat subtotal minimal 40.000.
+- Array tiga item masih dipakai; `Vec` baru dibahas di Bab 8.
+- Belum ada `Result` atau error handling untuk pembayaran.
+- Metode bayar masih dipilih di kode, belum dibaca dari input.
 
 ### Aturan untuk bab berikutnya
 

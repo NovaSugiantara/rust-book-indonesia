@@ -1,0 +1,315 @@
+---
+title: '5.1 Mendefinisikan dan membuat instance'
+description: 'Field struct, instance, mutability, field init shorthand, update syntax, tuple struct, dan unit-like struct.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Struct mendefinisikan bentuk data. Setelah struct didefinisikan, kita membuat instance dengan mengisi setiap field.
+
+## Mendefinisikan struct
+
+Struct `User` menyimpan data akun. Setiap field punya nama dan tipe.
+
+<RustPlayground
+  code={`struct User {
+    active: bool,
+    username: String,
+    email: String,
+    sign_in_count: u64,
+}
+
+fn main() {
+    let user1 = User {
+        active: true,
+        username: String::from("someusername123"),
+        email: String::from("someone@example.com"),
+        sign_in_count: 1,
+    };
+
+    println!("{} {}", user1.username, user1.email);
+}`}
+  filename="src/main.rs"
+  label="Mendefinisikan dan membuat instance struct"
+/>
+
+Urutan field saat membuat instance tidak harus sama dengan urutan definisi. Yang penting nama field-nya cocok.
+
+## Mutability instance
+
+Rust tidak mengizinkan hanya satu field yang mutable. Kalau instance perlu diubah, seluruh instance harus mutable.
+
+<RustPlayground
+  code={`struct User {
+    active: bool,
+    username: String,
+    email: String,
+    sign_in_count: u64,
+}
+
+fn main() {
+    let mut user1 = User {
+        active: true,
+        username: String::from("someusername123"),
+        email: String::from("someone@example.com"),
+        sign_in_count: 1,
+    };
+
+    user1.email = String::from("anotheremail@example.com");
+    println!("{}", user1.email);
+}`}
+  filename="src/main.rs"
+  label="Mengubah field pada instance mutable"
+/>
+
+## Field init shorthand
+
+Kalau nama variabel sama dengan nama field, kamu bisa menulis field sekali saja.
+
+<RustPlayground
+  code={`struct User {
+    active: bool,
+    username: String,
+    email: String,
+    sign_in_count: u64,
+}
+
+fn build_user(email: String, username: String) -> User {
+    User {
+        active: true,
+        username,
+        email,
+        sign_in_count: 1,
+    }
+}
+
+fn main() {
+    let user = build_user(
+        String::from("someone@example.com"),
+        String::from("someusername123"),
+    );
+
+    println!("{}", user.username);
+}`}
+  filename="src/main.rs"
+  label="Field init shorthand"
+/>
+
+`username` dan `email` adalah singkatan dari `username: username` dan `email: email`.
+
+## Struct update syntax
+
+Struct update syntax membuat instance baru dari sebagian besar nilai instance lain.
+
+<RustPlayground
+  code={`struct User {
+    active: bool,
+    username: String,
+    email: String,
+    sign_in_count: u64,
+}
+
+fn main() {
+    let user1 = User {
+        active: true,
+        username: String::from("someusername123"),
+        email: String::from("someone@example.com"),
+        sign_in_count: 1,
+    };
+
+    let user2 = User {
+        email: String::from("another@example.com"),
+        ..user1
+    };
+
+    println!("{} {}", user2.email, user2.username);
+}`}
+  filename="src/main.rs"
+  label="Struct update syntax"
+/>
+
+Tanda `..user1` mengambil field yang belum ditulis dari `user1`. Ini memindahkan `String` dari `user1`. Karena itu, setelah update syntax, `user1` tidak bisa dipakai sebagai nilai utuh.
+
+<RustPlayground
+  code={`struct User {
+    active: bool,
+    username: String,
+    email: String,
+    sign_in_count: u64,
+}
+
+fn main() {
+    let user1 = User {
+        active: true,
+        username: String::from("someusername123"),
+        email: String::from("someone@example.com"),
+        sign_in_count: 1,
+    };
+
+    let user2 = User {
+        email: String::from("another@example.com"),
+        ..user1
+    };
+
+    println!("{}", user1.username);
+    println!("{}", user2.username);
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error memakai struct setelah field dipindahkan"
+/>
+
+Compiler menyebut `borrow of moved value: user1`. Field `username` sudah dipindahkan ke `user2`. Kalau kamu hanya ingin menyalin data, clone field secara eksplisit sebelum update syntax.
+
+## Tuple struct
+
+Tuple struct memberi nama pada tuple, sehingga tipe berbeda meskipun isinya sama.
+
+<RustPlayground
+  code={`struct Color(i32, i32, i32);
+struct Point(i32, i32, i32);
+
+fn main() {
+    let black = Color(0, 0, 0);
+    let origin = Point(0, 0, 0);
+
+    println!("{} {}", black.0, origin.0);
+}`}
+  filename="src/main.rs"
+  label="Tuple struct"
+/>
+
+`Color` dan `Point` sama-sama berisi tiga `i32`, tetapi keduanya tipe berbeda. Fungsi yang menerima `Color` tidak bisa diberi `Point`.
+
+## Unit-like struct
+
+Struct tanpa field disebut unit-like struct. Ini berguna saat kamu hanya perlu sebuah tipe untuk implementasi trait.
+
+<RustPlayground
+  code={`struct AlwaysEqual;
+
+fn main() {
+    let subject = AlwaysEqual;
+    println!("Unit-like struct dibuat.");
+}`}
+  filename="src/main.rs"
+  label="Unit-like struct"
+/>
+
+## Struct yang menyimpan reference
+
+Struct biasanya memiliki datanya sendiri. Kalau kamu mencoba menyimpan `&str` tanpa lifetime, compiler menolak:
+
+<RustPlayground
+  code={`struct User {
+    active: bool,
+    username: &str,
+    email: &str,
+    sign_in_count: u64,
+}
+
+fn main() {
+    let user1 = User {
+        active: true,
+        username: "someusername123",
+        email: "someone@example.com",
+        sign_in_count: 1,
+    };
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error struct menyimpan reference tanpa lifetime"
+/>
+
+Compiler meminta lifetime specifier. Untuk sekarang, gunakan tipe yang dimiliki seperti `String`. Lifetime pada struct dibahas di Bab 10.
+
+:::note[Kalau di bahasa lain]
+Struct mirip interface atau type di TypeScript, struct di Go, class data di PHP, dan dataclass di Python. Bedanya, Rust memisahkan definisi data dari method, dan setiap instance harus mengisi semua field. Tidak ada default field atau constructor otomatis kecuali kamu menulisnya sendiri.
+:::
+
+:::caution[Hati-hati]
+Update syntax memindahkan field, bukan menyalin. Kalau instance asal masih dibutuhkan, clone field yang diperlukan atau buat instance baru secara eksplisit.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang harus mutable agar satu field struct bisa diubah?',
+      options: [
+        'Seluruh instance struct',
+        'Hanya field yang diubah',
+        'Nama tipe struct',
+        'File Cargo.toml',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rust tidak mendukung mutability per field.',
+        'Salah. Field tidak punya penanda mut sendiri.',
+        'Salah. Nama tipe bukan nilai yang diubah.',
+        'Salah. Cargo.toml tidak mengatur mutability field.',
+      ],
+      explanation:
+        'Instance harus dideklarasikan dengan let mut agar field bisa diubah.',
+    },
+    {
+      question: 'Apa arti username, pada pembuatan struct?',
+      options: [
+        'Shorthand untuk username: username',
+        'Field baru bernama kosong',
+        'Nilai default untuk username',
+        'Reference ke username',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Nama field dan variabel sama, jadi cukup ditulis sekali.',
+        'Salah. Nama field tetap username.',
+        'Salah. Tidak ada nilai default.',
+        'Salah. Ini bukan reference.',
+      ],
+      explanation:
+        'Field init shorthand mengurangi pengulangan nama yang sama.',
+    },
+    {
+      question: 'Apa yang dilakukan ..user1 pada struct update syntax?',
+      options: [
+        'Mengisi field yang tidak ditulis dari user1, sambil memindahkan nilainya',
+        'Menyalin seluruh user1 tanpa memindahkan apa pun',
+        'Membuat reference ke user1',
+        'Mengabaikan field yang tidak ditulis',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Field yang tersisa diambil dari user1 dan bisa dipindahkan.',
+        'Salah. String di user1 dipindahkan, bukan disalin otomatis.',
+        'Salah. Update syntax membuat instance baru.',
+        'Salah. Field yang tidak ditulis harus diisi dari instance sumber.',
+      ],
+      explanation:
+        'Setelah update syntax, field yang dipindahkan tidak lagi bisa dipakai dari instance asal.',
+    },
+    {
+      question: 'Mengapa struct dengan field &str butuh lifetime?',
+      options: [
+        'Karena struct harus tahu berapa lama reference itu valid',
+        'Karena &str tidak bisa disimpan di struct',
+        'Karena struct tidak boleh berisi teks',
+        'Karena String tidak punya lifetime',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler perlu memastikan reference hidup selama struct.',
+        'Salah. &str bisa disimpan kalau lifetime ditulis.',
+        'Salah. Struct boleh berisi teks.',
+        'Salah. String memiliki data sendiri.',
+      ],
+      explanation:
+        'Lifetime memastikan data yang dipinjam tidak hilang saat struct masih dipakai.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

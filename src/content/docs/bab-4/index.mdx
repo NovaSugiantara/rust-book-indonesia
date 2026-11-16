@@ -1,0 +1,92 @@
+---
+title: 'Bab 4: Memahami ownership'
+description: 'Aturan ownership, borrow, reference, dan slice di Rust, dengan contoh dari kode backend.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Bab ini adalah inti Rust. Kalau kamu hanya membawa satu konsep dari bahasa ini ke pekerjaan backend, bawa aturan ownership dan borrow. Aturan ini menjelaskan kenapa Rust bisa mengelola memory tanpa garbage collector, kenapa data berpindah kepemilikan, dan kenapa compiler menolak beberapa program yang terlihat wajar di bahasa lain.
+
+Untuk pembaca yang datang dari JavaScript, Go, atau Python, bagian tersulit biasanya bukan sintaks. Bagian tersulit adalah membiasakan diri bahwa sebuah nilai punya satu pemilik, dan bahwa meminjam nilai punya aturan. Di backend, aturan ini muncul saat request masuk, saat data dimasukkan ke cache, saat worker mengambil antrean, dan saat response dibentuk.
+
+## Tiga aturan
+
+1. Setiap nilai di Rust punya satu owner.
+2. Hanya boleh ada satu owner pada satu waktu.
+3. Saat owner keluar dari scope, nilainya di-drop.
+
+Aturan ini diperiksa compiler. Tidak ada runtime garbage collector yang berjalan di belakang layar.
+
+## Urutan bab
+
+1. [Apa itu ownership](what-is-ownership/) membahas scope, heap, move, clone, dan Copy.
+2. [Reference dan borrowing](references-borrowing/) membahas `&`, `&mut`, dan aturan pinjaman.
+3. [Slice](slices/) membahas `&str` dan `&[T]`.
+4. [Studi kasus: Kasir Warung](studi-kasus/) memakai borrow dan slice pada struk.
+
+:::note[Kenapa begini?]
+Compiler memeriksa ownership saat kompilasi, bukan saat program berjalan. Karena itu, bug seperti use-after-free atau double free tidak perlu ditemukan lewat test produksi. Compiler menolak kode yang melanggar aturan sebelum binary dibuat.
+:::
+
+:::tip[Tips]
+Saat borrow checker menolak kode, jangan langsung menambahkan `.clone()`. Baca dulu nilai mana yang dipinjam, siapa pemiliknya, dan berapa lama pinjaman itu dipakai. Clone adalah pilihan terakhir yang disengaja, bukan solusi otomatis.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Berapa owner yang boleh dimiliki satu nilai pada satu waktu?',
+      options: ['Satu', 'Dua', 'Sebanyak yang dibutuhkan', 'Tidak ada'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Satu nilai punya satu owner pada satu waktu.',
+        'Salah. Dua owner akan membuat keputusan drop menjadi ambigu.',
+        'Salah. Ownership tidak dibagi bebas tanpa mekanisme khusus seperti reference counting.',
+        'Salah. Setiap nilai punya owner selama masih hidup.',
+      ],
+      explanation:
+        'Aturan satu owner mencegah double free dan membuat waktu drop bisa ditentukan compiler.',
+    },
+    {
+      question: 'Apa yang terjadi saat owner keluar dari scope?',
+      options: [
+        'Nilainya di-drop dan memory-nya dibersihkan',
+        'Nilainya disalin ke heap',
+        'Program panic',
+        'Nilainya menjadi milik garbage collector',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Fungsi drop dipanggil saat owner keluar dari scope.',
+        'Salah. Tidak ada penyalinan otomatis ke heap saat scope berakhir.',
+        'Salah. Drop adalah pembersihan normal, bukan panic.',
+        'Salah. Rust tidak memakai garbage collector runtime.',
+      ],
+      explanation:
+        'Drop adalah cara Rust mengembalikan memory dan resource lain secara otomatis.',
+    },
+    {
+      question: 'Mengapa Rust tidak membutuhkan garbage collector untuk kepemilikan biasa?',
+      options: [
+        'Karena compiler memeriksa owner dan waktu hidup nilai',
+        'Karena Rust tidak pernah mengalokasikan memory di heap',
+        'Karena semua nilai disimpan di stack',
+        'Karena program Rust selalu berjalan di satu thread',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler memakai aturan ownership untuk menentukan kapan nilai di-drop.',
+        'Salah. String dan Vec memakai heap.',
+        'Salah. Nilai yang ukurannya tidak diketahui saat kompilasi disimpan di heap.',
+        'Salah. Rust mendukung banyak thread.',
+      ],
+      explanation:
+        'Pemeriksaan dilakukan saat kompilasi. Tidak ada proses pemindaian memory saat runtime.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

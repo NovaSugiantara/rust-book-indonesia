@@ -1,0 +1,296 @@
+---
+title: '4.4 Studi kasus: Kasir Warung'
+description: 'Memakai String, borrow, dan slice pada struk Kasir Warung tanpa clone berlebihan.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Setelah Bab 3, Kasir Warung punya perhitungan total tetapi masih menerima array secara utuh. Di bab ini kita menambahkan nama pelanggan sebagai `String`, lalu mengubah fungsi perhitungan agar meminjam data dengan `&str` dan slice.
+
+## Dari array ke pinjaman
+
+Bab 3 memakai fungsi `hitung_subtotal(harga: u32, jumlah: u32)`. Di sini kita memakai slice agar satu fungsi bisa menjumlahkan beberapa item sekaligus tanpa memiliki array-nya.
+
+<StudyCase title="Kasir Warung: struk dengan nama pelanggan" intro="Menambahkan String dan slice, lalu memastikan data asli tetap bisa dipakai setelah fungsi selesai.">
+  <StudyCaseStep
+    title="Tambahkan nama pelanggan"
+    goal="Menyimpan nama pelanggan sebagai String dan mencetaknya lewat &str."
+  >
+    Nama pelanggan dimiliki oleh `main`. Fungsi header hanya meminjam nama itu. Setelah header dicetak, `main` masih bisa memakai nama yang sama untuk ucapan terima kasih.
+
+    ```rust
+    fn cetak_header(nama: &str, jumlah_barang: usize) {
+        println!("========================================");
+        println!("           KASIR WARUNG BU SRI");
+        println!("        Jl. Melati No. 12, Bandung");
+        println!("Pelanggan: {nama}");
+        println!("Jumlah barang: {jumlah_barang}");
+        println!("========================================");
+    }
+    ```
+
+    <Fragment slot="hint">
+      Parameter `&str` menerima `&String` lewat deref coercion, jadi kamu tidak perlu menulis `&String`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Di `main`, buat `let nama_pelanggan = String::from("Bu Sri");`, lalu panggil `cetak_header(&nama_pelanggan, jumlah_barang);`. Setelah itu `nama_pelanggan` masih valid untuk `println!("Terima kasih, {nama_pelanggan}.");`.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Ubah perhitungan memakai slice"
+    goal="Menjumlahkan hanya item yang dipilih dengan &[u32]."
+  >
+    Ganti fungsi subtotal agar menerima dua slice. Pemanggil mengirim potongan array sesuai jumlah barang yang dipilih.
+
+    ```rust
+    fn hitung_subtotal(harga: &[u32], jumlah: &[u32]) -> u32 {
+        let mut subtotal = 0;
+
+        for i in 0..harga.len() {
+            subtotal += harga[i] * jumlah[i];
+        }
+
+        subtotal
+    }
+    ```
+
+    <Fragment slot="hint">
+      Potongan array dibuat dengan rentang, misalnya `&daftar_harga[..jumlah_barang]`. Batas `jumlah_barang` tidak disertakan.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Panggil `hitung_subtotal(&daftar_harga[..jumlah_barang], &daftar_jumlah[..jumlah_barang])`. Fungsi hanya membaca slice, jadi array asli tetap dimiliki `main`.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Jalankan dan periksa ownership"
+    goal="Memastikan nama dan array tetap valid setelah dipinjam."
+  >
+    Jalankan program. Setelah header dan total tercetak, nama pelanggan masih bisa dipakai. Tidak ada clone yang diperlukan karena semua fungsi hanya membaca.
+
+    <RustPlayground
+      code={`fn cetak_header(nama: &str, jumlah_barang: usize) {
+    println!("========================================");
+    println!("           KASIR WARUNG BU SRI");
+    println!("        Jl. Melati No. 12, Bandung");
+    println!("Pelanggan: {nama}");
+    println!("Jumlah barang: {jumlah_barang}");
+    println!("========================================");
+}
+
+fn hitung_subtotal(harga: &[u32], jumlah: &[u32]) -> u32 {
+    let mut subtotal = 0;
+
+    for i in 0..harga.len() {
+        subtotal += harga[i] * jumlah[i];
+    }
+
+    subtotal
+}
+
+fn hitung_diskon(subtotal: u32) -> u32 {
+    if subtotal >= 40_000 {
+        subtotal * 10 / 100
+    } else {
+        0
+    }
+}
+
+fn main() {
+    let nama_pelanggan = String::from("Bu Sri");
+    let jumlah_barang: usize = 3;
+    let daftar_harga = [12_000, 8_000, 15_000];
+    let daftar_jumlah = [1, 2, 1];
+
+    cetak_header(&nama_pelanggan, jumlah_barang);
+
+    let subtotal = hitung_subtotal(
+        &daftar_harga[..jumlah_barang],
+        &daftar_jumlah[..jumlah_barang],
+    );
+    let diskon = hitung_diskon(subtotal);
+    let total = subtotal - diskon;
+
+    println!("Subtotal: Rp{subtotal}");
+    println!("Diskon:   Rp{diskon}");
+    println!("Total:    Rp{total}");
+    println!("Terima kasih, {nama_pelanggan}.");
+}`}
+      filename="src/main.rs"
+      label="Struk dengan String dan slice"
+    />
+
+    <Fragment slot="hint">
+      Perhatikan bahwa `cetak_header` dan `hitung_subtotal` tidak mengembalikan nilai yang dipinjam. Mereka hanya membaca.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Output menampilkan nama pelanggan, subtotal, diskon, total, dan ucapan terima kasih. `nama_pelanggan` tetap dimiliki `main` sepanjang program.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Kode lokal lengkap
+
+Versi lokal tetap membaca jumlah barang dari terminal. Bagian input sama dengan Bab 3, lalu data dipinjam ke fungsi header dan subtotal.
+
+```rust
+use std::io;
+
+fn cetak_header(nama: &str, jumlah_barang: usize) {
+    println!("========================================");
+    println!("           KASIR WARUNG BU SRI");
+    println!("        Jl. Melati No. 12, Bandung");
+    println!("Pelanggan: {nama}");
+    println!("Jumlah barang: {jumlah_barang}");
+    println!("========================================");
+}
+
+fn hitung_subtotal(harga: &[u32], jumlah: &[u32]) -> u32 {
+    let mut subtotal = 0;
+
+    for i in 0..harga.len() {
+        subtotal += harga[i] * jumlah[i];
+    }
+
+    subtotal
+}
+
+fn hitung_diskon(subtotal: u32) -> u32 {
+    if subtotal >= 40_000 {
+        subtotal * 10 / 100
+    } else {
+        0
+    }
+}
+
+fn main() {
+    let nama_pelanggan = String::from("Bu Sri");
+    let mut jumlah_barang: usize = 0;
+
+    loop {
+        println!("Jumlah barang (1-3):");
+
+        let mut input = String::new();
+
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Gagal membaca input");
+
+        let jumlah: usize = match input.trim().parse() {
+            Ok(angka) => angka,
+            Err(_) => {
+                println!("Masukkan angka, bukan teks. Coba lagi.");
+                continue;
+            }
+        };
+
+        match jumlah {
+            1..=3 => {
+                jumlah_barang = jumlah;
+                break;
+            }
+            _ => println!("Jumlah harus 1 sampai 3. Coba lagi."),
+        }
+    }
+
+    cetak_header(&nama_pelanggan, jumlah_barang);
+
+    let daftar_harga = [12_000, 8_000, 15_000];
+    let daftar_jumlah = [1, 2, 1];
+
+    let subtotal = hitung_subtotal(
+        &daftar_harga[..jumlah_barang],
+        &daftar_jumlah[..jumlah_barang],
+    );
+    let diskon = hitung_diskon(subtotal);
+    let total = subtotal - diskon;
+
+    println!("Subtotal: Rp{subtotal}");
+    println!("Diskon:   Rp{diskon}");
+    println!("Total:    Rp{total}");
+    println!("Terima kasih, {nama_pelanggan}.");
+}
+```
+
+## Keadaan setelah Bab 4
+
+- Nama pelanggan disimpan sebagai `String` dan dipinjam ke fungsi header sebagai `&str`.
+- Subtotal menerima slice `&[u32]`, bukan array atau `Vec`.
+- Array harga tetap dimiliki `main` dan tidak di-clone.
+- Belum ada struct. Data item masih berupa array terpisah.
+- `jumlah_barang` tetap dibatasi 1 sampai 3 karena array berukuran tetap.
+
+:::note[Kenapa begini?]
+Fungsi yang hanya membaca sebaiknya meminjam, bukan mengambil ownership. Dengan `&str` dan `&[u32]`, pemanggil tetap memiliki data dan bisa memakainya lagi. Clone baru diperlukan kalau ada dua pemilik yang benar-benar independen.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa cetak_header menerima &str, bukan String?',
+      options: [
+        'Karena fungsi hanya membaca nama dan pemilik tetap boleh memakainya lagi',
+        'Karena String tidak bisa dicetak',
+        'Karena &str selalu lebih cepat untuk semua operasi',
+        'Karena &str menghapus nama setelah fungsi selesai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Borrow membuat pemilik tetap memegang data.',
+        'Salah. String bisa dicetak.',
+        'Salah. Kecepatan bukan alasan utamanya.',
+        'Salah. Borrow tidak menghapus data.',
+      ],
+      explanation:
+        'Parameter &str menghindari move dan clone saat fungsi hanya perlu membaca teks.',
+    },
+    {
+      question: 'Apa yang dikirim oleh &daftar_harga[..jumlah_barang]?',
+      options: [
+        'Slice yang menunjuk sebagian array harga',
+        'Salinan seluruh array',
+        'Nilai u32 pertama',
+        'String baru',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rentang menghasilkan slice &[u32].',
+        'Salah. Slice tidak menyalin elemen.',
+        'Salah. Hasilnya slice, bukan satu nilai.',
+        'Salah. Tidak ada String yang dibuat.',
+      ],
+      explanation:
+        'Slice memberi fungsi akses baca ke sebagian array tanpa mengambil ownership.',
+    },
+    {
+      question: 'Mengapa nama_pelanggan masih bisa dipakai setelah cetak_header?',
+      options: [
+        'Karena fungsi meminjam nama, bukan memindahkan ownership',
+        'Karena String selalu Copy',
+        'Karena fungsi menyalin nama secara otomatis',
+        'Karena main memiliki dua salinan nama',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Borrow berakhir setelah fungsi selesai.',
+        'Salah. String tidak Copy.',
+        'Salah. Tidak ada clone otomatis.',
+        'Salah. Hanya ada satu String.',
+      ],
+      explanation:
+        'Ownership tetap di main; fungsi hanya meminjam selama pemanggilan.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

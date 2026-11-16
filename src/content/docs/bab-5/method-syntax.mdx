@@ -1,0 +1,224 @@
+---
+title: '5.3 Method'
+description: 'Method dengan self, mutable self, getter, can_hold, dan associated function.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Method adalah fungsi yang terikat pada sebuah tipe. Method didefinisikan di blok `impl`, dan parameter pertamanya adalah `self`.
+
+## Method area
+
+Kita pindahkan fungsi `area` ke dalam `impl Rectangle`. Parameter `rectangle: &Rectangle` berubah menjadi `&self`.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+}
+
+fn main() {
+    let rect1 = Rectangle {
+        width: 30,
+        height: 50,
+    };
+
+    println!(
+        "The area of the rectangle is {} square pixels.",
+        rect1.area()
+    );
+}`}
+  filename="src/main.rs"
+  label="Method area pada Rectangle"
+/>
+
+`&self` adalah singkatan dari `self: &Self`. Di dalam `impl`, `Self` berarti tipe yang sedang diimplementasikan, yaitu `Rectangle`. Method meminjam instance, jadi `rect1` tetap valid setelah pemanggilan.
+
+Kalau method perlu mengubah instance, gunakan `&mut self`. Kalau method mengambil alih instance, gunakan `self`. Pengambilan ownership lewat `self` jarang dipakai, biasanya saat method mengubah instance menjadi tipe lain.
+
+## Method dan field dengan nama sama
+
+Method boleh punya nama yang sama dengan field. Pemanggilan dengan tanda kurung berarti method; tanpa tanda kurung berarti field.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn width(&self) -> bool {
+        self.width > 0
+    }
+}
+
+fn main() {
+    let rect1 = Rectangle {
+        width: 30,
+        height: 50,
+    };
+
+    if rect1.width() {
+        println!("Width bukan nol: {}", rect1.width);
+    }
+}`}
+  filename="src/main.rs"
+  label="Method getter dengan nama field"
+/>
+
+Method seperti `width` disebut getter. Rust tidak membuat getter otomatis. Kamu menulisnya sendiri kalau perlu.
+
+## Method dengan parameter lain
+
+Method bisa menerima parameter setelah `self`. Contoh `can_hold` memeriksa apakah satu persegi panjang muat di dalam persegi panjang lain.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+
+    fn can_hold(&self, other: &Rectangle) -> bool {
+        self.width > other.width && self.height > other.height
+    }
+}
+
+fn main() {
+    let rect1 = Rectangle {
+        width: 30,
+        height: 50,
+    };
+    let rect2 = Rectangle {
+        width: 10,
+        height: 40,
+    };
+    let rect3 = Rectangle {
+        width: 60,
+        height: 45,
+    };
+
+    println!("Can rect1 hold rect2? {}", rect1.can_hold(&rect2));
+    println!("Can rect1 hold rect3? {}", rect1.can_hold(&rect3));
+}`}
+  filename="src/main.rs"
+  label="Method can_hold dengan parameter reference"
+/>
+
+`&rect2` dipinjam karena `can_hold` hanya membaca ukuran persegi panjang kedua. `main` tetap memiliki `rect2`.
+
+## Associated function
+
+Fungsi di dalam `impl` yang tidak punya `self` disebut associated function. Associated function sering dipakai sebagai constructor.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn square(size: u32) -> Self {
+        Self {
+            width: size,
+            height: size,
+        }
+    }
+}
+
+fn main() {
+    let sq = Rectangle::square(3);
+    println!("{sq:?}");
+}`}
+  filename="src/main.rs"
+  label="Associated function untuk membuat persegi"
+/>
+
+Pemanggilannya memakai `Rectangle::square(3)`, bukan `rect.square(3)`, karena tidak ada instance yang terlibat. `Self` di return type dan body merujuk ke `Rectangle`.
+
+## Otomatis reference
+
+Rust tidak memakai operator `->` seperti C++. Saat kamu menulis `rect1.area()`, compiler menambahkan `&` atau `&mut` sesuai signature method. Method dengan `&self` bisa dipanggil pada nilai biasa, reference, atau mutable reference selama aturan borrow terpenuhi.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, method ada di object atau prototype. Di Go, method punya receiver. Di PHP, method memakai `$this`. Rust memisahkan data di struct dan perilaku di `impl`, lalu memakai `self` sebagai penerima. Associated function seperti `Rectangle::square` mirip static method.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa arti &self pada method?',
+      options: [
+        'Method meminjam instance tanpa mengambil ownership',
+        'Method menyalin instance',
+        'Method menghapus instance',
+        'Method hanya bisa dipanggil sekali',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. &self adalah reference immutable ke instance.',
+        'Salah. Tidak ada penyalinan instance.',
+        'Salah. Borrow tidak menghapus instance.',
+        'Salah. Method bisa dipanggil berkali-kali.',
+      ],
+      explanation:
+        '&self dipakai saat method hanya membaca field.',
+    },
+    {
+      question: 'Kapan memakai &mut self?',
+      options: [
+        'Saat method perlu mengubah field instance',
+        'Saat method hanya membaca field',
+        'Saat method tidak punya parameter',
+        'Saat method mengembalikan unit',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. &mut self memberi izin menulis ke instance.',
+        'Salah. Untuk membaca cukup &self.',
+        'Salah. Parameter self tetap ada.',
+        'Salah. Nilai balik tidak menentukan mutability.',
+      ],
+      explanation:
+        'Method yang mengubah state membutuhkan mutable borrow pada instance.',
+    },
+    {
+      question: 'Apa perbedaan Rectangle::square dan rect1.area?',
+      options: [
+        'square adalah associated function tanpa instance; area adalah method pada instance',
+        'square adalah method; area adalah associated function',
+        'Keduanya harus dipanggil dengan titik',
+        'Keduanya tidak bisa mengembalikan nilai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Associated function tidak punya self.',
+        'Salah. Justru sebaliknya.',
+        'Salah. Associated function dipanggil dengan ::.',
+        'Salah. Keduanya bisa mengembalikan nilai.',
+      ],
+      explanation:
+        'Associated function terkait dengan tipe, method terkait dengan instance.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />
