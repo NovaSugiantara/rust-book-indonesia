@@ -1,0 +1,158 @@
+---
+title: '15.4 Rc'
+description: 'Kepemilikan bersama dengan reference counting, Rc::clone, dan batas single-thread.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Biasanya satu nilai punya satu pemilik. Ada kasus ketika beberapa bagian program perlu memiliki data yang sama, misalnya beberapa edge pada graph menunjuk node yang sama. `Rc<T>` memungkinkan kepemilikan bersama lewat reference counting.
+
+## Box tidak bisa berbagi
+
+Dengan `Box`, memindahkan list ke satu pemilik membuat pemilik lain tidak bisa memakainya lagi:
+
+<RustPlayground
+  code={`enum List {
+    Cons(i32, Box<List>),
+    Nil,
+}
+
+fn main() {
+    let a = Box::new(List::Cons(5, Box::new(List::Nil)));
+
+    let b = List::Cons(3, a);
+    let c = List::Cons(4, a);
+
+    let _ = (b, c);
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error Box dipakai oleh dua pemilik"
+/>
+
+Pesan `use of moved value: a` muncul karena `a` sudah dipindahkan ke `b`. Reference bisa dipakai, tetapi membutuhkan lifetime yang menyatakan data hidup cukup lama.
+
+## Rc untuk beberapa pemilik
+
+`Rc<T>` menyimpan jumlah reference ke nilai. Nilai dibersihkan ketika jumlah reference mencapai nol.
+
+<RustPlayground
+  code={`use std::rc::Rc;
+
+#[derive(Debug)]
+enum List {
+    Cons(i32, Rc<List>),
+    Nil,
+}
+
+fn main() {
+    let a = Rc::new(List::Cons(
+        5,
+        Rc::new(List::Cons(10, Rc::new(List::Nil))),
+    ));
+
+    println!("count setelah a: {}", Rc::strong_count(&a));
+
+    let b = List::Cons(3, Rc::clone(&a));
+    println!("count setelah b: {}", Rc::strong_count(&a));
+
+    {
+        let c = List::Cons(4, Rc::clone(&a));
+        println!("count setelah c: {}", Rc::strong_count(&a));
+        let _ = c;
+    }
+
+    println!("count setelah c keluar: {}", Rc::strong_count(&a));
+
+    let _ = b;
+}`}
+  filename="src/main.rs"
+  label="Rc memungkinkan beberapa list berbagi data"
+/>
+
+`Rc::clone(&a)` tidak menyalin seluruh list. Ia hanya menambah hitungan reference. Karena itu, konvensi Rust menulis `Rc::clone` untuk membedakan dari clone yang melakukan deep copy.
+
+Saat `c` keluar scope, hitungan turun satu. Saat `b` dan `a` juga keluar scope, hitungan mencapai nol dan data dibersihkan.
+
+## Immutable saja
+
+`Rc<T>` memberi akses immutable ke data. Ia tidak mengizinkan mutable reference ganda karena itu bisa melanggar aturan borrow dan menyebabkan data race. Untuk mutasi lewat `Rc`, gunakan `RefCell<T>` di dalamnya, yang dibahas berikutnya.
+
+## Single-thread
+
+`Rc<T>` hanya untuk skenario single-thread. Reference count-nya tidak memakai operasi atomik, sehingga tidak aman dipakai bersama antar thread. Untuk berbagi antar thread, Bab 16 membahas `Arc<T>`.
+
+Ini bukan detail kecil. Di server, data yang dipegang `Rc` tidak bisa dikirim ke worker thread. Compiler akan menolak karena `Rc` tidak mengimplementasikan trait `Send`.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript dan Python, object bisa dirujuk banyak variabel dan dibersihkan oleh garbage collector. Di Go, pointer bisa dibagikan dan GC menentukan waktu cleanup. Rust memakai `Rc` saat jumlah pemilik perlu eksplisit dan cleanup harus deterministik dalam satu thread.
+:::
+
+:::tip[Tips]
+Gunakan `Rc` untuk data read-only yang memang perlu dimiliki beberapa bagian dalam satu thread. Kalau data perlu diubah, pertimbangkan `Rc<RefCell<T>>` dan pahami risiko borrow panic.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dilakukan Rc::clone?',
+      options: [
+        'Menambah hitungan reference tanpa deep copy',
+        'Menyalin seluruh data di heap',
+        'Membuat mutable reference',
+        'Memindahkan kepemilikan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Hanya hitungan reference yang bertambah.',
+        'Salah. Deep copy bukan perilaku Rc::clone.',
+        'Salah. Rc memberi akses immutable.',
+        'Salah. Kepemilikan tetap dibagi.',
+      ],
+      explanation:
+        'Karena itu Rc::clone murah dibanding clone data besar.',
+    },
+    {
+      question: 'Kapan data di dalam Rc dibersihkan?',
+      options: [
+        'Saat strong count mencapai nol',
+        'Saat program dimulai',
+        'Saat clone pertama dibuat',
+        'Saat mutable reference dibuat',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Tidak ada pemilik tersisa.',
+        'Salah. Data dibuat saat Rc::new.',
+        'Salah. Clone menambah count.',
+        'Salah. Rc tidak memberi mutable reference langsung.',
+      ],
+      explanation:
+        'Drop pada Rc menurunkan hitungan dan membersihkan data saat mencapai nol.',
+    },
+    {
+      question: 'Mengapa Rc tidak bisa dipakai lintas thread?',
+      options: [
+        'Karena reference count-nya tidak atomik dan Rc bukan Send',
+        'Karena Rc hanya untuk String',
+        'Karena Rc tidak punya Drop',
+        'Karena Rc selalu mutable',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rc dirancang untuk single-thread.',
+        'Salah. Rc generik.',
+        'Salah. Rc punya Drop.',
+        'Salah. Rc memberi akses immutable.',
+      ],
+      explanation:
+        'Untuk lintas thread, gunakan Arc yang memakai penghitungan atomik.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

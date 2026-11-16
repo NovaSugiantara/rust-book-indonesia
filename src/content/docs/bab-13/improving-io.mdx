@@ -1,0 +1,231 @@
+---
+title: '13.3 Memperbaiki proyek I/O'
+description: 'Menghapus clone dengan iterator, menyederhanakan search, dan memilih loop atau iterator.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Bab 12 meninggalkan satu `clone` di `Config::build` dan loop manual di `search`. Dengan iterator, keduanya bisa ditulis lebih ringkas dan tanpa salinan string.
+
+## Config::build menerima iterator
+
+`env::args` mengembalikan iterator, bukan slice. Alih-alih mengumpulkannya menjadi `Vec` lalu mengindeks, serahkan iterator itu langsung ke `Config::build`.
+
+```rust
+use std::env;
+use std::process;
+
+fn main() {
+    let config = Config::build(env::args()).unwrap_or_else(|err| {
+        eprintln!("Problem parsing arguments: {err}");
+        process::exit(1);
+    });
+
+    if let Err(e) = run(config) {
+        eprintln!("Application error: {e}");
+        process::exit(1);
+    }
+}
+```
+
+Signature `build` berubah menjadi generic dengan bound iterator:
+
+```rust
+impl Config {
+    fn build(mut args: impl Iterator<Item = String>) -> Result<Config, &'static str> {
+        args.next();
+
+        let query = match args.next() {
+            Some(arg) => arg,
+            None => return Err("tidak mendapat query"),
+        };
+
+        let file_path = match args.next() {
+            Some(arg) => arg,
+            None => return Err("tidak mendapat path file"),
+        };
+
+        Ok(Config { query, file_path })
+    }
+}
+```
+
+`args` harus mutable karena `next` mengubah posisi iterator. Panggilan `args.next()` pertama membuang nama program. Setelah itu, setiap `next` mengembalikan `Option<String>`.
+
+<RustPlayground
+  code={`struct Config {
+    query: String,
+    file_path: String,
+}
+
+impl Config {
+    fn build(mut args: impl Iterator<Item = String>) -> Result<Config, &'static str> {
+        args.next();
+
+        let query = match args.next() {
+            Some(arg) => arg,
+            None => return Err("tidak mendapat query"),
+        };
+
+        let file_path = match args.next() {
+            Some(arg) => arg,
+            None => return Err("tidak mendapat path file"),
+        };
+
+        Ok(Config { query, file_path })
+    }
+}
+
+fn main() {
+    let args = vec![
+        String::from("minigrep"),
+        String::from("rust"),
+        String::from("puisi.txt"),
+    ];
+
+    match Config::build(args.into_iter()) {
+        Ok(config) => println!("{} di {}", config.query, config.file_path),
+        Err(err) => println!("{err}"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Config::build memakai iterator"
+/>
+
+Karena `build` mengambil kepemilikan `String` dari iterator, tidak ada `clone`. Nilai dipindahkan langsung ke field `Config`.
+
+Mengirim `Vec<String>` biasa tidak cukup karena `Vec` bukan iterator:
+
+<RustPlayground
+  code={`fn build(mut args: impl Iterator<Item = String>) {
+    args.next();
+}
+
+fn main() {
+    let args = vec![String::from("minigrep")];
+    build(args);
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mengirim Vec ke parameter iterator"
+/>
+
+Pesan `Vec<String> is not an iterator` muncul karena `Vec` bisa diubah menjadi iterator lewat `into_iter`, tetapi bukan iterator itu sendiri. Panggil `build(args.into_iter())` atau kirim `env::args()` langsung.
+
+## Search dengan adapter
+
+Versi Bab 12 memakai `Vec` mutable dan `push`. Versi iterator menyaring baris lalu mengumpulkannya:
+
+<RustPlayground
+  code={`fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    contents
+        .lines()
+        .filter(|line| line.contains(query))
+        .collect()
+}
+
+fn main() {
+    let contents = "Rust aman\\nBelajar Rust\\nBaris lain";
+    let hasil = search("Rust", contents);
+
+    for line in hasil {
+        println!("{line}");
+    }
+}`}
+  filename="src/lib.rs"
+  label="search dengan filter dan collect"
+/>
+
+Tidak ada vector mutable perantara. `filter` menyimpan baris yang cocok, `collect` membangun vector hasil. Lifetime `'a` tetap menghubungkan hasil ke `contents`.
+
+Kalau pemanggil tidak membutuhkan seluruh hasil sekaligus, `search` bisa mengembalikan iterator:
+
+```rust
+fn search<'a>(
+    query: &'a str,
+    contents: &'a str,
+) -> impl Iterator<Item = &'a str> + 'a {
+    contents
+        .lines()
+        .filter(move |line| line.contains(query))
+}
+```
+
+Dengan bentuk ini, baris dicetak saat ditemukan, bukan setelah semua hasil dikumpulkan. Buku mencatat perubahan perilaku ini: sebelum perubahan, program menunggu semua hasil terkumpul; sesudahnya, hasil bisa dicetak selama iterasi. Test juga perlu disesuaikan karena hasilnya bukan `Vec` lagi.
+
+## Loop atau iterator
+
+Buku menyebut banyak programmer Rust lebih memilih gaya iterator karena fokus pada tujuan, bukan detail indeks dan vector sementara. Namun pilihan tetap bergantung pada keterbacaan. Loop eksplisit lebih jelas saat membutuhkan indeks, beberapa koleksi, atau kontrol alur yang kompleks.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, `array.filter(...).map(...)` langsung membangun array baru. Di Python, generator expression dan `map`/`filter` menghasilkan iterator lazy, sedangkan list comprehension membangun list. Rust memakai rantai adapter yang juga lazy, lalu `collect` menentukan collection tujuan. Perbedaan utamanya, tipe item dan lifetime iterator diperiksa compiler.
+:::
+
+:::tip[Tips]
+Saat memindahkan loop ke iterator, jaga nama variabel dan urutan operasi tetap sama. Bandingkan output sebelum dan sesudah perubahan, jangan hanya mengandalkan test yang sudah ada.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa Config::build tidak perlu clone setelah memakai iterator?',
+      options: [
+        'Karena iterator memberi kepemilikan String yang bisa dipindahkan ke Config',
+        'Karena String menjadi Copy',
+        'Karena Config menyimpan reference',
+        'Karena clone otomatis dihapus compiler',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. next mengembalikan String owned.',
+        'Salah. String tidak Copy.',
+        'Salah. Config tetap memiliki String.',
+        'Salah. clone tidak dihapus otomatis.',
+      ],
+      explanation:
+        'Dengan mengambil kepemilikan iterator, nilai bisa dipindahkan tanpa salinan.',
+    },
+    {
+      question: 'Mengapa parameter args pada build perlu mut?',
+      options: [
+        'Karena next mengubah state iterator',
+        'Karena String selalu mutable',
+        'Karena Config memiliki field mutable',
+        'Karena iterasi berjalan di thread lain',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. next membutuhkan mutable receiver.',
+        'Salah. String tidak otomatis mutable.',
+        'Salah. Mutabilitas args bukan karena field Config.',
+        'Salah. Tidak ada thread baru di sini.',
+      ],
+      explanation:
+        'Iterator menyimpan posisi, sehingga pemanggilan next membutuhkan akses mutable.',
+    },
+    {
+      question: 'Apa keuntungan search yang mengembalikan impl Iterator?',
+      options: [
+        'Hasil bisa diproses saat ditemukan tanpa mengumpulkan semua lebih dulu',
+        'Hasil selalu lebih cepat dalam semua kasus',
+        'Hasil tidak membutuhkan lifetime',
+        'Hasil bisa diubah menjadi Vec tanpa collect',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Konsumen bisa memproses item secara bertahap.',
+        'Salah. Kecepatan bergantung pada kasus dan perlu diukur.',
+        'Salah. Iterator tetap meminjam contents.',
+        'Salah. Tetap butuh collect untuk Vec.',
+      ],
+      explanation:
+        'Buku menjelaskan perubahan perilaku ini saat search dipakai untuk file besar.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

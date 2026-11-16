@@ -53,7 +53,7 @@ Kasir Warung dimulai sebagai CLI di Bab 1 dan tumbuh menjadi layanan backend. Se
 
 Aturan peta:
 
-- Bab 4 sampai 12 sudah ditulis. Jangan menulis bab 13 sampai 21 sebelum ada tugas khusus untuk bab itu.
+- Bab 4 sampai 15 sudah ditulis. Jangan menulis bab 16 sampai 21 sebelum ada tugas khusus untuk bab itu.
 - Setiap bab yang menyentuh Kasir Warung harus meninggalkan kode yang bisa dijalankan dan output contoh yang benar.
 - Jangan memakai fitur dari bab yang belum diajarkan tanpa penjelasan singkat. Kalau terpaksa, jelaskan alasannya di callout.
 - Bab 4 dan 5 mengubah cara data transaksi disimpan. Jangan mempertahankan array harga dari Bab 3 kalau struct sudah tersedia.
@@ -209,6 +209,30 @@ src/
 │   │   ├── environment-variables.mdx
 │   │   ├── stderr.mdx
 │   │   └── studi-kasus.mdx
+│   ├── bab-13/
+│   │   ├── index.mdx
+│   │   ├── closures.mdx
+│   │   ├── iterators.mdx
+│   │   ├── improving-io.mdx
+│   │   ├── performance.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-14/
+│   │   ├── index.mdx
+│   │   ├── release-profiles.mdx
+│   │   ├── publishing.mdx
+│   │   ├── workspaces.mdx
+│   │   ├── cargo-install.mdx
+│   │   ├── custom-commands.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-15/
+│   │   ├── index.mdx
+│   │   ├── box.mdx
+│   │   ├── deref.mdx
+│   │   ├── drop.mdx
+│   │   ├── rc.mdx
+│   │   ├── interior-mutability.mdx
+│   │   ├── reference-cycles.mdx
+│   │   └── studi-kasus.mdx
 │   ├── capstone/
 │   │   ├── index.mdx
 │   │   └── framework.mdx
@@ -218,7 +242,7 @@ src/
 │   │   ├── langkah-2.mdx
 │   │   ├── langkah-3.mdx
 │   │   └── langkah-4.mdx
-│   └── bab-13.mdx ... bab-21.mdx
+│   └── bab-16.mdx ... bab-21.mdx
 ├── data/chapters.ts
 ├── scripts/progress.ts
 └── styles/custom.css
@@ -889,6 +913,99 @@ Kontrak setelah Bab 12:
 - Laporan sukses ditulis dengan `println!`; error ditulis dengan `eprintln!`.
 - Integration test di `tests/laporan.rs` menguji normalisasi, jumlah nol, kode tidak dikenal, dan total.
 - Belum ada iterator dan closure tingkat lanjut; itu masuk Bab 13.
+
+### Keadaan setelah Bab 13
+
+Bab 13 menambahkan rekap transaksi berbasis closure dan iterator. Laporan menu dari Bab 12 tetap ada, lalu ditambah ringkasan pembayaran.
+
+```text
+kasir_warung/
+├── src/
+│   ├── lib.rs
+│   ├── menu.rs
+│   ├── transaksi.rs
+│   ├── laporan.rs
+│   ├── rangkuman.rs
+│   └── main.rs
+└── tests/
+    ├── kasir.rs
+    ├── laporan.rs
+    └── rangkuman.rs
+```
+
+Kontrak setelah Bab 13:
+
+- `TransaksiLaporan` adalah view ringkas berisi pelanggan, metode, total, dan status lunas.
+- `total_lunas` memakai `filter`, `map`, dan `sum`.
+- `total_lunas_fold` memakai `fold` untuk akumulasi.
+- `total_per_metode` memakai `filter` dan `fold` dengan `HashMap<String, u32>`.
+- `cetak_ringkasan` mengurutkan kunci metode sebelum mencetak agar output stabil.
+- CLI tetap menulis laporan ke stdout dan error ke stderr.
+- Test `rangkuman.rs` memeriksa total lunas dan rekap per metode.
+- Belum ada iterator streaming yang mengembalikan hasil ke pemanggil; itu latihan lanjutan.
+
+### Keadaan setelah Bab 14
+
+Bab 14 memecah Kasir Warung menjadi workspace dengan library inti dan binary CLI. Root workspace memegang lockfile, folder target, dan profil release.
+
+```text
+kasir_warung/
+├── Cargo.toml
+├── Cargo.lock
+├── kasir-core/
+│   ├── Cargo.toml
+│   └── src/lib.rs
+├── kasir-cli/
+│   ├── Cargo.toml
+│   └── src/main.rs
+└── target/
+```
+
+Kontrak setelah Bab 14:
+
+- `kasir-core` memuat module menu, transaksi, laporan, dan rangkuman.
+- `kasir-cli` bergantung pada `kasir-core` lewat `path = "../kasir-core"`.
+- Satu `Cargo.lock` dan satu `target` dipakai bersama.
+- `[profile.release] opt-level = 3` ditulis di root workspace.
+- `cargo test -p kasir-core` dan `cargo run -p kasir-cli` dijalankan dari root.
+- `cargo install --path kasir-cli` memasang binary lokal.
+- `kasir-core` dan `kasir-cli` punya metadata publikasi masing-masing.
+- Publikasi dan yank dilakukan per crate, bukan per workspace.
+- Belum ada CI yang mem-publish otomatis; itu di luar cakupan bab.
+
+### Keadaan setelah Bab 15
+
+Bab 15 menambahkan cache menu single-thread ke `kasir-core`. Cache dibagikan dengan `Rc` dan dimutasi lewat `RefCell`, lalu batasnya diperiksa terhadap kebutuhan worker thread.
+
+```text
+kasir_warung/
+├── Cargo.toml
+├── Cargo.lock
+├── kasir-core/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── menu.rs
+│       ├── transaksi.rs
+│       ├── laporan.rs
+│       ├── rangkuman.rs
+│       └── cache.rs
+├── kasir-cli/
+│   ├── Cargo.toml
+│   └── src/main.rs
+└── target/
+```
+
+Kontrak setelah Bab 15:
+
+- `MenuCache` menyimpan `HashMap<String, u32>` harga dan hit counter.
+- `cari_harga` menerima `&RefCell<MenuCache>` dan memakai `borrow_mut`.
+- `SharedMenu = Rc<RefCell<MenuCache>>` dipakai beberapa fungsi dalam satu thread.
+- `Rc::strong_count` dipakai untuk memeriksa jumlah pemilik.
+- `Rc<RefCell<T>>` tidak bisa dikirim ke thread lain; compiler menolak dengan `cannot be sent between threads safely`.
+- CLI tetap single-thread.
+- Rencana Bab 16: `Arc<Mutex<T>>` untuk cache dan state bersama lintas worker.
+- Belum ada cache global lintas proses atau TTL; itu di luar cakupan.
 
 ### Aturan untuk bab berikutnya
 

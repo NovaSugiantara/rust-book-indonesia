@@ -1,0 +1,230 @@
+---
+title: '14.2 Publikasi crate'
+description: 'Dokumentasi, re-export API, metadata, cargo publish, dan cargo yank.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Crate bisa dibagikan lewat crates.io. Sebelum publikasi, API perlu didokumentasikan, struktur publik dibuat nyaman dipakai, dan metadata package dilengkapi.
+
+## Dokumentasi dengan tiga slash
+
+`///` mendokumentasikan item yang mengikutinya. Komentar ini mendukung Markdown dan diubah menjadi HTML oleh `cargo doc`.
+
+````rust
+/// Menambahkan satu ke angka.
+///
+/// # Examples
+///
+/// ```
+/// assert_eq!(my_crate::add_one(1), 2);
+/// ```
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+````
+
+Bagian yang sering dipakai:
+
+- `# Panics` untuk kondisi yang membuat fungsi panic.
+- `# Errors` untuk kondisi yang mengembalikan `Err`.
+- `# Safety` untuk fungsi `unsafe`.
+
+Contoh kode di dokumentasi ikut dijalankan oleh `cargo test` sebagai doc test. Ini menjaga contoh tetap sesuai dengan kode.
+
+<RustPlayground
+  code={`/// Menambahkan satu ke angka.
+///
+/// # Examples
+///
+/// \`\`\`
+/// assert_eq!(add_one(1), 2);
+/// \`\`\`
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+
+fn main() {
+    println!("{}", add_one(41));
+}`}
+  filename="src/lib.rs"
+  label="Dokumentasi dengan contoh yang bisa diuji"
+/>
+
+`cargo doc` menghasilkan dokumentasi di `target/doc`. `cargo doc --open` membangun lalu membukanya di browser.
+
+## Dokumentasi crate
+
+`//!` mendokumentasikan item yang memuat komentar, biasanya crate root atau module. Letakkan di awal `src/lib.rs` untuk menjelaskan tujuan crate secara keseluruhan.
+
+```rust
+//! Library kecil untuk operasi aritmetika.
+//!
+//! Crate ini menyediakan fungsi `add_one` untuk kebutuhan contoh.
+
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+```
+
+## Re-export dengan pub use
+
+Struktur internal crate belum tentu nyaman bagi pemakai. `pub use` membuat item publik di lokasi lain tanpa memindahkan definisinya.
+
+```rust
+mod kinds {
+    pub enum PrimaryColor {
+        Red,
+        Yellow,
+        Blue,
+    }
+}
+
+mod utils {
+    pub fn mix(c1: kinds::PrimaryColor, c2: kinds::PrimaryColor) {
+        let _ = (c1, c2);
+    }
+}
+
+pub use kinds::PrimaryColor;
+pub use utils::mix;
+```
+
+Pemakai bisa menulis `use art::PrimaryColor;` tanpa mengetahui module `kinds`. Struktur internal tetap tersedia jika dibutuhkan.
+
+Item yang tidak `pub` tetap tidak bisa dipakai dari luar module:
+
+<RustPlayground
+  code={`mod art {
+    fn mix() {
+        println!("campur warna");
+    }
+}
+
+fn main() {
+    art::mix();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error memanggil fungsi private dari module lain"
+/>
+
+Pesan `function mix is private` menunjukkan bahwa visibilitas ditentukan di definisi item dan re-export, bukan di pemanggil. Untuk membuatnya dapat dipakai, tulis `pub fn mix` atau re-export dengan `pub use`.
+
+## Akun dan token
+
+Publikasi membutuhkan akun crates.io dan API token. Token disimpan Cargo setelah `cargo login`:
+
+```console
+$ cargo login
+abcdefghijklmnopqrstuvwxyz012345
+```
+
+Token adalah rahasia. Jangan commit ke repositori. Kalau token bocor, cabut dan buat token baru.
+
+## Metadata package
+
+Nama crate harus unik di crates.io dan dialokasikan siapa cepat dia dapat. Sebelum publish, isi `description` dan `license`. Keduanya wajib.
+
+```toml
+[package]
+name = "kasir-core"
+version = "0.1.0"
+edition = "2024"
+description = "Library inti untuk transaksi Kasir Warung."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+```
+
+`license` memakai identifier SPDX. Kalau lisensi tidak ada di SPDX, gunakan `license-file` yang menunjuk file teks lisensi.
+
+## Publish dan versi
+
+```console
+$ cargo publish
+```
+
+Publikasi mengunggah versi tertentu secara permanen. Versi tidak bisa ditimpa dan kode tidak bisa dihapus, kecuali dalam keadaan tertentu. Untuk merilis perubahan, naikkan `version` mengikuti Semantic Versioning lalu publish lagi.
+
+Kalau sebuah versi bermasalah, gunakan `cargo yank`:
+
+```console
+$ cargo yank --vers 1.0.1
+$ cargo yank --vers 1.0.1 --undo
+```
+
+Yank mencegah proyek baru memakai versi itu, tetapi proyek yang sudah punya `Cargo.lock` tetap bisa memakainya. Yank tidak menghapus kode dan tidak menghapus rahasia yang terlanjur diunggah.
+
+:::note[Kalau di bahasa lain]
+Di npm, publikasi memakai `npm publish` dan versi juga tidak boleh ditimpa. Di PHP, package biasanya didaftarkan ke Packagist dari repositori Git. Di Go, module didistribusikan lewat repositori dan module proxy berdasarkan tag versi. Rust memakai crates.io sebagai registry default, dengan metadata dan aturan versi yang diperiksa Cargo.
+:::
+
+:::tip[Tips]
+Jalankan `cargo test` dan `cargo doc` sebelum publish. Pastikan contoh dokumentasi masih benar dan tidak ada item publik yang tidak sengaja terekspos.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa perbedaan /// dan //!?',
+      options: [
+        '/// mendokumentasikan item berikutnya, //! mendokumentasikan item yang memuatnya',
+        '/// untuk test, //! untuk production',
+        '/// hanya untuk module, //! hanya untuk fungsi',
+        'Keduanya identik',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. //! biasanya dipakai di crate root atau module.',
+        'Salah. Keduanya dokumentasi, bukan pembeda test.',
+        'Salah. /// bisa untuk banyak item.',
+        'Salah. Posisi dan targetnya berbeda.',
+      ],
+      explanation:
+        'Gunakan //! untuk menjelaskan crate atau module secara keseluruhan.',
+    },
+    {
+      question: 'Apa fungsi pub use?',
+      options: [
+        'Membuat item publik tersedia di lokasi lain tanpa memindahkan definisinya',
+        'Mengubah item private menjadi public di module asal',
+        'Menghapus module internal',
+        'Membuat dependency baru',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. pub use adalah re-export.',
+        'Salah. Visibilitas definisi tetap seperti semula.',
+        'Salah. Module internal tidak dihapus.',
+        'Salah. pub use bukan dependency.',
+      ],
+      explanation:
+        'Re-export menyederhanakan API publik tanpa mengubah struktur internal.',
+    },
+    {
+      question: 'Apa yang dilakukan cargo yank?',
+      options: [
+        'Mencegah proyek baru memakai versi tertentu tanpa menghapus kode',
+        'Menghapus versi dari crates.io',
+        'Menghapus token API',
+        'Mengganti nama crate',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Proyek lama dengan lockfile tetap berjalan.',
+        'Salah. Yank tidak menghapus kode.',
+        'Salah. Token diatur terpisah.',
+        'Salah. Nama crate tidak berubah.',
+      ],
+      explanation:
+        'Yank berguna saat versi rusak, tetapi bukan alat untuk menghapus data sensitif.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

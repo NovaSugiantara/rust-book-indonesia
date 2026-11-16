@@ -1,0 +1,181 @@
+---
+title: '15.6 Reference cycle dan Weak'
+description: 'Membentuk siklus Rc yang bocor, lalu memutusnya dengan Weak untuk relasi tanpa kepemilikan.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Rust mencegah banyak kesalahan memory, tetapi bukan berarti semua memory leak mustahil. Dengan `Rc` dan `RefCell`, dua nilai bisa saling merujuk sehingga hitungan reference tidak pernah mencapai nol. Nilai itu tidak pernah di-drop.
+
+## Membentuk reference cycle
+
+Definisi berikut menyimpan `RefCell<Rc<List>>` agar simpul berikutnya bisa diganti setelah list dibuat.
+
+<RustPlayground
+  code={`use std::cell::RefCell;
+use std::rc::Rc;
+
+#[derive(Debug)]
+enum List {
+    Cons(i32, RefCell<Rc<List>>),
+    Nil,
+}
+
+impl List {
+    fn tail(&self) -> Option<&RefCell<Rc<List>>> {
+        match self {
+            List::Cons(_, item) => Some(item),
+            List::Nil => None,
+        }
+    }
+}
+
+fn main() {
+    let a = Rc::new(List::Cons(5, RefCell::new(Rc::new(List::Nil))));
+    println!("strong count a: {}", Rc::strong_count(&a));
+
+    let b = Rc::new(List::Cons(10, RefCell::new(Rc::clone(&a))));
+    println!("strong count a setelah b: {}", Rc::strong_count(&a));
+
+    if let Some(link) = a.tail() {
+        *link.borrow_mut() = Rc::clone(&b);
+    }
+
+    println!("strong count b: {}", Rc::strong_count(&b));
+    println!("strong count a setelah siklus: {}", Rc::strong_count(&a));
+}`}
+  filename="src/main.rs"
+  label="Dua list Rc saling menunjuk"
+/>
+
+Setelah `a` menunjuk `b` dan `b` menunjuk `a`, masing-masing punya hitungan dua. Saat variabel `a` dan `b` keluar scope, hitungan turun menjadi satu, bukan nol. Data di heap tetap ada dan tidak bisa dijangkau lagi. Ini memory leak.
+
+Mencetak struktur secara rekursif akan terus mengikuti siklus sampai stack overflow. Rust tidak mendeteksi siklus ini otomatis. Siklus adalah bug logika yang harus dicegah lewat desain, test, dan review.
+
+## Weak untuk relasi tanpa kepemilikan
+
+`Rc::downgrade` membuat `Weak<T>`. Weak reference tidak menambah strong count dan tidak memiliki data. Nilai tetap dibersihkan saat strong count mencapai nol, meskipun weak count masih ada.
+
+Untuk memakai nilai dari `Weak<T>`, panggil `upgrade()`. Hasilnya `Option<Rc<T>>`: `Some` jika data masih ada, `None` jika sudah di-drop.
+
+Contoh pohon dengan child memiliki parent:
+
+<RustPlayground
+  code={`use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+
+struct Node {
+    value: i32,
+    parent: RefCell<Weak<Node>>,
+    children: RefCell<Vec<Rc<Node>>>,
+}
+
+fn main() {
+    let leaf = Rc::new(Node {
+        value: 3,
+        parent: RefCell::new(Weak::new()),
+        children: RefCell::new(vec![]),
+    });
+
+    println!("parent leaf: {:?}", leaf.parent.borrow().upgrade().map(|n| n.value));
+
+    let branch = Rc::new(Node {
+        value: 5,
+        parent: RefCell::new(Weak::new()),
+        children: RefCell::new(vec![Rc::clone(&leaf)]),
+    });
+
+    *leaf.parent.borrow_mut() = Rc::downgrade(&branch);
+
+    println!("parent leaf: {:?}", leaf.parent.borrow().upgrade().map(|n| n.value));
+    println!("strong branch: {}", Rc::strong_count(&branch));
+    println!("weak branch: {}", Rc::weak_count(&branch));
+}`}
+  filename="src/main.rs"
+  label="Pohon dengan Weak reference ke parent"
+/>
+
+`branch` memiliki `leaf` lewat `children`, sedangkan `leaf` hanya memiliki weak reference ke `branch`. Relasi parent ke child adalah ownership; relasi child ke parent bukan. Saat `branch` keluar scope, strong count-nya mencapai nol dan seluruh cabang bisa dibersihkan.
+
+## Kapan memakai Weak
+
+`Weak` berguna untuk:
+
+- back-reference dari child ke parent,
+- cache yang tidak boleh memperpanjang umur nilai,
+- observer atau registry yang hanya ingin tahu apakah target masih hidup.
+
+Untuk relasi yang benar-benar memiliki data, tetap gunakan `Rc` atau `Box`. Terlalu banyak `Weak` membuat kode harus selalu memeriksa `upgrade()`.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, reference cycle tidak masalah karena garbage collector melacak reachability, bukan hanya hitungan reference. Di Python, cycle collector menangani sebagian siklus. Di Go, GC juga menangani siklus. Rust memakai reference counting eksplisit, sehingga siklus `Rc` tidak dibersihkan dan harus diputus dengan `Weak`.
+:::
+
+:::tip[Tips]
+Gambarkan arah kepemilikan sebelum memilih Rc atau Weak. Parent memiliki child, child tidak memiliki parent. Kalau dua arah sama-sama kuat, kemungkinan besar akan terbentuk siklus.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa reference cycle menyebabkan memory leak?',
+      options: [
+        'Karena strong count tidak pernah mencapai nol',
+        'Karena Rc tidak punya Drop',
+        'Karena Weak menambah strong count',
+        'Karena RefCell menyimpan data di stack',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Masing-masing menahan hitungan pemilik lain.',
+        'Salah. Rc punya Drop.',
+        'Salah. Weak tidak menambah strong count.',
+        'Salah. RefCell tidak menentukan lokasi data.',
+      ],
+      explanation:
+        'Data tetap dialokasikan meskipun tidak ada variabel luar yang menjangkaunya.',
+    },
+    {
+      question: 'Apa yang dilakukan Rc::downgrade?',
+      options: [
+        'Membuat Weak<T> tanpa menambah strong count',
+        'Mengurangi strong count',
+        'Menghapus data',
+        'Membuat mutable reference',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Weak tidak memiliki data.',
+        'Salah. Strong count tidak berubah.',
+        'Salah. Data tidak dihapus.',
+        'Salah. Weak bukan mutable reference.',
+      ],
+      explanation:
+        'Weak hanya mengamati apakah data masih hidup.',
+    },
+    {
+      question: 'Apa hasil upgrade pada Weak?',
+      options: [
+        'Option<Rc<T>>, Some jika data masih ada',
+        'T langsung',
+        'Result<T, E>',
+        'Weak<T> baru',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. None jika data sudah di-drop.',
+        'Salah. Tidak ada jaminan data masih hidup.',
+        'Salah. upgrade memakai Option.',
+        'Salah. upgrade menghasilkan Rc.',
+      ],
+      explanation:
+        'Option memaksa pemanggil menangani kemungkinan data sudah hilang.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

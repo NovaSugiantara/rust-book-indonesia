@@ -1,0 +1,197 @@
+---
+title: '14.3 Workspace'
+description: 'Mengelola beberapa package dengan satu Cargo.lock, satu target, dan dependency path.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Workspace adalah kumpulan package yang dikembangkan bersama. Semua package dalam workspace berbagi satu `Cargo.lock` dan satu folder `target`.
+
+## Membuat workspace
+
+Buat direktori, lalu tulis `Cargo.toml` di root tanpa bagian `[package]`:
+
+```toml
+[workspace]
+members = ["adder"]
+resolver = "3"
+```
+
+`members` berisi package yang ikut workspace. `resolver = "3"` memakai algoritma resolver terbaru yang disebut buku. Setelah itu, `cargo new` di dalam direktori workspace otomatis menambahkan package ke `members`.
+
+```console
+$ cargo new adder
+     Created binary (application) `adder` package
+      Adding `adder` as member of workspace
+```
+
+Struktur direktori menjadi:
+
+```text
+add/
+├── Cargo.lock
+├── Cargo.toml
+├── adder/
+│   ├── Cargo.toml
+│   └── src/main.rs
+└── target/
+```
+
+Hanya ada satu `Cargo.lock` dan satu `target` di root. Menjalankan `cargo build` dari dalam `adder` tetap menaruh hasil build di `add/target`. Ini menghindari kompilasi ulang dependency yang sama untuk setiap package.
+
+## Menambah library
+
+```console
+$ cargo new add_one --lib
+```
+
+Tambahkan `add_one` ke `members`, lalu buat `adder` bergantung pada library itu lewat path:
+
+```toml
+[dependencies]
+add_one = { path = "../add_one" }
+```
+
+Cargo tidak menganggap package dalam workspace otomatis saling bergantung. Dependency harus dinyatakan eksplisit.
+
+`adder/src/main.rs` bisa memakai library:
+
+```rust
+fn main() {
+    let angka = 10;
+    println!("{angka} plus satu adalah {}", add_one::add_one(angka));
+}
+```
+
+Jalankan package tertentu dengan `-p`:
+
+```console
+$ cargo run -p adder
+```
+
+Di playground tidak ada beberapa package, tetapi batas library dan binary bisa digambarkan dengan module:
+
+<RustPlayground
+  code={`mod add_one {
+    pub fn add_one(x: i32) -> i32 {
+        x + 1
+    }
+}
+
+fn main() {
+    let angka = 10;
+    println!("{angka} plus satu adalah {}", add_one::add_one(angka));
+}`}
+  filename="src/main.rs"
+  label="Logika library yang dipakai binary"
+/>
+
+## Satu lockfile, dependency tetap per package
+
+Workspace menyatukan versi dependency yang kompatibel. Kalau `add_one` memakai `rand`, `adder` tidak otomatis bisa memakai `rand`. Setiap package tetap harus menulis dependency-nya sendiri.
+
+Mencoba memakai crate yang tidak dideklarasikan menghasilkan error:
+
+<RustPlayground
+  code={`use crate_tidak_ada;
+
+fn main() {
+    println!("coba memakai crate yang tidak dideklarasikan");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error unresolved import crate yang tidak dideklarasikan"
+/>
+
+Pesan `unresolved import crate_tidak_ada` dan `no external crate` muncul karena crate itu tidak ada di dependencies package ini. Menambahkannya ke package lain dalam workspace tidak cukup. Di buku, error yang sama muncul saat `adder` memakai `rand` tanpa menulis dependency `rand` di `Cargo.toml`-nya.
+
+Kalau dua package memakai versi dependency yang kompatibel, Cargo memakai satu versi. Kalau versinya tidak kompatibel, Cargo bisa menyelesaikan lebih dari satu versi agar masing-masing package tetap bekerja.
+
+## Test dan publish
+
+Dari root workspace, `cargo test` menjalankan test semua package. Untuk satu package:
+
+```console
+$ cargo test -p add_one
+```
+
+Publikasi juga dilakukan per package:
+
+```console
+$ cargo publish -p add_one
+```
+
+Setiap crate punya nama, versi, dan metadata sendiri. Workspace tidak membuat satu crate besar yang otomatis terpublikasi bersama.
+
+:::note[Kalau di bahasa lain]
+npm workspaces mengelola beberapa package JavaScript dalam satu repositori dengan dependency yang bisa di-hoist. Composer memakai `path` repository untuk package lokal. Go memakai `go work` dan file `go.work` untuk beberapa module. Rust memakai satu `Cargo.lock` dan satu `target`, dengan dependency path yang tetap ditulis per package.
+:::
+
+:::tip[Tips]
+Pisahkan package ketika batasnya jelas, misalnya library inti, binary CLI, dan adapter database. Jangan memecah hanya karena jumlah file bertambah.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dibagi dalam satu workspace?',
+      options: [
+        'Satu Cargo.lock dan satu folder target',
+        'Satu file main.rs untuk semua package',
+        'Satu daftar dependency untuk semua package',
+        'Satu versi crate untuk publikasi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Lockfile dan output build berada di root.',
+        'Salah. Setiap package punya source sendiri.',
+        'Salah. Dependency ditulis per package.',
+        'Salah. Publikasi per crate.',
+      ],
+      explanation:
+        'Workspace menyatukan build dan resolusi dependency, bukan source code.',
+    },
+    {
+      question: 'Bagaimana package dalam workspace saling bergantung?',
+      options: [
+        'Dengan dependency path yang ditulis eksplisit',
+        'Otomatis melalui nama folder',
+        'Dengan memanggil cargo link',
+        'Dengan menaruh semua kode di lib.rs',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Cargo tidak mengasumsikan dependency antar anggota.',
+        'Salah. Nama folder saja tidak cukup.',
+        'Salah. Tidak ada cargo link untuk ini.',
+        'Salah. Itu menggabungkan kode, bukan dependency.',
+      ],
+      explanation:
+        'Dependency path membuat hubungan antar package eksplisit.',
+    },
+    {
+      question: 'Mengapa adder tidak bisa memakai rand hanya karena add_one memakainya?',
+      options: [
+        'Karena dependency harus dideklarasikan di Cargo.toml package itu sendiri',
+        'Karena rand tidak mendukung workspace',
+        'Karena workspace melarang dependency eksternal',
+        'Karena rand hanya untuk library',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Dependency berlaku per package.',
+        'Salah. rand bisa dipakai di workspace.',
+        'Salah. Workspace mendukung dependency eksternal.',
+        'Salah. rand bisa dipakai binary atau library.',
+      ],
+      explanation:
+        'Lockfile bersama tidak menggantikan deklarasi dependency per package.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

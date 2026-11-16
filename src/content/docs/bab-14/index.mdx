@@ -1,0 +1,91 @@
+---
+title: 'Bab 14: Cargo dan crates.io'
+description: 'Release profile, dokumentasi dan publikasi crate, workspace, cargo install, dan custom command.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Sampai Bab 13, Cargo dipakai untuk membuat proyek, menambah dependency, menjalankan test, dan build. Bab ini membahas sisi lain Cargo: mengatur profil build, mendokumentasikan dan mempublikasikan crate, mengelola beberapa package dalam workspace, serta memasang binary dari crates.io.
+
+Di backend, bagian ini terasa saat memecah aplikasi menjadi library dan binary, menyiapkan build release untuk deployment, atau membagikan library internal ke tim lain.
+
+## Urutan bab
+
+1. [Release profile](release-profiles/) membahas profil `dev` dan `release`, `opt-level`, dan kapan memakai masing-masing.
+2. [Publikasi crate](publishing/) membahas dokumentasi, `pub use`, metadata, `cargo publish`, dan `cargo yank`.
+3. [Workspace](workspaces/) membahas beberapa package dengan satu `Cargo.lock` dan satu folder `target`.
+4. [cargo install](cargo-install/) membahas pemasangan binary dari crates.io.
+5. [Custom command](custom-commands/) membahas binary `cargo-sesuatu` sebagai subcommand Cargo.
+6. [Studi kasus: workspace Kasir Warung](studi-kasus/) memecah proyek menjadi `kasir-core` dan `kasir-cli`.
+
+:::note[Kenapa begini?]
+Cargo bukan hanya build tool. Ia mengatur metadata package, resolusi dependency, dokumentasi, distribusi, dan binary yang dipasang. Memahami batas package dan workspace membantu saat aplikasi tumbuh dari satu binary menjadi beberapa komponen.
+:::
+
+:::tip[Tips]
+Jangan memecah proyek menjadi workspace terlalu awal. Mulai dari satu package, lalu pisahkan ketika ada batas yang jelas antara library dan binary atau ketika beberapa package benar-benar perlu berbagi dependency.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dibahas di bab ini?',
+      options: [
+        'Release profile, publikasi crate, workspace, dan cargo install',
+        'Ownership dan borrow checker',
+        'Thread dan async',
+        'Macro dan unsafe',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Fokusnya fitur Cargo dan crates.io.',
+        'Salah. Itu bab awal.',
+        'Salah. Itu bab berikutnya.',
+        'Salah. Itu bab lanjutan.',
+      ],
+      explanation:
+        'Bab ini memperluas penggunaan Cargo di luar build dan test dasar.',
+    },
+    {
+      question: 'Apa keuntungan workspace?',
+      options: [
+        'Beberapa package berbagi Cargo.lock dan folder target',
+        'Semua package otomatis menjadi satu crate',
+        'Dependency tidak perlu ditulis di setiap package',
+        'Semua package otomatis terpublikasi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Workspace menyatukan lockfile dan output build.',
+        'Salah. Setiap package tetap crate terpisah.',
+        'Salah. Dependency tetap dinyatakan per package.',
+        'Salah. Publikasi dilakukan per crate.',
+      ],
+      explanation:
+        'Workspace mengelola beberapa package terkait tanpa menggabungkannya menjadi satu crate.',
+    },
+    {
+      question: 'Apa itu cargo install?',
+      options: [
+        'Memasang binary crate secara lokal',
+        'Menambahkan library ke dependencies',
+        'Mengganti versi Rust',
+        'Membuat workspace baru',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. cargo install memasang binary target.',
+        'Salah. Dependency ditambahkan lewat Cargo.toml.',
+        'Salah. Versi Rust diatur rustup.',
+        'Salah. Workspace dibuat manual atau lewat cargo new.',
+      ],
+      explanation:
+        'cargo install berguna untuk alat CLI yang dibagikan lewat crates.io.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

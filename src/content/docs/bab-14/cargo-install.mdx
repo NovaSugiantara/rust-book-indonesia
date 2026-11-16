@@ -1,0 +1,126 @@
+---
+title: '14.4 cargo install'
+description: 'Memasang binary crate dari crates.io dan memastikan folder bin ada di PATH.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+`cargo install` memasang binary crate secara lokal. Perintah ini bukan pengganti package manager sistem. Tujuannya memudahkan developer Rust memasang alat CLI yang dibagikan di crates.io.
+
+## Hanya binary target
+
+Yang bisa dipasang adalah package dengan binary target, yaitu program yang dihasilkan dari `src/main.rs` atau file binary lain. Library tanpa binary tidak bisa dijalankan sendiri dan tidak bisa dipasang dengan cara ini.
+
+Contoh alat terkenal adalah `ripgrep`, implementasi pencarian file yang disebut di Bab 12:
+
+```console
+$ cargo install ripgrep
+    Updating crates.io index
+  Downloaded ripgrep v14.1.1
+  Downloaded 1 crate (213.6 KB) in 0.40s
+  Installing ripgrep v14.1.1
+--snip--
+   Compiling grep v0.3.2
+    Finished `release` profile [optimized] target(s) in 6.73s
+  Installing ~/.cargo/bin/rg
+   Installed package `ripgrep v14.1.1` (executable `rg`)
+```
+
+Nama package `ripgrep` menghasilkan binary `rg`. Baris `Installing ~/.cargo/bin/rg` menunjukkan lokasi hasil pemasangan.
+
+## Folder bin dan PATH
+
+Binary dipasang ke folder `bin` pada installation root. Kalau Rust dipasang lewat rustup tanpa konfigurasi khusus, lokasinya `$HOME/.cargo/bin`.
+
+Folder itu harus ada di `PATH` agar perintah seperti `rg` bisa dipanggil dari direktori mana pun. Kalau `cargo install` berhasil tetapi perintah tidak ditemukan, periksa `PATH` sebelum menganggap pemasangan gagal.
+
+## Binary target sederhana
+
+<RustPlayground
+  code={`fn main() {
+    let nama = std::env::args()
+        .next()
+        .unwrap_or_else(|| String::from("kasir-laporan"));
+
+    println!("{nama}: alat CLI Kasir Warung");
+    println!("Pakai: kasir-laporan <file>");
+}`}
+  filename="src/main.rs"
+  label="Binary target yang bisa dipasang dengan cargo install"
+/>
+
+Program ini punya `main`, sehingga bisa menjadi binary target. Kalau kode yang sama diletakkan di `src/lib.rs` tanpa binary, `cargo install` tidak punya program untuk dipasang.
+
+## Setelah dipasang
+
+Binary yang dipasang berjalan seperti program lain. Ia tidak membutuhkan Cargo saat dijalankan, karena sudah dikompilasi menjadi executable.
+
+Memperbarui versi berarti menjalankan `cargo install` lagi untuk package yang sama. Cargo memasang versi yang tersedia di registry sesuai permintaan.
+
+:::note[Kalau di bahasa lain]
+Di Node.js, `npm install -g` memasang package global dan binary-nya masuk ke folder bin npm. Di PHP, `composer global require` memasang package global. Di Go, `go install package@version` memasang binary ke `GOBIN` atau `$GOPATH/bin`. Rust memakai `cargo install` dan folder `~/.cargo/bin` sebagai lokasi umum.
+:::
+
+:::tip[Tips]
+Untuk alat internal, pertimbangkan memasang dari path lokal selama pengembangan. Untuk alat publik, dokumentasikan nama binary dan cara menambahkan folder bin ke `PATH`.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Package seperti apa yang bisa dipasang dengan cargo install?',
+      options: [
+        'Package yang punya binary target',
+        'Semua library crate',
+        'Hanya package dengan nama pendek',
+        'Hanya package tanpa dependency',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Harus ada program yang bisa dijalankan.',
+        'Salah. Library tanpa binary tidak bisa dipasang.',
+        'Salah. Panjang nama tidak menentukan.',
+        'Salah. Dependency diperbolehkan.',
+      ],
+      explanation:
+        'Binary target biasanya berasal dari src/main.rs.',
+    },
+    {
+      question: 'Di mana binary hasil cargo install biasanya berada?',
+      options: ['$HOME/.cargo/bin', 'Folder src proyek', 'target/debug saja', 'Cargo.toml'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Itu lokasi umum untuk instalasi rustup.',
+        'Salah. Source bukan lokasi binary.',
+        'Salah. Binary dipasang ke folder bin instalasi.',
+        'Salah. Cargo.toml adalah manifest.',
+      ],
+      explanation:
+        'Folder tersebut perlu ada di PATH agar perintah bisa dipanggil.',
+    },
+    {
+      question: 'Mengapa perintah hasil install bisa tidak ditemukan?',
+      options: [
+        'Karena folder bin belum ada di PATH',
+        'Karena binary tidak dikompilasi',
+        'Karena crate tidak punya lisensi',
+        'Karena Cargo.lock dihapus',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Shell hanya mencari di folder yang ada di PATH.',
+        'Salah. cargo install mengompilasi binary.',
+        'Salah. Lisensi bukan syarat menjalankan binary.',
+        'Salah. Cargo.lock bukan penentu PATH.',
+      ],
+      explanation:
+        'Periksa PATH dan lokasi instalasi sebelum menyimpulkan pemasangan gagal.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

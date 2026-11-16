@@ -1,0 +1,302 @@
+---
+title: '13.5 Studi kasus: rekap transaksi Kasir Warung'
+description: 'Memakai closure dan iterator untuk menyaring transaksi lunas, menjumlahkan total, dan mengelompokkan metode bayar.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+CLI laporan di Bab 12 sudah membaca file transaksi dan menghitung rekap per menu. Sekarang kita menambahkan ringkasan transaksi yang memakai filter, map, fold, dan HashMap untuk mengelompokkan metode pembayaran.
+
+<StudyCase title="Kasir Warung: rekap dengan iterator" intro="Mengubah daftar transaksi menjadi total lunas dan rekap per metode bayar.">
+  <StudyCaseStep
+    title="Proyeksi transaksi ke baris laporan"
+    goal="Menyiapkan bentuk data ringkas yang mudah diproses iterator."
+  >
+    Data transaksi lengkap menyimpan menu, item, dan status pembayaran. Untuk laporan, kita hanya butuh beberapa field. Buat view ringkas agar fungsi rekap tidak bergantung pada seluruh struktur transaksi.
+
+    ```rust
+    #[derive(Debug, Clone)]
+    pub struct TransaksiLaporan {
+        pub pelanggan: String,
+        pub metode: String,
+        pub total: u32,
+        pub lunas: bool,
+    }
+    ```
+
+    Di kode lengkap, baris ini dihasilkan setelah transaksi dibayar. Total sudah dihitung oleh method transaksi, sehingga laporan tidak mengulang perhitungan subtotal.
+
+    <Fragment slot="hint">
+      View laporan bukan pengganti model transaksi. Ia hanya membawa field yang dibutuhkan laporan.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Dengan bentuk yang sempit, fungsi rekap lebih mudah dites dan tidak perlu mengetahui detail menu.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Filter status dan map total"
+    goal="Menjumlahkan hanya transaksi yang lunas."
+  >
+    `filter` menyaring transaksi lunas, lalu `map` mengambil total dan `sum` menjumlahkannya.
+
+    ```rust
+    pub fn total_lunas(transaksi: &[TransaksiLaporan]) -> u32 {
+        transaksi
+            .iter()
+            .filter(|t| t.lunas)
+            .map(|t| t.total)
+            .sum()
+    }
+    ```
+
+    Rantai ini tidak membuat vector perantara. Setiap item diproses satu per satu sampai iterator habis.
+
+    <Fragment slot="hint">
+      `filter` menerima reference ke item, sehingga closure mendapat `&&TransaksiLaporan` saat dipanggil pada `iter`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Hasilnya hanya total transaksi lunas. Transaksi yang belum dibayar tidak masuk hitungan.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Fold untuk akumulasi"
+    goal="Menghitung total dan mengelompokkan metode bayar dengan satu nilai akumulator."
+  >
+    `fold` membawa state dari satu item ke item berikutnya. Bentuk ini berguna saat akumulasi bukan sekadar penjumlahan.
+
+    ```rust
+    pub fn total_lunas_fold(transaksi: &[TransaksiLaporan]) -> u32 {
+        transaksi.iter().fold(0, |total, t| {
+            if t.lunas {
+                total + t.total
+            } else {
+                total
+            }
+        })
+    }
+    ```
+
+    Fold juga bisa membangun `HashMap` berisi total per metode:
+
+    ```rust
+    pub fn total_per_metode(
+        transaksi: &[TransaksiLaporan],
+    ) -> HashMap<String, u32> {
+        transaksi
+            .iter()
+            .filter(|t| t.lunas)
+            .fold(HashMap::new(), |mut rekap, t| {
+                *rekap.entry(t.metode.clone()).or_insert(0) += t.total;
+                rekap
+            })
+    }
+    ```
+
+    <Fragment slot="hint">
+      `entry(...).or_insert(0)` membuat nilai awal hanya jika metode belum ada, lalu referensi hasilnya bisa ditambah.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Satu pass menghasilkan total per metode tanpa vector tambahan.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Cetak ringkasan di CLI"
+    goal="Mengurutkan hasil dan menampilkannya bersama laporan menu."
+  >
+    Urutkan kunci metode agar output stabil, lalu cetak total per metode dan total keseluruhan.
+
+    ```rust
+    pub fn cetak_ringkasan(transaksi: &[TransaksiLaporan]) {
+        let per_metode = total_per_metode(transaksi);
+        let mut metode: Vec<&String> = per_metode.keys().collect();
+        metode.sort();
+
+        println!("Ringkasan pembayaran:");
+        for nama in metode {
+            println!("{nama}: Rp{}", per_metode[nama]);
+        }
+
+        println!("Total lunas: Rp{}", total_lunas(transaksi));
+    }
+    ```
+
+    <Fragment slot="hint">
+      `keys()` menghasilkan iterator reference ke kunci. Setelah diurutkan, HashMap dipakai lagi untuk mengambil nilainya.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Laporan menu dari Bab 12 tetap berjalan. Ringkasan pembayaran menjadi bagian tambahan di stdout, sedangkan error tetap ke stderr.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+
+#[derive(Debug, Clone)]
+struct TransaksiLaporan {
+    pelanggan: String,
+    metode: String,
+    total: u32,
+    lunas: bool,
+}
+
+fn total_lunas(transaksi: &[TransaksiLaporan]) -> u32 {
+    transaksi
+        .iter()
+        .filter(|t| t.lunas)
+        .map(|t| t.total)
+        .sum()
+}
+
+fn total_lunas_fold(transaksi: &[TransaksiLaporan]) -> u32 {
+    transaksi.iter().fold(0, |total, t| {
+        if t.lunas {
+            total + t.total
+        } else {
+            total
+        }
+    })
+}
+
+fn total_per_metode(transaksi: &[TransaksiLaporan]) -> HashMap<String, u32> {
+    transaksi
+        .iter()
+        .filter(|t| t.lunas)
+        .fold(HashMap::new(), |mut rekap, t| {
+            *rekap.entry(t.metode.clone()).or_insert(0) += t.total;
+            rekap
+        })
+}
+
+fn main() {
+    let transaksi = vec![
+        TransaksiLaporan {
+            pelanggan: String::from("Bu Sri"),
+            metode: String::from("tunai"),
+            total: 43_000,
+            lunas: true,
+        },
+        TransaksiLaporan {
+            pelanggan: String::from("Pak Budi"),
+            metode: String::from("QRIS"),
+            total: 28_000,
+            lunas: true,
+        },
+        TransaksiLaporan {
+            pelanggan: String::from("Bu Ani"),
+            metode: String::from("tunai"),
+            total: 15_000,
+            lunas: false,
+        },
+    ];
+
+    assert_eq!(total_lunas(&transaksi), 71_000);
+    assert_eq!(total_lunas_fold(&transaksi), 71_000);
+
+    let per_metode = total_per_metode(&transaksi);
+    let mut metode: Vec<&String> = per_metode.keys().collect();
+    metode.sort();
+
+    println!("Ringkasan pembayaran:");
+    for nama in metode {
+        println!("{nama}: Rp{}", per_metode[nama]);
+    }
+    println!("Total lunas: Rp{}", total_lunas(&transaksi));
+}`}
+  filename="src/main.rs"
+  label="Filter, map, fold, dan HashMap pada rekap transaksi"
+/>
+
+## Keadaan setelah Bab 13
+
+- `TransaksiLaporan` menjadi view ringkas untuk laporan pembayaran.
+- `total_lunas` memakai `filter`, `map`, dan `sum`.
+- `total_lunas_fold` memakai `fold` untuk akumulasi.
+- `total_per_metode` memakai `filter` dan `fold` dengan `HashMap`.
+- Output ringkasan memakai iterator untuk mengurutkan kunci dan mencetak hasil.
+- Laporan menu dari Bab 12 dan error ke stderr tetap berlaku.
+- Belum ada iterator yang mengembalikan hasil secara streaming ke pemanggil; itu latihan lanjutan.
+
+:::note[Kalau di bahasa lain]
+Pola ini mirip `filter` dan `reduce` di JavaScript, `filter` dan `sum` di Python, atau `stream().filter(...).mapToInt(...).sum()` di Java. Rust membuat adapter lazy dan memeriksa tipe item, sehingga hasil filter dan map harus cocok dengan metode berikutnya.
+:::
+
+:::tip[Tips]
+Kalau akumulasi makin rumit, pertimbangkan loop eksplisit. `fold` yang berisi banyak cabang bisa lebih sulit dibaca daripada loop biasa.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa fungsi filter pada total_lunas?',
+      options: [
+        'Menyaring transaksi yang belum lunas',
+        'Mengubah total menjadi String',
+        'Mengurutkan transaksi',
+        'Menjumlahkan semua transaksi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Hanya transaksi lunas yang diteruskan.',
+        'Salah. Perubahan tipe dilakukan map.',
+        'Salah. Pengurutan terpisah.',
+        'Salah. Penjumlahan dilakukan sum.',
+      ],
+      explanation:
+        'Filter menentukan item mana yang masuk perhitungan berikutnya.',
+    },
+    {
+      question: 'Apa perbedaan sum dan fold di contoh ini?',
+      options: [
+        'sum menjumlahkan nilai, fold membawa akumulator yang bisa berupa apa saja',
+        'sum lebih lambat karena selalu alokasi',
+        'fold hanya bekerja pada HashMap',
+        'Keduanya tidak bisa dipakai pada iterator',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. fold lebih umum dan bisa membangun HashMap.',
+        'Salah. Tidak ada klaim alokasi seperti itu.',
+        'Salah. fold bekerja pada banyak tipe akumulator.',
+        'Salah. Keduanya metode Iterator.',
+      ],
+      explanation:
+        'fold berguna saat akumulasi bukan sekadar penjumlahan sederhana.',
+    },
+    {
+      question: 'Mengapa kunci HashMap diurutkan sebelum dicetak?',
+      options: [
+        'Agar urutan output stabil',
+        'Agar nilai total berubah',
+        'Agar HashMap tidak mengalokasikan memory',
+        'Agar filter berjalan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Urutan iterasi HashMap tidak dijamin untuk tampilan yang konsisten.',
+        'Salah. Pengurutan kunci tidak mengubah nilai.',
+        'Salah. Pengurutan tidak menghapus alokasi.',
+        'Salah. Filter sudah berjalan sebelumnya.',
+      ],
+      explanation:
+        'Output CLI yang stabil lebih mudah dibaca dan dites.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

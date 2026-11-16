@@ -1,0 +1,92 @@
+---
+title: 'Bab 15: Smart pointer'
+description: 'Box, Deref, Drop, Rc, RefCell, reference cycle, dan Weak untuk data dengan kepemilikan khusus.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Reference biasa meminjam data dan mengikuti aturan borrow checker. Smart pointer adalah tipe yang berperilaku seperti pointer tetapi membawa kemampuan tambahan, seperti memiliki data di heap, menghitung jumlah pemilik, atau menegakkan aturan borrow saat runtime.
+
+Di backend, smart pointer muncul saat menyimpan data besar di heap, membuat struktur pohon, berbagi cache read-only dalam satu thread, atau mencatat state yang perlu diubah lewat reference immutable.
+
+## Urutan bab
+
+1. [Box](box/) membahas data di heap dan tipe rekursif.
+2. [Deref](deref/) membahas dereference, `Deref`, dan deref coercion.
+3. [Drop](drop/) membahas cleanup otomatis dan `std::mem::drop`.
+4. [Rc](rc/) membahas kepemilikan bersama dengan reference counting.
+5. [Interior mutability](interior-mutability/) membahas `RefCell` dan `Rc<RefCell<T>>`.
+6. [Reference cycle](reference-cycles/) membahas kebocoran memory dan `Weak`.
+7. [Studi kasus: cache menu](studi-kasus/) memakai `Rc<RefCell<MenuCache>>` dan batasnya.
+
+:::note[Kenapa begini?]
+Smart pointer tetap mengikuti aturan ownership. Yang berubah adalah cara data dimiliki atau diakses. `Box` memindahkan data ke heap, `Rc` memungkinkan beberapa pemilik, dan `RefCell` memindahkan pemeriksaan borrow ke runtime. Tidak ada yang menghapus kebutuhan memahami ownership.
+:::
+
+:::tip[Tips]
+Gunakan smart pointer hanya saat kebutuhan ownership biasa tidak cukup. `Box` untuk indirection, `Rc` untuk berbagi dalam satu thread, dan `RefCell` saat mutasi lewat reference immutable benar-benar diperlukan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dimaksud smart pointer?',
+      options: [
+        'Tipe yang berperilaku seperti pointer dengan kemampuan tambahan',
+        'Pointer yang selalu aman dipakai lintas thread',
+        'Reference yang tidak mengikuti aturan ownership',
+        'Tipe yang hanya ada di stack',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Smart pointer membawa kemampuan seperti ownership dan cleanup.',
+        'Salah. Tidak semua smart pointer thread-safe.',
+        'Salah. Smart pointer tetap mengikuti ownership.',
+        'Salah. Box menyimpan data di heap.',
+      ],
+      explanation:
+        'Contohnya Box, Rc, dan RefCell dengan trade-off masing-masing.',
+    },
+    {
+      question: 'Mengapa Box berguna untuk tipe rekursif?',
+      options: [
+        'Karena ukuran pointer diketahui sehingga siklus ukuran tak terbatas diputus',
+        'Karena Box menghapus rekursi',
+        'Karena Box membuat semua tipe menjadi Copy',
+        'Karena Box menyimpan data di stack',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Box memiliki ukuran tetap dan menunjuk data di heap.',
+        'Salah. Rekursi tetap ada secara konseptual.',
+        'Salah. Box tidak membuat tipe menjadi Copy.',
+        'Salah. Box menyimpan data di heap.',
+      ],
+      explanation:
+        'Tanpa indirection, compiler tidak bisa menentukan ukuran tipe rekursif.',
+    },
+    {
+      question: 'Apa batasan Rc dan RefCell?',
+      options: [
+        'Keduanya untuk skenario single-thread',
+        'Keduanya tidak bisa dipakai di main',
+        'Keduanya hanya untuk tipe angka',
+        'Keduanya menghapus borrow checker',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Keduanya tidak thread-safe.',
+        'Salah. Bisa dipakai di main.',
+        'Salah. Bisa menyimpan banyak tipe.',
+        'Salah. Aturan tetap ada, RefCell memindahkannya ke runtime.',
+      ],
+      explanation:
+        'Bab 16 membahas Arc dan Mutex untuk kebutuhan lintas thread.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

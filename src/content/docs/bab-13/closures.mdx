@@ -1,0 +1,349 @@
+---
+title: '13.1 Closure'
+description: 'Fungsi anonim yang menangkap environment, inferensi tipe, move, dan trait Fn.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Closure adalah fungsi anonim yang bisa disimpan di variabel atau dikirim sebagai argumen. Berbeda dari fungsi biasa, closure dapat menangkap nilai dari environment tempat ia dibuat.
+
+## Menangkap environment
+
+Contoh buku memakai perusahaan kaus yang membagikan kaus gratis. Penerima bisa punya warna favorit, atau mendapat warna yang stoknya paling banyak.
+
+<RustPlayground
+  code={`#[derive(Debug, PartialEq, Copy, Clone)]
+enum ShirtColor {
+    Red,
+    Blue,
+}
+
+struct Inventory {
+    shirts: Vec<ShirtColor>,
+}
+
+impl Inventory {
+    fn giveaway(&self, user_preference: Option<ShirtColor>) -> ShirtColor {
+        user_preference.unwrap_or_else(|| self.most_stocked())
+    }
+
+    fn most_stocked(&self) -> ShirtColor {
+        let mut num_red = 0;
+        let mut num_blue = 0;
+
+        for color in &self.shirts {
+            match color {
+                ShirtColor::Red => num_red += 1,
+                ShirtColor::Blue => num_blue += 1,
+            }
+        }
+
+        if num_red > num_blue {
+            ShirtColor::Red
+        } else {
+            ShirtColor::Blue
+        }
+    }
+}
+
+fn main() {
+    let store = Inventory {
+        shirts: vec![ShirtColor::Blue, ShirtColor::Red, ShirtColor::Blue],
+    };
+
+    let user_pref1 = Some(ShirtColor::Red);
+    let giveaway1 = store.giveaway(user_pref1);
+    println!("Preferensi {:?} mendapat {:?}", user_pref1, giveaway1);
+
+    let user_pref2 = None;
+    let giveaway2 = store.giveaway(user_pref2);
+    println!("Preferensi {:?} mendapat {:?}", user_pref2, giveaway2);
+}`}
+  filename="src/main.rs"
+  label="Closure menangkap self dari Inventory"
+/>
+
+`|| self.most_stocked()` adalah closure tanpa parameter. Ia menangkap `self` dari environment, sesuatu yang tidak bisa dilakukan fungsi biasa. `unwrap_or_else` hanya memanggil closure jika `Option` bernilai `None`.
+
+## Inferensi tipe closure
+
+Closure biasanya tidak membutuhkan anotasi tipe karena dipakai dalam konteks yang sempit. Anotasi tetap boleh ditulis jika membuat kode lebih jelas.
+
+```rust
+fn add_one_v1(x: u32) -> u32 { x + 1 }
+
+let add_one_v2 = |x: u32| -> u32 { x + 1 };
+let add_one_v3 = |x| { x + 1 };
+let add_one_v4 = |x| x + 1;
+```
+
+Keempat bentuk menghasilkan perilaku yang sama. Compiler mengunci satu tipe konkret untuk parameter dan return value closure berdasarkan pemakaian pertama.
+
+<RustPlayground
+  code={`fn main() {
+    let tambah_satu = |x: u32| -> u32 { x + 1 };
+    println!("{}", tambah_satu(41));
+}`}
+  filename="src/main.rs"
+  label="Closure dengan anotasi tipe"
+/>
+
+Kalau closure tanpa anotasi dipanggil dengan dua tipe berbeda, compiler menolak pemanggilan kedua:
+
+<RustPlayground
+  code={`fn main() {
+    let example_closure = |x| x;
+
+    let s = example_closure(String::from("hello"));
+    let n = example_closure(5);
+
+    println!("{s} {n}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error closure dengan dua tipe berbeda"
+/>
+
+Pesan `expected String, found integer` muncul karena tipe parameter sudah dikunci menjadi `String` saat pemanggilan pertama. Closure bukan fungsi generik yang bisa menerima tipe berbeda pada setiap pemanggilan.
+
+## Menangkap dengan borrow
+
+Closure memilih cara menangkap berdasarkan isi body. Kalau body hanya membaca nilai, closure meminjamnya secara immutable.
+
+<RustPlayground
+  code={`fn main() {
+    let list = vec![1, 2, 3];
+    println!("Sebelum closure: {list:?}");
+
+    let hanya_membaca = || println!("Dari closure: {list:?}");
+
+    println!("Sebelum memanggil: {list:?}");
+    hanya_membaca();
+    println!("Setelah memanggil: {list:?}");
+}`}
+  filename="src/main.rs"
+  label="Closure meminjam list secara immutable"
+/>
+
+Kalau body mengubah nilai, closure menangkap mutable reference. Tidak boleh ada borrow lain selama mutable borrow aktif.
+
+<RustPlayground
+  code={`fn main() {
+    let mut list = vec![1, 2, 3];
+    println!("Sebelum closure: {list:?}");
+
+    let mut tambah_item = || list.push(7);
+
+    tambah_item();
+    println!("Setelah memanggil: {list:?}");
+}`}
+  filename="src/main.rs"
+  label="Closure meminjam list secara mutable"
+/>
+
+Menambahkan `println!("{list:?}")` di antara definisi dan pemanggilan closure akan ditolak compiler karena mutable borrow masih aktif. Ini aturan borrow yang sama seperti referensi biasa.
+
+## Move ke thread
+
+Gunakan `move` jika closure harus mengambil kepemilikan nilai dari environment. Ini penting saat closure dikirim ke thread baru karena thread bisa hidup lebih lama dari scope pembuatnya.
+
+<RustPlayground
+  code={`use std::thread;
+
+fn main() {
+    let list = vec![1, 2, 3];
+    println!("Sebelum closure: {list:?}");
+
+    thread::spawn(move || println!("Dari thread: {list:?}"))
+        .join()
+        .unwrap();
+}`}
+  filename="src/main.rs"
+  label="Closure move untuk thread baru"
+/>
+
+Tanpa `move`, compiler tidak bisa menjamin `list` tetap valid sampai thread selesai. Di backend, pola ini muncul saat data request atau potongan konfigurasi dikirim ke worker.
+
+## Trait Fn
+
+Closure secara otomatis mengimplementasikan satu atau beberapa trait berikut:
+
+- `FnOnce`: bisa dipanggil sekali. Semua closure mengimplementasikannya.
+- `FnMut`: tidak memindahkan nilai keluar, tetapi bisa mengubah nilai yang ditangkap.
+- `Fn`: tidak memindahkan dan tidak mengubah nilai yang ditangkap.
+
+Closure yang memindahkan nilai keluar dari body hanya mengimplementasikan `FnOnce`.
+
+`sort_by_key` memanggil closure berkali-kali, sehingga membutuhkan `FnMut`:
+
+<RustPlayground
+  code={`#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let mut list = [
+        Rectangle { width: 10, height: 1 },
+        Rectangle { width: 3, height: 5 },
+        Rectangle { width: 7, height: 12 },
+    ];
+
+    list.sort_by_key(|r| r.width);
+
+    for rect in &list {
+        println!("{}x{}", rect.width, rect.height);
+    }
+}`}
+  filename="src/main.rs"
+  label="Closure FnMut pada sort_by_key"
+/>
+
+Closure yang memindahkan `String` keluar dari environment tidak memenuhi `FnMut`:
+
+<RustPlayground
+  code={`#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+}
+
+fn main() {
+    let mut list = [
+        Rectangle { width: 10 },
+        Rectangle { width: 3 },
+        Rectangle { width: 7 },
+    ];
+
+    let mut sort_operations = vec![];
+    let value = String::from("closure called");
+
+    list.sort_by_key(|r| {
+        sort_operations.push(value);
+        r.width
+    });
+
+    println!("{list:?}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error FnMut memindahkan nilai"
+/>
+
+Pesan `cannot move out of value, a captured variable in an FnMut closure` menjelaskan bahwa closure harus bisa dipanggil berkali-kali, sedangkan `value` hanya bisa dipindahkan sekali. Ganti dengan counter mutable untuk menghitung pemanggilan:
+
+<RustPlayground
+  code={`#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+}
+
+fn main() {
+    let mut list = [
+        Rectangle { width: 10 },
+        Rectangle { width: 3 },
+        Rectangle { width: 7 },
+    ];
+
+    let mut jumlah_panggilan = 0;
+    list.sort_by_key(|r| {
+        jumlah_panggilan += 1;
+        r.width
+    });
+
+    println!("{list:?}, dipanggil {jumlah_panggilan} kali");
+}`}
+  filename="src/main.rs"
+  label="Closure FnMut dengan counter mutable"
+/>
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, closure menangkap binding variabel dan bisa mengubahnya tanpa anotasi tipe. Di Python, nested function atau `lambda` menangkap variabel sekitarnya; perubahan variabel luar membutuhkan `nonlocal`. Rust membedakan cara menangkap dan trait `FnOnce`, `FnMut`, `Fn` pada compile time, sehingga fungsi yang menerima closure bisa menyatakan apakah closure boleh mengubah atau memindahkan nilai.
+:::
+
+:::tip[Tips]
+Kalau fungsi hanya memanggil closure sekali, bound `FnOnce` paling fleksibel. Kalau closure dipanggil berkali-kali, gunakan `FnMut` atau `Fn` sesuai kebutuhan. Mulai dari bound paling longgar yang masih aman.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang ditangkap closure pada giveaway?',
+      options: [
+        'Reference immutable ke self Inventory',
+        'Salinan seluruh Inventory',
+        'Tidak menangkap apa pun',
+        'Mutable reference ke shirts',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Body hanya membaca self lewat most_stocked.',
+        'Salah. Tidak ada move atau clone seluruh Inventory.',
+        'Salah. Closure memakai self dari environment.',
+        'Salah. most_stocked meminjam immutable.',
+      ],
+      explanation:
+        'Closure memilih penangkapan paling sedikit yang dibutuhkan body.',
+    },
+    {
+      question: 'Mengapa closure yang memindahkan nilai keluar hanya FnOnce?',
+      options: [
+        'Karena nilai yang dipindahkan tidak ada lagi untuk pemanggilan berikutnya',
+        'Karena closure tanpa parameter selalu FnOnce',
+        'Karena FnOnce tidak bisa mengembalikan nilai',
+        'Karena compiler melarang closure dipanggil dua kali',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Nilai yang sudah dipindahkan tidak bisa dipindahkan lagi.',
+        'Salah. Closure tanpa parameter bisa Fn.',
+        'Salah. FnOnce bisa mengembalikan nilai.',
+        'Salah. Larangannya muncul dari kepemilikan nilai, bukan jumlah panggilan.',
+      ],
+      explanation:
+        'FnOnce adalah batas minimum semua closure, tetapi closure yang memindahkan nilai tidak bisa lebih dari itu.',
+    },
+    {
+      question: 'Apa fungsi move pada closure?',
+      options: [
+        'Memaksa closure mengambil kepemilikan nilai yang ditangkap',
+        'Membuat closure berjalan di thread baru',
+        'Mengubah closure menjadi fungsi biasa',
+        'Menghapus nilai setelah dipanggil',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. move mengubah cara penangkapan menjadi ownership.',
+        'Salah. Thread dibuat oleh thread::spawn.',
+        'Salah. move tidak mengubah jenis closure menjadi fn.',
+        'Salah. Nilai di-drop sesuai aturan ownership.',
+      ],
+      explanation:
+        'move sering diperlukan saat closure dikirim ke thread agar datanya tetap valid.',
+    },
+    {
+      question: 'Mengapa sort_by_key membutuhkan FnMut?',
+      options: [
+        'Karena closure dipanggil untuk banyak item',
+        'Karena closure selalu mengubah list',
+        'Karena closure tidak boleh menangkap environment',
+        'Karena sort_by_key mengembalikan closure',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pemanggilan berulang membutuhkan closure yang bisa dipanggil lebih dari sekali.',
+        'Salah. Closure hanya membaca width pada contoh.',
+        'Salah. Closure boleh menangkap environment.',
+        'Salah. sort_by_key tidak mengembalikan closure.',
+      ],
+      explanation:
+        'FnMut berarti closure boleh dipanggil berkali-kali dan boleh mengubah state yang ditangkap.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

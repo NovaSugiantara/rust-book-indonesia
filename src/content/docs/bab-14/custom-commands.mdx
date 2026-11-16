@@ -1,0 +1,131 @@
+---
+title: '14.5 Custom command'
+description: 'Menambahkan subcommand Cargo lewat binary cargo-sesuatu di PATH.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Cargo bisa diperluas tanpa mengubah Cargo itu sendiri. Kalau ada binary bernama `cargo-sesuatu` di `PATH`, perintah `cargo sesuatu` akan menjalankannya.
+
+## Cara kerja
+
+Aturannya sederhana:
+
+- Nama binary diawali `cargo-`.
+- Binary berada di `PATH`.
+- Cargo meneruskan sisa argumen ke binary tersebut.
+- Subcommand muncul di `cargo --list`.
+
+Contoh, binary `cargo-laporan` bisa dipanggil sebagai:
+
+```console
+$ cargo laporan --file transaksi.csv
+```
+
+Cargo mencari `cargo-laporan`, menjalankannya, dan meneruskan `--file transaksi.csv`.
+
+## Memasang extension
+
+Extension bisa dibagikan sebagai crate binary dan dipasang dengan `cargo install`. Setelah binary masuk folder `bin` yang ada di `PATH`, subcommand langsung bisa dipakai seperti perintah Cargo bawaan.
+
+<RustPlayground
+  code={`fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let nama = args.first().map(String::as_str).unwrap_or("cargo-laporan");
+
+    println!("Menjalankan {nama}");
+    println!("Argumen: {:?}", &args[1..]);
+    println!("Subcommand ini akan dipanggil oleh cargo sebagai: cargo laporan");
+}`}
+  filename="src/main.rs"
+  label="Binary yang bisa menjadi custom command"
+/>
+
+Program ini menerima argumen seperti binary biasa. Yang membuatnya menjadi subcommand Cargo adalah nama file dan lokasinya di `PATH`, bukan kode di dalamnya.
+
+## Kapan membuat custom command
+
+Custom command berguna untuk alur kerja yang berulang, misalnya:
+
+- memeriksa struktur workspace,
+- membuat laporan dari data proyek,
+- menjalankan pemeriksaan khusus tim.
+
+Untuk kebutuhan yang hanya dipakai sekali, shell script atau alias lebih sederhana. Custom command masuk akal saat alat perlu dibagikan, punya logika cukup kompleks, atau ingin dipasang lewat Cargo.
+
+## Batasannya
+
+Cargo tidak memvalidasi isi custom command. Kalau binary gagal, error dan exit code berasal dari program itu. Dokumentasikan perilaku, argumen, dan status keluarnya agar bisa dipakai di CI.
+
+:::note[Kalau di bahasa lain]
+npm menyediakan `npm exec` dan binary dari package lokal atau global. Composer punya perintah global dan script composer. Go tidak punya mekanisme subcommand `go` dari binary eksternal dengan pola nama seperti Cargo; alat biasanya dipanggil langsung. Rust memakai konvensi nama `cargo-*` yang sederhana dan memanfaatkan `PATH`.
+:::
+
+:::tip[Tips]
+Beri nama binary dengan awalan `cargo-` dan uji dari direktori lain untuk memastikan ia benar-benar ditemukan lewat `PATH`, bukan karena kebetulan berada di folder proyek.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Bagaimana Cargo menemukan custom command?',
+      options: [
+        'Mencari binary cargo-sesuatu di PATH',
+        'Membaca file custom.toml',
+        'Mengimpor crate dari Cargo.lock',
+        'Menjalankan semua binary di target',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Konvensi nama dan PATH adalah kuncinya.',
+        'Salah. Tidak ada file custom.toml.',
+        'Salah. Cargo.lock bukan mekanisme subcommand.',
+        'Salah. Hanya binary yang cocok yang dijalankan.',
+      ],
+      explanation:
+        'Cargo memetakan cargo sesuatu ke binary cargo-sesuatu.',
+    },
+    {
+      question: 'Bagaimana custom command biasanya dipasang?',
+      options: [
+        'Dengan cargo install jika crate punya binary target',
+        'Dengan menambah dependency library',
+        'Dengan mengubah rustc',
+        'Dengan membuat file .cargo/config',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. cargo install menaruh binary di folder bin.',
+        'Salah. Dependency library tidak memasang binary.',
+        'Salah. rustc tidak perlu diubah.',
+        'Salah. Config bukan cara memasang binary.',
+      ],
+      explanation:
+        'Setelah binary ada di PATH, subcommand langsung tersedia.',
+    },
+    {
+      question: 'Apa yang muncul di cargo --list?',
+      options: [
+        'Custom command yang tersedia',
+        'Semua dependency proyek',
+        'Semua file source',
+        'Daftar test yang gagal',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Cargo menampilkan subcommand yang dikenali.',
+        'Salah. Dependency bukan subcommand.',
+        'Salah. File source bukan subcommand.',
+        'Salah. Hasil test bukan daftar subcommand.',
+      ],
+      explanation:
+        'Custom command diperlakukan seperti subcommand Cargo biasa.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

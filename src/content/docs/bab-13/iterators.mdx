@@ -1,0 +1,231 @@
+---
+title: '13.2 Iterator'
+description: 'Trait Iterator, next, adapter yang lazy, dan metode yang mengonsumsi iterator.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Iterator menghasilkan nilai satu per satu dan mengetahui kapan urutan selesai. Semua iterator mengimplementasikan trait `Iterator` dari standard library, yang mewajibkan satu method: `next`.
+
+## Iterator dan next
+
+<RustPlayground
+  code={`fn main() {
+    let v1 = vec![1, 2, 3];
+    let mut v1_iter = v1.iter();
+
+    assert_eq!(v1_iter.next(), Some(&1));
+    assert_eq!(v1_iter.next(), Some(&2));
+    assert_eq!(v1_iter.next(), Some(&3));
+    assert_eq!(v1_iter.next(), None);
+}`}
+  filename="src/main.rs"
+  label="Memanggil next pada iterator"
+/>
+
+`v1_iter` harus mutable karena setiap `next` mengubah posisi internal iterator. `iter` menghasilkan reference immutable. `into_iter` mengambil kepemilikan dan menghasilkan nilai owned, sedangkan `iter_mut` menghasilkan mutable reference.
+
+`for` loop mengambil kepemilikan iterator dan membuatnya mutable di belakang layar. Karena itu `for val in v1_iter` tidak membutuhkan `mut` pada variabel iterator.
+
+## Iterator itu lazy
+
+Membuat iterator atau memasang adapter belum mengerjakan apa pun. Kerja baru terjadi saat iterator dikonsumsi.
+
+```rust
+fn main() {
+    let v1: Vec<i32> = vec![1, 2, 3];
+
+    v1.iter().map(|x| x + 1);
+}
+```
+
+Kode itu hanya menghasilkan warning `unused Map that must be used`, bukan error. Warning memberi tahu bahwa iterator lazy dan hasilnya belum dipakai. Untuk menjalankannya, akhiri dengan metode konsumsi seperti `collect`:
+
+<RustPlayground
+  code={`fn main() {
+    let v1: Vec<i32> = vec![1, 2, 3];
+
+    let v2: Vec<_> = v1.iter().map(|x| x + 1).collect();
+
+    assert_eq!(v2, vec![2, 3, 4]);
+    println!("{v2:?}");
+}`}
+  filename="src/main.rs"
+  label="map dan collect"
+/>
+
+Tanpa anotasi `Vec<_>`, compiler tidak selalu bisa menyimpulkan collection yang diinginkan `collect`. Anotasi memberi tahu bahwa hasilnya vector.
+
+## Consuming adapter
+
+Metode yang memanggil `next` sampai habis disebut consuming adapter karena menghabiskan iterator. `sum` adalah salah satunya.
+
+<RustPlayground
+  code={`fn main() {
+    let v1 = vec![1, 2, 3];
+    let total: i32 = v1.iter().sum();
+
+    println!("Total: {total}");
+}`}
+  filename="src/main.rs"
+  label="sum mengonsumsi iterator"
+/>
+
+Setelah `sum`, iterator tidak boleh dipakai lagi. Mencoba memanggil `next` setelahnya ditolak compiler:
+
+<RustPlayground
+  code={`fn main() {
+    let v1 = vec![1, 2, 3];
+    let v1_iter = v1.iter();
+
+    let total: i32 = v1_iter.sum();
+    println!("{total}");
+
+    println!("{:?}", v1_iter.next());
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error memakai iterator setelah sum"
+/>
+
+Pesan `borrow of moved value` muncul karena `sum` mengambil kepemilikan iterator. Kalau nilai per item masih dibutuhkan, hitung total tanpa menghabiskan iterator yang sama atau buat iterator baru.
+
+## Iterator adapter
+
+Adapter seperti `map` dan `filter` tidak mengonsumsi iterator. Mereka menghasilkan iterator baru yang membungkus iterator sebelumnya.
+
+<RustPlayground
+  code={`fn main() {
+    let angka = vec![1, 2, 3, 4, 5, 6];
+
+    let genap_kuadrat: Vec<i32> = angka
+        .iter()
+        .filter(|x| **x % 2 == 0)
+        .map(|x| x * x)
+        .collect();
+
+    println!("{genap_kuadrat:?}");
+}`}
+  filename="src/main.rs"
+  label="Rantai filter dan map"
+/>
+
+`filter` menerima closure yang mengembalikan `bool`. Item yang menghasilkan `true` diteruskan, item yang `false` dibuang. `map` mengubah setiap item. Rantai adapter tetap lazy sampai `collect` dipanggil.
+
+Contoh buku memakai `filter` untuk memilih sepatu sesuai ukuran:
+
+<RustPlayground
+  code={`#[derive(PartialEq, Debug)]
+struct Shoe {
+    size: u32,
+    style: String,
+}
+
+fn shoes_in_size(shoes: Vec<Shoe>, shoe_size: u32) -> Vec<Shoe> {
+    shoes
+        .into_iter()
+        .filter(|s| s.size == shoe_size)
+        .collect()
+}
+
+fn main() {
+    let shoes = vec![
+        Shoe { size: 10, style: String::from("sneaker") },
+        Shoe { size: 13, style: String::from("sandal") },
+        Shoe { size: 10, style: String::from("boot") },
+    ];
+
+    let sesuai = shoes_in_size(shoes, 10);
+    println!("{sesuai:?}");
+}`}
+  filename="src/main.rs"
+  label="filter dengan closure yang menangkap shoe_size"
+/>
+
+Closure `|s| s.size == shoe_size` menangkap `shoe_size` dari environment. `into_iter` mengambil kepemilikan vector, sehingga hasil `collect` berisi `Shoe` owned.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, `map`, `filter`, dan `reduce` pada array langsung mengeksekusi dan menghasilkan array atau nilai. Di Python, `map` dan `filter` menghasilkan iterator lazy, sedangkan list comprehension langsung membangun list; `reduce` ada di modul `functools`. Rust membuat laziness sebagai sifat default iterator, dan adapter baru berjalan setelah ada metode konsumsi seperti `collect`, `sum`, atau `for`.
+:::
+
+:::tip[Tips]
+Rantai adapter panjang lebih mudah dibaca jika setiap langkah punya tujuan jelas. Kalau perlu indeks atau update beberapa koleksi sekaligus, loop biasa bisa lebih tepat.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa method wajib pada trait Iterator?',
+      options: ['next', 'map', 'filter', 'collect'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Implementor harus menyediakan next.',
+        'Salah. map punya implementasi default.',
+        'Salah. filter punya implementasi default.',
+        'Salah. collect punya implementasi default.',
+      ],
+      explanation:
+        'Method lain dibangun di atas next melalui implementasi default.',
+    },
+    {
+      question: 'Mengapa v1_iter perlu mutable saat next dipanggil?',
+      options: [
+        'Karena next mengubah posisi internal iterator',
+        'Karena vector v1 berubah',
+        'Karena semua variabel di Rust mutable',
+        'Karena next mengembalikan mutable reference',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Iterator menyimpan state posisi.',
+        'Salah. v1 tidak diubah.',
+        'Salah. Variabel default immutable.',
+        'Salah. next mengembalikan Option<Item>.',
+      ],
+      explanation:
+        'Memanggil next menghabiskan item dan mengubah state iterator.',
+    },
+    {
+      question: 'Apa perbedaan adapter dan consuming adapter?',
+      options: [
+        'Adapter menghasilkan iterator baru; consuming adapter menghabiskan iterator',
+        'Adapter selalu lebih cepat',
+        'Consuming adapter tidak pernah memanggil next',
+        'Adapter hanya bekerja pada Vec',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. map dan filter menghasilkan iterator baru.',
+        'Salah. Kecepatan bukan definisi keduanya.',
+        'Salah. Consuming adapter justru memanggil next.',
+        'Salah. Adapter bekerja pada banyak jenis iterator.',
+      ],
+      explanation:
+        'Rantai adapter perlu diakhiri consuming adapter agar benar-benar berjalan.',
+    },
+    {
+      question: 'Apa yang terjadi jika map dipanggil tanpa collect?',
+      options: [
+        'Tidak ada yang dikerjakan dan compiler memberi warning',
+        'Program panic',
+        'Map langsung mencetak hasil',
+        'Map mengubah vector asli',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Iterator lazy dan hasil Map tidak dipakai.',
+        'Salah. Tidak ada panic.',
+        'Salah. Map tidak mencetak apa pun.',
+        'Salah. Map tidak mengubah vector asli.',
+      ],
+      explanation:
+        'Warning unused Map mengingatkan bahwa iterator harus dikonsumsi.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

@@ -1,0 +1,147 @@
+---
+title: '15.1 Box'
+description: 'Menyimpan data di heap, memindahkan kepemilikan besar, dan membuat tipe rekursif berukuran tetap.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+`Box<T>` adalah smart pointer paling sederhana. Data disimpan di heap, sedangkan stack menyimpan pointer ke data itu. Saat `Box` keluar dari scope, data di heap ikut dibersihkan.
+
+## Data di heap
+
+<RustPlayground
+  code={`fn main() {
+    let b = Box::new(5);
+    println!("b = {b}");
+}`}
+  filename="src/main.rs"
+  label="Menyimpan i32 di heap dengan Box"
+/>
+
+`b` bisa dipakai seperti nilai `i32` biasa karena `Box` mengimplementasikan `Deref`. Yang berbeda adalah lokasi data: nilai `5` berada di heap, pointer kecil berada di stack.
+
+## Tipe rekursif
+
+Tipe rekursif berisi nilai dari tipe yang sama di dalam dirinya. Compiler perlu mengetahui ukuran tipe saat kompilasi. Tanpa indirection, ukurannya bisa terus bertambah tanpa batas.
+
+<RustPlayground
+  code={`enum List {
+    Cons(i32, List),
+    Nil,
+}
+
+fn main() {
+    let list = List::Cons(1, List::Cons(2, List::Nil));
+    let _ = list;
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error tipe rekursif tanpa Box"
+/>
+
+Pesan `recursive type List has infinite size` muncul karena `Cons` menyimpan `List` secara langsung. Compiler tidak bisa menentukan berapa banyak ruang yang dibutuhkan.
+
+Dengan `Box<List>`, ukuran `List` menjadi ukuran `i32` plus ukuran pointer. Rantai data tetap bisa panjang, tetapi setiap simpul menunjuk ke simpul berikutnya lewat heap.
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum List {
+    Cons(i32, Box<List>),
+    Nil,
+}
+
+fn main() {
+    let list = List::Cons(
+        1,
+        Box::new(List::Cons(2, Box::new(List::Cons(3, Box::new(List::Nil))))),
+    );
+
+    println!("{list:?}");
+}`}
+  filename="src/main.rs"
+  label="Tipe rekursif dengan Box"
+/>
+
+Bentuk ini mirip linked list. Di Rust, `Vec<T>` biasanya lebih tepat untuk daftar biasa. Struktur rekursif seperti pohon ekspresi atau AST tetap membutuhkan indirection.
+
+## Tiga kegunaan Box
+
+Buku menyebut tiga situasi utama:
+
+1. Tipe yang ukurannya tidak diketahui saat kompilasi, tetapi perlu dipakai di konteks yang membutuhkan ukuran pasti.
+2. Data besar yang kepemilikannya dipindahkan tanpa menyalin seluruh data.
+3. Nilai yang hanya perlu diketahui mengimplementasikan trait tertentu, bukan tipe konkretnya.
+
+Kasus ketiga adalah trait object, yang dibahas lebih dalam di Bab 18. `Box<dyn Error>` yang sudah dipakai di Bab 12 adalah contoh nilai yang menyimpan tipe error berbeda di balik trait `Error`.
+
+## Batas kemampuan Box
+
+`Box` hanya memberi indirection dan alokasi heap. Ia tidak memberi kepemilikan bersama seperti `Rc`, dan tidak memberi mutasi lewat reference immutable seperti `RefCell`. `Box` mengimplementasikan `Deref` dan `Drop`, sehingga bisa diperlakukan seperti reference dan dibersihkan otomatis.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript dan Python, object besar secara umum sudah berada di heap dan dikelola oleh garbage collector. Di Go, `new(T)` mengalokasikan nilai dan pointer menunjuk ke sana, dengan GC yang mengatur umur. Rust memakai `Box` saat programmer secara eksplisit membutuhkan alokasi heap dengan ownership tunggal dan cleanup deterministik.
+:::
+
+:::tip[Tips]
+Jangan membungkus semua nilai dengan Box. Untuk angka atau struct kecil, stack lebih sederhana. Gunakan Box saat ada alasan ukuran, kepemilikan, atau trait object.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Di mana data Box<T> disimpan?',
+      options: ['Heap, dengan pointer di stack', 'Stack seluruhnya', 'File sementara', 'Database'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Box menunjuk data di heap.',
+        'Salah. Hanya pointer yang di stack.',
+        'Salah. Box bukan penyimpanan file.',
+        'Salah. Box tidak memakai database.',
+      ],
+      explanation:
+        'Ukuran pointer tetap, sedangkan data bisa berukuran dinamis.',
+    },
+    {
+      question: 'Mengapa enum rekursif tanpa Box gagal dikompilasi?',
+      options: [
+        'Karena compiler tidak bisa menentukan ukuran tipe',
+        'Karena enum tidak boleh rekursif',
+        'Karena i32 tidak bisa disimpan di enum',
+        'Karena Box wajib untuk semua enum',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ukuran rekursif tanpa indirection tidak terbatas.',
+        'Salah. Enum rekursif bisa dengan indirection.',
+        'Salah. i32 valid di enum.',
+        'Salah. Enum biasa tidak butuh Box.',
+      ],
+      explanation:
+        'Box memutus perhitungan ukuran tak terbatas dengan pointer berukuran tetap.',
+    },
+    {
+      question: 'Kemampuan apa yang tidak diberikan Box?',
+      options: [
+        'Kepemilikan bersama seperti Rc',
+        'Deref ke nilai di dalamnya',
+        'Cleanup otomatis saat drop',
+        'Alokasi data di heap',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Box memiliki satu pemilik.',
+        'Salah. Box mengimplementasikan Deref.',
+        'Salah. Box membersihkan data heap saat drop.',
+        'Salah. Box mengalokasikan data di heap.',
+      ],
+      explanation:
+        'Untuk kepemilikan bersama, gunakan Rc atau Arc.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

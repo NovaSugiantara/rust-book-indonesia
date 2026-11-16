@@ -1,0 +1,177 @@
+---
+title: '15.3 Drop'
+description: 'Menjalankan cleanup saat nilai keluar dari scope dan memakai std::mem::drop untuk drop lebih awal.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Trait `Drop` memungkinkan kode cleanup dijalankan saat nilai keluar dari scope. Compiler menyisipkan pemanggilan ini otomatis, sehingga sumber daya seperti file, koneksi, atau lock bisa dilepas tanpa pemanggilan manual di setiap jalur.
+
+## Implementasi Drop
+
+<RustPlayground
+  code={`struct CustomSmartPointer {
+    data: String,
+}
+
+impl Drop for CustomSmartPointer {
+    fn drop(&mut self) {
+        println!("Menghapus CustomSmartPointer dengan data {}", self.data);
+    }
+}
+
+fn main() {
+    let c = CustomSmartPointer {
+        data: String::from("pertama"),
+    };
+    let d = CustomSmartPointer {
+        data: String::from("kedua"),
+    };
+
+    println!("CustomSmartPointer dibuat");
+}`}
+  filename="src/main.rs"
+  label="Drop dijalankan saat nilai keluar dari scope"
+/>
+
+Output menunjukkan `d` di-drop sebelum `c`, karena variabel di-drop dalam urutan kebalikan dari pembuatannya. `Drop` sudah ada di prelude, jadi tidak perlu `use`.
+
+## Tidak bisa memanggil drop secara manual
+
+Method `drop` tidak boleh dipanggil langsung. Kalau dipanggil, nilai akan dibersihkan dua kali: sekali oleh pemanggilan manual dan sekali otomatis saat scope berakhir.
+
+<RustPlayground
+  code={`struct CustomSmartPointer;
+
+impl Drop for CustomSmartPointer {
+    fn drop(&mut self) {
+        println!("cleanup");
+    }
+}
+
+fn main() {
+    let c = CustomSmartPointer;
+    c.drop();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error memanggil drop secara eksplisit"
+/>
+
+Pesan `explicit destructor calls not allowed` muncul karena Rust melarang pemanggilan `Drop::drop` langsung. Ini mencegah double free.
+
+## Drop lebih awal dengan std::mem::drop
+
+Kalau nilai perlu dibersihkan sebelum akhir scope, gunakan fungsi `std::mem::drop`, yang juga tersedia sebagai `drop` di prelude.
+
+<RustPlayground
+  code={`struct CustomSmartPointer {
+    data: String,
+}
+
+impl Drop for CustomSmartPointer {
+    fn drop(&mut self) {
+        println!("Menghapus {}", self.data);
+    }
+}
+
+fn main() {
+    let c = CustomSmartPointer {
+        data: String::from("sebelum akhir main"),
+    };
+
+    println!("Dibuat");
+    drop(c);
+    println!("Setelah drop");
+}`}
+  filename="src/main.rs"
+  label="std::mem::drop untuk cleanup lebih awal"
+/>
+
+Pesan cleanup muncul di antara `Dibuat` dan `Setelah drop`. Setelah `drop(c)`, `c` tidak boleh dipakai lagi karena kepemilikannya sudah diambil fungsi `drop`.
+
+## Kapan Drop berguna
+
+`Drop` berguna untuk melepas resource yang harus segera dikembalikan, misalnya:
+
+- menutup file atau koneksi,
+- melepas lock,
+- mengembalikan koneksi ke pool,
+- mencatat metrik saat guard selesai.
+
+Di backend, guard sering membawa referensi ke resource dan melakukan cleanup saat scope selesai. Karena `Drop` berjalan otomatis, jalur error yang keluar lebih awal tetap menjalankan cleanup selama nilai benar-benar di-drop.
+
+`Drop` tidak boleh panic. Panic saat panic lain sedang berlangsung dapat menghentikan program. Bersihkan resource dengan operasi yang tidak melempar panic tak terkendali.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript dan Python, cleanup sering bergantung pada garbage collector atau blok `try/finally`; Python juga punya context manager. Di Go, `defer` menjadwalkan pemanggilan saat fungsi selesai. Rust menjalankan `Drop` saat nilai keluar dari scope, sehingga cleanup mengikuti ownership dan tidak perlu ditulis di setiap jalur keluar.
+:::
+
+:::tip[Tips]
+Jangan menaruh logika bisnis penting di `Drop`. Buat cleanup yang singkat dan tidak bergantung pada state yang mungkin sudah tidak valid. Untuk operasi yang bisa gagal, sediakan method eksplisit sebelum drop.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Kapan Drop dijalankan?',
+      options: [
+        'Saat nilai keluar dari scope',
+        'Hanya saat program memanggil drop manual',
+        'Saat garbage collector berjalan',
+        'Saat file dibuka',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler menyisipkan pemanggilan saat scope berakhir.',
+        'Salah. Pemanggilan manual justru dilarang.',
+        'Salah. Rust tidak memakai GC.',
+        'Salah. Drop bukan pembukaan file.',
+      ],
+      explanation:
+        'Cleanup mengikuti ownership dan umur nilai.',
+    },
+    {
+      question: 'Mengapa memanggil c.drop() ditolak?',
+      options: [
+        'Karena akan menyebabkan cleanup ganda',
+        'Karena drop bukan method',
+        'Karena c tidak mutable',
+        'Karena Drop hanya untuk Box',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rust tetap akan drop nilai di akhir scope.',
+        'Salah. drop adalah method trait Drop.',
+        'Salah. Parameter drop adalah &mut self, tetapi larangan utamanya cleanup ganda.',
+        'Salah. Drop bisa diimplementasikan banyak tipe.',
+      ],
+      explanation:
+        'Gunakan std::mem::drop untuk meminta cleanup lebih awal.',
+    },
+    {
+      question: 'Apa efek drop(c) dari std::mem::drop?',
+      options: [
+        'Mengambil kepemilikan c dan menjalankan Drop sekarang',
+        'Menandai c agar di-drop nanti',
+        'Menyalin c',
+        'Mematikan program',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Fungsi drop mengambil nilai dan membiarkannya keluar scope.',
+        'Salah. Drop berjalan saat pemanggilan.',
+        'Salah. Tidak ada penyalinan.',
+        'Salah. Program tidak berhenti.',
+      ],
+      explanation:
+        'Setelah drop(c), c tidak boleh dipakai lagi.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

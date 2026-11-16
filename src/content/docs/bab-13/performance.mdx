@@ -1,0 +1,146 @@
+---
+title: '13.4 Performance loop dan iterator'
+description: 'Hasil benchmark buku dan arti zero-cost abstraction tanpa klaim berlebihan.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Pertanyaan wajar setelah memakai iterator: apakah kode lebih lambat? Buku menjalankan benchmark pada `search` versi loop dan versi iterator dengan teks *The Adventures of Sherlock Holmes* dan query `the`.
+
+## Hasil benchmark buku
+
+```text
+test bench_search_for  ... bench:  19,620,300 ns/iter (+/- 915,700)
+test bench_search_iter ... bench:  19,234,900 ns/iter (+/- 657,200)
+```
+
+Buku menyimpulkan kedua implementasi memiliki performa yang mirip. Ini bukan bukti bahwa semua iterator selalu sama cepat dengan semua loop. Buku juga menyarankan benchmark lebih menyeluruh dengan berbagai ukuran teks, query berbeda, dan variasi lain.
+
+## Zero-cost abstraction
+
+Buku menjelaskan iterator sebagai salah satu zero-cost abstraction Rust: menggunakan abstraksi tidak menambah overhead runtime. Iterator tingkat tinggi dapat dikompilasi menjadi kode yang kira-kira sama dengan kode tingkat rendah yang ditulis manual.
+
+Optimisasi seperti loop unrolling dan penghapusan pemeriksaan batas array dapat diterapkan, sehingga kode hasilnya efisien. Buku menyatakan bahwa dalam banyak kasus, kode Rust dengan iterator dikompilasi menjadi assembly yang sama dengan yang ditulis tangan.
+
+Klaim ini berlaku pada pola yang bisa dioptimalkan compiler. Kode yang melakukan I/O, alokasi besar, atau pekerjaan dinamis tetap perlu diukur sendiri. Jangan memakai istilah zero-cost untuk mengklaim bahwa setiap program otomatis cepat.
+
+## Membandingkan dua bentuk
+
+Kedua fungsi berikut menghitung jumlah angka genap. Yang pertama memakai loop, yang kedua memakai iterator.
+
+<RustPlayground
+  code={`fn jumlah_genap_loop(angka: &[i32]) -> i32 {
+    let mut total = 0;
+
+    for nilai in angka {
+        if nilai % 2 == 0 {
+            total += nilai;
+        }
+    }
+
+    total
+}
+
+fn jumlah_genap_iterator(angka: &[i32]) -> i32 {
+    angka
+        .iter()
+        .filter(|nilai| **nilai % 2 == 0)
+        .sum()
+}
+
+fn main() {
+    let data = [1, 2, 3, 4, 5, 6, 7, 8];
+
+    assert_eq!(jumlah_genap_loop(&data), 20);
+    assert_eq!(jumlah_genap_iterator(&data), 20);
+
+    println!("Kedua bentuk menghasilkan 20");
+}`}
+  filename="src/main.rs"
+  label="Loop dan iterator menghasilkan nilai yang sama"
+/>
+
+Contoh ini menunjukkan ekuivalensi hasil, bukan performa. Untuk mengukur performa, gunakan benchmark yang mengukur waktu secara terkontrol, bukan `Instant::now` sekali jalan.
+
+## Kapan memilih loop
+
+Iterator cocok saat operasinya berupa urutan transformasi dan filter yang jelas. Loop lebih mudah dibaca saat:
+
+- membutuhkan indeks atau beberapa koleksi sekaligus,
+- ada `break`, `continue`, atau update state yang rumit,
+- alur kesalahan lebih jelas dengan loop eksplisit.
+
+Buku menekankan bahwa keduanya sering setara secara performa setelah optimisasi. Pilihan yang baik adalah yang paling jelas untuk pembaca dan cukup cepat untuk kebutuhan nyata.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, method array seperti `map` dan `filter` membangun array baru dan bisa menambah alokasi. Di Python, generator expression menghindari list perantara, sedangkan list comprehension membangun list. Rust memakai iterator lazy dan biasanya tidak perlu collection perantara, tetapi tetap perlu diukur untuk memastikan optimizer menghasilkan kode yang diharapkan.
+:::
+
+:::tip[Tips]
+Ukur sebelum mengubah kode yang sudah benar. Optimisasi tanpa profil sering hanya menambah kompleksitas. Kalau performa penting, siapkan data dan skenario yang mewakili beban produksi.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa hasil benchmark buku untuk loop dan iterator?',
+      options: [
+        'Keduanya memiliki performa yang mirip',
+        'Iterator selalu dua kali lebih cepat',
+        'Loop selalu dua kali lebih cepat',
+        'Benchmark tidak menghasilkan angka',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Angka keduanya berdekatan.',
+        'Salah. Tidak ada klaim dua kali lebih cepat.',
+        'Salah. Tidak ada klaim loop dua kali lebih cepat.',
+        'Salah. Buku menampilkan angka benchmark.',
+      ],
+      explanation:
+        'Buku menyimpulkan kedua implementasi mirip, bukan identik untuk semua kasus.',
+    },
+    {
+      question: 'Apa arti zero-cost abstraction dalam konteks iterator?',
+      options: [
+        'Abstraksi tidak menambah overhead runtime pada pola yang dioptimalkan',
+        'Semua program Rust otomatis cepat',
+        'Iterator tidak pernah mengalokasikan memory',
+        'Compiler menghapus semua loop',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Buku menyatakan abstraksi tidak menambah overhead runtime.',
+        'Salah. Klaim itu terlalu luas.',
+        'Salah. collect tetap bisa mengalokasikan memory.',
+        'Salah. Loop tidak dihapus begitu saja.',
+      ],
+      explanation:
+        'Zero-cost berarti abstraksi dapat dikompilasi mendekati kode manual, bukan jaminan untuk semua beban kerja.',
+    },
+    {
+      question: 'Kapan loop eksplisit lebih tepat?',
+      options: [
+        'Saat membutuhkan indeks, break, atau state yang rumit',
+        'Saat semua operasi berupa filter sederhana',
+        'Saat ingin menghindari semua alokasi',
+        'Saat tidak ada data',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Kontrol alur yang kompleks lebih jelas dengan loop.',
+        'Salah. Filter sederhana cocok dengan iterator.',
+        'Salah. Loop tidak otomatis menghindari alokasi.',
+        'Salah. Tanpa data, keduanya sepele.',
+      ],
+      explanation:
+        'Keterbacaan dan kebutuhan kontrol alur menentukan pilihan.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

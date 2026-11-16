@@ -1,0 +1,131 @@
+---
+title: '14.1 Release profile'
+description: 'Profil dev dan release, opt-level, serta trade-off waktu kompilasi dan optimisasi.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Cargo punya dua profil utama: `dev` untuk `cargo build` dan `release` untuk `cargo build --release`. Keduanya punya pengaturan default yang berbeda dan bisa diubah lewat `Cargo.toml`.
+
+## Profil bawaan
+
+```console
+$ cargo build
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+$ cargo build --release
+    Finished `release` profile [optimized] target(s) in 0.32s
+```
+
+Label `unoptimized + debuginfo` pada profil `dev` menunjukkan build tanpa optimisasi penuh dan dengan informasi debug. Profil `release` memakai optimisasi dan biasanya menghasilkan binary yang lebih cepat berjalan, dengan waktu kompilasi lebih lama.
+
+## opt-level
+
+`opt-level` mengatur jumlah optimisasi dengan rentang 0 sampai 3. Default `dev` adalah 0, default `release` adalah 3.
+
+```toml
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+```
+
+Optimisasi lebih banyak memperpanjang waktu kompilasi. Pada `dev`, kompilasi cepat lebih penting karena kode sering diubah dan dijalankan. Pada `release`, waktu kompilasi dibayar sekali, sementara program dijalankan berkali-kali.
+
+Nilai bisa diubah sebagian. Contoh berikut memakai optimisasi level 1 untuk `dev` tanpa mengubah pengaturan lain:
+
+```toml
+[profile.dev]
+opt-level = 1
+```
+
+Cargo memakai default profil ditambah override yang ditulis. Pengaturan lain tetap mengikuti default.
+
+## Debug assertion
+
+Profil `dev` mengaktifkan `debug_assertions`, sedangkan `release` mematikannya secara default. Makro `debug_assert!` berguna untuk pemeriksaan yang membantu saat pengembangan tetapi tidak perlu ikut di build release.
+
+<RustPlayground
+  code={`fn hitung_total(harga: u32, jumlah: u32) -> u32 {
+    debug_assert!(jumlah > 0, "jumlah harus lebih dari nol");
+    harga * jumlah
+}
+
+fn main() {
+    println!("debug assertions aktif: {}", cfg!(debug_assertions));
+    println!("Total: {}", hitung_total(12_000, 3));
+}`}
+  filename="src/main.rs"
+  label="debug_assert dan cfg debug_assertions"
+/>
+
+Playground berjalan dalam mode debug, sehingga `debug_assertions` aktif. Jangan memakai `debug_assert!` untuk validasi input pengguna di production karena pemeriksaan itu bisa hilang pada build release. Gunakan `Result` untuk validasi yang harus selalu berjalan.
+
+## Kapan memakai release
+
+Build release dipakai saat menyiapkan binary untuk deployment atau pengukuran performa. Untuk iterasi lokal, build `dev` lebih cepat dan informasi debug membantu membaca panic.
+
+Perubahan profil bisa memengaruhi perilaku program yang bergantung pada `cfg!(debug_assertions)` atau `debug_assert!`. Uji build release sebelum menganggap perilaku di `dev` berlaku sama.
+
+:::note[Kalau di bahasa lain]
+Di Node.js, mode development dan production biasanya diatur lewat environment dan bundler, bukan profil compiler. Di Go, `go build` menghasilkan binary optimized secara default dan menyimpan simbol debug; flag seperti `-ldflags` mengubah metadata. Di Rust, profil `dev` dan `release` adalah konfigurasi Cargo yang eksplisit.
+:::
+
+:::tip[Tips]
+Jangan mengubah `opt-level` tanpa alasan yang bisa diukur. Mulai dari default, ukur build dan runtime, lalu ubah satu pengaturan pada satu waktu.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa profil default untuk cargo build?',
+      options: ['dev', 'release', 'test', 'bench'],
+      answer: 0,
+      optionNotes: [
+        'Benar. cargo build memakai profil dev.',
+        'Salah. release dipakai dengan --release.',
+        'Salah. test adalah profil terpisah untuk test.',
+        'Salah. bench dipakai untuk benchmark.',
+      ],
+      explanation:
+        'Profil dev dioptimalkan untuk siklus pengembangan yang cepat.',
+    },
+    {
+      question: 'Apa default opt-level untuk release?',
+      options: ['3', '0', '1', '2'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Release memakai opt-level 3 secara default.',
+        'Salah. 0 adalah default dev.',
+        'Salah. 1 hanya jika di-override.',
+        'Salah. 2 bukan default release.',
+      ],
+      explanation:
+        'Release menukar waktu kompilasi dengan kode yang berjalan lebih cepat.',
+    },
+    {
+      question: 'Mengapa debug_assert tidak cocok untuk validasi input production?',
+      options: [
+        'Karena bisa dimatikan pada build release',
+        'Karena selalu panic di release',
+        'Karena hanya bekerja untuk String',
+        'Karena tidak bisa menerima pesan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. debug_assert bergantung pada debug_assertions.',
+        'Salah. Ia justru bisa hilang di release.',
+        'Salah. Bisa dipakai untuk banyak tipe.',
+        'Salah. debug_assert bisa menerima pesan.',
+      ],
+      explanation:
+        'Validasi yang harus selalu berjalan perlu ditulis dengan Result atau panic eksplisit.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

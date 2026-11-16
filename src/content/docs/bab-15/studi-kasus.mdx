@@ -1,0 +1,276 @@
+---
+title: '15.7 Studi kasus: cache menu Kasir Warung'
+description: 'Memakai Rc<RefCell<MenuCache>> untuk cache single-thread dan menunjukkan batasnya menuju Bab 16.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Kasir Warung sudah punya `HashMap` menu di library. Sekarang cache menu dibagikan ke beberapa fungsi laporan dalam satu thread, dengan hit counter yang bisa berubah meskipun cache dipegang lewat reference immutable.
+
+<StudyCase title="Kasir Warung: cache menu" intro="Membungkus cache dengan Rc dan RefCell, lalu memeriksa kenapa kombinasi ini tidak bisa dipakai lintas thread.">
+  <StudyCaseStep
+    title="Bungkus cache dengan RefCell"
+    goal="Mengizinkan hit counter berubah lewat method yang menerima reference immutable."
+  >
+    ```rust
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+
+    #[derive(Default)]
+    pub struct MenuCache {
+        pub harga: HashMap<String, u32>,
+        pub hit: u32,
+    }
+
+    pub fn cari_harga(cache: &RefCell<MenuCache>, kode: &str) -> Option<u32> {
+        let mut cache = cache.borrow_mut();
+        cache.hit += 1;
+        cache.harga.get(kode).copied()
+    }
+    ```
+
+    `cari_harga` tidak perlu `&mut MenuCache` di signature. Mutasi terjadi di dalam `RefCell` saat runtime.
+
+    <Fragment slot="hint">
+      Tahan `borrow_mut` hanya selama lookup. Jangan memanggil fungsi lain yang juga meminjam cache selama borrow masih aktif.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Signature tetap memakai reference immutable, tetapi hit counter tetap bisa diperbarui.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Bagikan cache dengan Rc"
+    goal="Membuat beberapa pemilik cache dalam satu thread."
+  >
+    ```rust
+    use std::rc::Rc;
+
+    pub type SharedMenu = Rc<RefCell<MenuCache>>;
+
+    let menu: SharedMenu = Rc::new(RefCell::new(MenuCache {
+        harga: HashMap::from([
+            (String::from("KOPI"), 12_000),
+            (String::from("ROTI"), 8_000),
+        ]),
+        hit: 0,
+    }));
+
+    let kasir_pagi = Rc::clone(&menu);
+    let kasir_siang = Rc::clone(&menu);
+    ```
+
+    Kedua variabel menunjuk cache yang sama. `Rc::clone` hanya menambah strong count, bukan menyalin isi `HashMap`.
+
+    <Fragment slot="hint">
+      `Rc` memberi kepemilikan bersama. `RefCell` memberi mutasi. Keduanya diperlukan untuk cache yang dibaca dan dicatat hit-nya.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Cache bisa dipakai beberapa fungsi tanpa clone seluruh menu.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Catat hit dan periksa hitungan"
+    goal="Memastikan lookup berjalan dan melihat jumlah pemilik serta hit."
+  >
+    ```rust
+    assert_eq!(cari_harga(&kasir_pagi, "KOPI"), Some(12_000));
+    assert_eq!(cari_harga(&kasir_siang, "ROTI"), Some(8_000));
+
+    println!("hit: {}", menu.borrow().hit);
+    println!("strong count: {}", Rc::strong_count(&menu));
+    ```
+
+    Output menunjukkan dua hit dan strong count tiga: `menu`, `kasir_pagi`, dan `kasir_siang`. Saat variabel keluar scope, hitungan turun dan cache dibersihkan pada nol.
+
+    <Fragment slot="hint">
+      Setelah selesai membaca, lepaskan borrow sebelum melakukan operasi lain pada cache.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Cache tunggal melayani beberapa bagian laporan dalam satu thread.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Batas: bukan untuk worker thread"
+    goal="Menunjukkan bahwa Rc<RefCell<T>> tidak bisa dikirim ke thread lain."
+  >
+    Di server, cache akan diakses worker thread. Kombinasi ini ditolak compiler:
+
+    ```rust
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::thread;
+
+    let cache = Rc::new(RefCell::new(0));
+
+    thread::spawn(move || {
+        *cache.borrow_mut() += 1;
+    })
+    .join()
+    .unwrap();
+    ```
+
+    Error `Rc<RefCell<i32>> cannot be sent between threads safely` muncul karena `Rc` tidak atomik dan `RefCell` tidak melakukan sinkronisasi. Bab 16 menggantinya dengan `Arc<Mutex<T>>`: `Arc` untuk kepemilikan lintas thread, `Mutex` untuk akses eksklusif.
+
+    <Fragment slot="hint">
+      Ini bukan kekurangan konfigurasi. Ini jaminan compiler bahwa data tidak diakses bersamaan tanpa sinkronisasi.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Cache single-thread tetap berguna untuk CLI dan proses lokal. Untuk server multi-thread, gunakan primitif thread-safe.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+<RustPlayground
+  code={`use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+#[derive(Default)]
+struct MenuCache {
+    harga: HashMap<String, u32>,
+    hit: u32,
+}
+
+type SharedMenu = Rc<RefCell<MenuCache>>;
+
+fn cari_harga(cache: &RefCell<MenuCache>, kode: &str) -> Option<u32> {
+    let mut cache = cache.borrow_mut();
+    cache.hit += 1;
+    cache.harga.get(kode).copied()
+}
+
+fn main() {
+    let menu: SharedMenu = Rc::new(RefCell::new(MenuCache {
+        harga: HashMap::from([
+            (String::from("KOPI"), 12_000),
+            (String::from("ROTI"), 8_000),
+        ]),
+        hit: 0,
+    }));
+
+    let kasir_pagi = Rc::clone(&menu);
+    let kasir_siang = Rc::clone(&menu);
+
+    assert_eq!(cari_harga(&kasir_pagi, "KOPI"), Some(12_000));
+    assert_eq!(cari_harga(&kasir_siang, "ROTI"), Some(8_000));
+    assert_eq!(cari_harga(&kasir_siang, "TEH"), None);
+
+    println!("hit: {}", menu.borrow().hit);
+    println!("strong count: {}", Rc::strong_count(&menu));
+}`}
+  filename="src/main.rs"
+  label="Cache menu dengan Rc<RefCell<MenuCache>>"
+/>
+
+<RustPlayground
+  code={`use std::cell::RefCell;
+use std::rc::Rc;
+use std::thread;
+
+fn main() {
+    let cache = Rc::new(RefCell::new(0));
+
+    thread::spawn(move || {
+        *cache.borrow_mut() += 1;
+    })
+    .join()
+    .unwrap();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error Rc<RefCell<T>> dikirim ke thread"
+/>
+
+## Keadaan setelah Bab 15
+
+- `MenuCache` menyimpan harga dan hit counter.
+- `cari_harga` memakai `RefCell::borrow_mut` untuk mencatat hit.
+- `SharedMenu = Rc<RefCell<MenuCache>>` dipakai beberapa bagian laporan dalam satu thread.
+- `Rc::strong_count` dipakai untuk memeriksa jumlah pemilik.
+- Kombinasi ini tidak bisa dikirim ke thread lain; compiler menolak dengan pesan `cannot be sent between threads safely`.
+- Rencana Bab 16: ganti `Rc` dengan `Arc` dan `RefCell` dengan `Mutex` untuk worker thread.
+- Belum ada cache global lintas proses; itu di luar cakupan bab.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript, cache object bisa dipegang banyak variabel tanpa memikirkan ownership. Di Go, map bersama dilindungi `sync.Mutex` atau diakses lewat channel. Rust memisahkan dua masalah: siapa yang memiliki data (`Rc` atau `Arc`) dan siapa yang boleh mengubah saat ini (`RefCell` atau `Mutex`).
+:::
+
+:::tip[Tips]
+Kalau cache hanya dibaca setelah dimuat, `Rc<HashMap>` tanpa `RefCell` lebih sederhana. Tambahkan `RefCell` hanya ketika ada state yang benar-benar perlu diubah.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa cache memakai RefCell?',
+      options: [
+        'Agar hit counter bisa berubah lewat reference immutable',
+        'Agar cache bisa dikirim ke thread',
+        'Agar HashMap menjadi sorted',
+        'Agar Rc tidak perlu clone',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. RefCell memberi interior mutability.',
+        'Salah. RefCell justru menghalangi lintas thread.',
+        'Salah. HashMap tidak diurutkan oleh RefCell.',
+        'Salah. Rc tetap perlu clone untuk pemilik baru.',
+      ],
+      explanation:
+        'Method lookup menerima &RefCell, tetapi bisa memutasi isinya saat runtime.',
+    },
+    {
+      question: 'Apa arti strong count tiga pada cache?',
+      options: [
+        'Ada tiga Rc yang memiliki cache',
+        'Cache punya tiga item menu',
+        'Ada tiga thread yang memakai cache',
+        'Cache sudah di-drop tiga kali',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. menu, kasir_pagi, dan kasir_siang.',
+        'Salah. Jumlah item menu berbeda.',
+        'Salah. Tidak ada thread di contoh itu.',
+        'Salah. Cache belum di-drop.',
+      ],
+      explanation:
+        'Rc::strong_count menghitung pemilik Rc yang masih hidup.',
+    },
+    {
+      question: 'Mengapa Rc<RefCell<T>> gagal dikirim ke thread?',
+      options: [
+        'Karena Rc tidak atomik dan RefCell tidak sinkron',
+        'Karena RefCell hanya untuk angka',
+        'Karena thread tidak bisa memakai heap',
+        'Karena Mutex tidak tersedia',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Kombinasi ini bukan tipe Send/Sync.',
+        'Salah. RefCell generik.',
+        'Salah. Thread bisa memakai heap.',
+        'Salah. Mutex tersedia di standard library.',
+      ],
+      explanation:
+        'Bab 16 memakai Arc<Mutex<T>> untuk kepemilikan dan sinkronisasi lintas thread.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

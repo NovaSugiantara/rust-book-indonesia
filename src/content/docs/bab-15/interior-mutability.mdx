@@ -1,0 +1,224 @@
+---
+title: '15.5 Interior mutability'
+description: 'RefCell untuk mutasi lewat reference immutable dan kombinasi Rc<RefCell<T>>.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Interior mutability memungkinkan data diubah meskipun ada reference immutable ke data itu. Pola ini memakai `unsafe` di dalam tipe, tetapi menyediakan API aman yang menegakkan aturan borrow saat runtime. `RefCell<T>` adalah contoh utamanya.
+
+## Aturan borrow saat runtime
+
+Biasanya borrow checker menolak mutasi lewat nilai immutable:
+
+<RustPlayground
+  code={`fn main() {
+    let nilai = 5;
+    nilai += 1;
+
+    println!("{nilai}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mengubah nilai immutable"
+/>
+
+`RefCell<T>` memindahkan pemeriksaan aturan borrow ke runtime. Kalau aturan dilanggar, program panic, bukan gagal dikompilasi.
+
+Aturan yang ditegakkan tetap sama:
+
+- banyak immutable borrow diperbolehkan,
+- satu mutable borrow diperbolehkan,
+- mutable dan immutable borrow tidak boleh bersamaan.
+
+`borrow()` mengembalikan `Ref<T>`, sedangkan `borrow_mut()` mengembalikan `RefMut<T>`. Keduanya mengimplementasikan `Deref`, sehingga bisa dipakai seperti reference biasa.
+
+## Mock object untuk test
+
+Contoh buku membuat `LimitTracker` yang mengirim pesan lewat trait `Messenger`. Mock object perlu mencatat pesan, tetapi method trait menerima `&self`. `RefCell` memungkinkan pencatatan itu.
+
+<RustPlayground
+  code={`use std::cell::RefCell;
+
+trait Messenger {
+    fn send(&self, msg: &str);
+}
+
+struct MockMessenger {
+    sent_messages: RefCell<Vec<String>>,
+}
+
+impl MockMessenger {
+    fn new() -> MockMessenger {
+        MockMessenger {
+            sent_messages: RefCell::new(Vec::new()),
+        }
+    }
+}
+
+impl Messenger for MockMessenger {
+    fn send(&self, msg: &str) {
+        self.sent_messages.borrow_mut().push(String::from(msg));
+    }
+}
+
+fn main() {
+    let mock = MockMessenger::new();
+
+    mock.send("kamu sudah memakai 80% kuota");
+    mock.send("hati-hati, kuota hampir habis");
+
+    assert_eq!(mock.sent_messages.borrow().len(), 2);
+    println!("Pesan tercatat: {:?}", mock.sent_messages.borrow());
+}`}
+  filename="src/main.rs"
+  label="Mock object dengan RefCell"
+/>
+
+Tanpa `RefCell`, field `sent_messages` tidak bisa diubah karena `send` hanya menerima `&self`. Mengubah trait menjadi `&mut self` akan memaksa semua implementasi berubah hanya demi test.
+
+## Dua mutable borrow
+
+Kalau dua mutable borrow aktif bersamaan, `RefCell` panic. Contoh berikut menangkap panic agar program tetap bisa memperlihatkan hasilnya:
+
+<RustPlayground
+  code={`use std::cell::RefCell;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+
+fn main() {
+    let data = RefCell::new(vec![1, 2, 3]);
+
+    let hasil = catch_unwind(AssertUnwindSafe(|| {
+        let _satu = data.borrow_mut();
+        let _dua = data.borrow_mut();
+    }));
+
+    println!("panic tertangkap: {}", hasil.is_err());
+}`}
+  filename="src/main.rs"
+  label="Pelanggaran borrow RefCell berubah menjadi panic"
+/>
+
+Pesan panic berisi `already borrowed: BorrowMutError`. Ini terjadi saat runtime, bisa terlambat ditemukan dibanding error compile. Karena itu, gunakan `RefCell` hanya saat kamu yakin aturan borrow dipatuhi.
+
+## `Rc<RefCell<T>>`
+
+`Rc<T>` memberi banyak pemilik tetapi hanya akses immutable. `RefCell<T>` memberi mutasi lewat reference immutable. Kombinasinya memberi banyak pemilik dan mutasi.
+
+<RustPlayground
+  code={`use std::cell::RefCell;
+use std::rc::Rc;
+
+fn main() {
+    let nilai = Rc::new(RefCell::new(5));
+
+    let a = Rc::clone(&nilai);
+    let b = Rc::clone(&nilai);
+
+    *nilai.borrow_mut() += 10;
+
+    println!("a = {}", a.borrow());
+    println!("b = {}", b.borrow());
+}`}
+  filename="src/main.rs"
+  label="Rc<RefCell<T>> untuk banyak pemilik dan mutasi"
+/>
+
+Semua pemilik melihat nilai yang sama. Perubahan lewat satu `Rc` terlihat oleh yang lain karena mereka menunjuk `RefCell` yang sama.
+
+## Batas single-thread
+
+`RefCell<T>` juga hanya untuk single-thread. Pemeriksaan borrow-nya tidak memakai sinkronisasi antar thread. Mengirim `Rc<RefCell<T>>` ke thread lain akan ditolak compiler karena tipe itu bukan `Send`.
+
+Di server, cache yang diakses beberapa worker thread tidak boleh memakai `Rc<RefCell<T>>`. Bab 16 membahas `Arc<Mutex<T>>` untuk berbagi state lintas thread dengan lock.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript dan Python, object bisa diubah dari banyak tempat dan sinkronisasi menjadi tanggung jawab programmer atau runtime. Di Go, mutasi bersama biasanya dilindungi `sync.Mutex` atau channel. Rust memakai `RefCell` untuk pemeriksaan runtime dalam satu thread, dan `Mutex` untuk sinkronisasi lintas thread.
+:::
+
+:::tip[Tips]
+Pegang `borrow` atau `borrow_mut` dalam scope sesingkat mungkin. Menahan borrow sambil memanggil fungsi lain yang juga meminjam data adalah penyebab umum panic `BorrowMutError`.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dilakukan RefCell terhadap aturan borrow?',
+      options: [
+        'Memindahkan pemeriksaannya ke runtime',
+        'Menghapus semua aturan borrow',
+        'Membuat semua borrow menjadi mutable',
+        'Memindahkan data ke heap',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pelanggaran menjadi panic saat runtime.',
+        'Salah. Aturan tetap berlaku.',
+        'Salah. Immutable borrow tetap ada.',
+        'Salah. RefCell tidak otomatis memindahkan data ke heap.',
+      ],
+      explanation:
+        'RefCell menukar jaminan compile time dengan fleksibilitas runtime.',
+    },
+    {
+      question: 'Apa yang terjadi jika dua borrow_mut aktif?',
+      options: [
+        'Program panic dengan BorrowMutError',
+        'Compiler menolak saat build',
+        'Borrow kedua diabaikan',
+        'Data dikembalikan ke nilai awal',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. RefCell menegakkan aturan saat runtime.',
+        'Salah. Kode ini bisa dikompilasi.',
+        'Salah. Borrow kedua tidak diabaikan.',
+        'Salah. Tidak ada rollback otomatis.',
+      ],
+      explanation:
+        'Karena itu RefCell perlu dipakai dengan hati-hati.',
+    },
+    {
+      question: 'Apa keuntungan Rc<RefCell<T>>?',
+      options: [
+        'Banyak pemilik dan kemampuan mengubah data',
+        'Otomatis thread-safe',
+        'Menghindari semua panic',
+        'Membuat data menjadi Copy',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rc membagi kepemilikan, RefCell mengizinkan mutasi.',
+        'Salah. Kombinasi ini tetap single-thread.',
+        'Salah. borrow yang salah tetap panic.',
+        'Salah. Tidak mengubah trait Copy.',
+      ],
+      explanation:
+        'Kombinasi ini umum untuk graph atau struktur yang saling merujuk dalam satu thread.',
+    },
+    {
+      question: 'Mengapa Rc<RefCell<T>> tidak bisa dikirim ke worker thread?',
+      options: [
+        'Karena Rc dan RefCell bukan tipe Send',
+        'Karena RefCell hanya untuk angka',
+        'Karena Rc tidak punya method clone',
+        'Karena thread tidak bisa memakai heap',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Keduanya dirancang untuk single-thread.',
+        'Salah. RefCell generik.',
+        'Salah. Rc punya clone.',
+        'Salah. Thread bisa memakai heap.',
+      ],
+      explanation:
+        'Gunakan Arc<Mutex<T>> untuk state bersama lintas thread.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

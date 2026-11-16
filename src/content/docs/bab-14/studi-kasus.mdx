@@ -1,0 +1,275 @@
+---
+title: '14.6 Studi kasus: workspace Kasir Warung'
+description: 'Memecah Kasir Warung menjadi kasir-core dan kasir-cli, menyiapkan release, dan memasang binary.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Sampai Bab 13, Kasir Warung berupa satu package dengan library dan binary CLI. Sekarang logika inti dipindahkan ke crate `kasir-core`, sementara `kasir-cli` menjadi binary yang bergantung padanya.
+
+<StudyCase title="Kasir Warung: workspace dan distribusi" intro="Memisahkan library dan CLI, memakai release profile, lalu memasang binary dari workspace.">
+  <StudyCaseStep
+    title="Membuat workspace"
+    goal="Menyiapkan root workspace dengan dua anggota."
+  >
+    Root `Cargo.toml` tidak punya `[package]`, hanya konfigurasi workspace dan profil release:
+
+    ```toml
+    [workspace]
+    members = ["kasir-core", "kasir-cli"]
+    resolver = "3"
+
+    [profile.release]
+    opt-level = 3
+    ```
+
+    Struktur proyek:
+
+    ```text
+    kasir_warung/
+    ├── Cargo.toml
+    ├── Cargo.lock
+    ├── kasir-core/
+    │   ├── Cargo.toml
+    │   └── src/lib.rs
+    ├── kasir-cli/
+    │   ├── Cargo.toml
+    │   └── src/main.rs
+    └── target/
+    ```
+
+    <Fragment slot="hint">
+      Satu `Cargo.lock` dan satu `target` berada di root workspace. Package anggota tidak punya lockfile sendiri.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Workspace memisahkan batas library dan binary tanpa menduplikasi build dependency.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Memindahkan logika ke kasir-core"
+    goal="Menjadikan laporan dan aturan transaksi sebagai API public library."
+  >
+    `kasir-core/src/lib.rs` memuat module yang sudah ada dan re-export API yang nyaman:
+
+    ```rust
+    pub mod laporan;
+    pub mod menu;
+    pub mod transaksi;
+
+    pub use laporan::{proses, Rekap};
+    pub use menu::{harga_menu, ItemPesanan, MenuItem};
+    pub use transaksi::{KasirError, Transaksi};
+    ```
+
+    `kasir-cli/Cargo.toml` bergantung pada library lewat path:
+
+    ```toml
+    [package]
+    name = "kasir-cli"
+    version = "0.1.0"
+    edition = "2024"
+
+    [dependencies]
+    kasir-core = { path = "../kasir-core" }
+    ```
+
+    <Fragment slot="hint">
+      `pub use` membuat pemakai tidak perlu tahu module internal. Binary tetap bisa mengimpor `kasir_core::Rekap`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Logika inti bisa dites sebagai library. Binary hanya menangani argumen, file, stdout, dan stderr.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Build, test, dan release"
+    goal="Menjalankan perintah dari root workspace dan menyiapkan binary release."
+  >
+    ```console
+    $ cargo test -p kasir-core
+    $ cargo run -p kasir-cli -- transaksi.csv
+    $ cargo build --release -p kasir-cli
+    ```
+
+    Binary release berada di `target/release/kasir-cli`. Profil release memakai `opt-level = 3`, sesuai default Cargo dan override yang ditulis di root.
+
+    Pasang binary dari workspace:
+
+    ```console
+    $ cargo install --path kasir-cli
+    ```
+
+    Setelah folder `~/.cargo/bin` ada di `PATH`, perintah `kasir-cli` bisa dipanggil dari direktori lain.
+
+    <Fragment slot="hint">
+      `-p` memilih package dalam workspace. Tanpa `-p`, Cargo bisa menjalankan lebih dari satu binary atau meminta pilihan.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Build dan test tetap dijalankan dari root, sementara binary dipasang sebagai alat lokal.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Metadata dan publikasi"
+    goal="Menyiapkan crate untuk dibagikan tanpa mengunggah versi yang salah."
+  >
+    Tambahkan metadata wajib di masing-masing package:
+
+    ```toml
+    [package]
+    name = "kasir-core"
+    version = "0.1.0"
+    edition = "2024"
+    description = "Library inti transaksi Kasir Warung."
+    license = "MIT OR Apache-2.0"
+    ```
+
+    Publikasikan `kasir-core` lebih dulu, lalu `kasir-cli`. Setiap crate punya versi dan metadata sendiri:
+
+    ```console
+    $ cargo publish -p kasir-core
+    $ cargo publish -p kasir-cli
+    ```
+
+    Kalau versi `kasir-core` bermasalah setelah dipakai, yank versi itu dan rilis versi baru. Yank tidak menghapus kode yang sudah diunggah.
+
+    <Fragment slot="hint">
+      Jangan menaruh token crates.io di Cargo.toml atau repositori. Gunakan `cargo login` dan simpan token di kredensial lokal.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Library dan binary bisa didistribusikan terpisah, dengan aturan versi masing-masing.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+Playground tidak bisa membuat workspace, tetapi pemisahan library dan binary bisa digambarkan dengan module dan re-export:
+
+<RustPlayground
+  code={`mod kasir_core {
+    pub mod laporan {
+        use std::collections::HashMap;
+
+        pub struct Rekap {
+            pub baris: HashMap<String, u32>,
+        }
+
+        impl Rekap {
+            pub fn total(&self) -> u32 {
+                self.baris.values().sum()
+            }
+        }
+    }
+
+    pub use laporan::Rekap;
+}
+
+use kasir_core::Rekap;
+use std::collections::HashMap;
+
+fn main() {
+    let rekap = Rekap {
+        baris: HashMap::from([
+            (String::from("KOPI"), 36_000),
+            (String::from("ROTI"), 24_000),
+        ]),
+    };
+
+    println!("Total: Rp{}", rekap.total());
+}`}
+  filename="src/main.rs"
+  label="Re-export API library dan pemakaian dari binary"
+/>
+
+## Keadaan setelah Bab 14
+
+- Root workspace berisi `kasir-core` dan `kasir-cli`.
+- `kasir-core` menyimpan menu, transaksi, laporan, error, dan rekap iterator.
+- `kasir-cli` bergantung pada `kasir-core` lewat path dependency.
+- Satu `Cargo.lock` dan satu `target` dipakai bersama.
+- Profil release memakai `opt-level = 3`.
+- Binary release ada di `target/release/kasir-cli`.
+- Metadata publikasi ada di masing-masing package.
+- Publikasi dan yank dilakukan per crate, bukan per workspace.
+- Belum ada CI yang mem-publish otomatis; itu di luar cakupan bab.
+
+:::note[Kalau di bahasa lain]
+Workspace Rust mirip npm workspaces, Composer path repository, atau `go work`. Perbedaannya, Cargo menyatukan lockfile dan output build di root. Publikasi crate mirip `npm publish` atau paket Composer di Packagist, sedangkan `cargo install` mirip `npm install -g` atau `go install`.
+:::
+
+:::tip[Tips]
+Publikasikan library lebih dulu, lalu binary yang bergantung padanya. Uji `cargo install --path` sebelum mengunggah apa pun agar alur pemasangan benar-benar berjalan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa kasir-core dipublikasikan lebih dulu?',
+      options: [
+        'Karena kasir-cli bergantung pada kasir-core',
+        'Karena binary tidak boleh punya dependency',
+        'Karena workspace hanya mengizinkan satu publikasi',
+        'Karena kasir-core tidak punya versi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Dependency harus tersedia sebelum crate yang memakainya.',
+        'Salah. Binary boleh punya dependency.',
+        'Salah. Setiap crate dipublikasikan terpisah.',
+        'Salah. kasir-core punya versi sendiri.',
+      ],
+      explanation:
+        'Urutan publikasi mengikuti arah dependency.',
+    },
+    {
+      question: 'Apa fungsi -p pada cargo run?',
+      options: [
+        'Memilih package yang dijalankan dalam workspace',
+        'Menjalankan semua package',
+        'Memasang binary ke PATH',
+        'Mengubah profil release',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. -p memilih nama package.',
+        'Salah. Tanpa -p Cargo bisa meminta pilihan.',
+        'Salah. Pemasangan memakai cargo install.',
+        'Salah. Profil diatur dengan --release atau Cargo.toml.',
+      ],
+      explanation:
+        'Workspace bisa punya beberapa binary, sehingga package perlu dipilih.',
+    },
+    {
+      question: 'Apa yang terjadi jika kasir-core di-yank?',
+      options: [
+        'Proyek baru tidak memakai versi itu, proyek lama dengan lockfile tetap berjalan',
+        'Semua kode kasir-core dihapus',
+        'kasir-cli otomatis terhapus',
+        'Semua versi kasir-core diblokir',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Yank mencegah pemakaian baru tanpa merusak lockfile lama.',
+        'Salah. Yank tidak menghapus kode.',
+        'Salah. kasir-cli adalah crate terpisah.',
+        'Salah. Hanya versi yang ditentukan yang di-yank.',
+      ],
+      explanation:
+        'Yank adalah mekanisme deprekasi versi, bukan penghapusan.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

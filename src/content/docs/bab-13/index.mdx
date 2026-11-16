@@ -1,0 +1,90 @@
+---
+title: 'Bab 13: Closure dan iterator'
+description: 'Closure yang menangkap environment, iterator yang lazy, adapter, dan dampaknya ke proyek CLI.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Closure dan iterator membawa gaya pemrograman fungsional ke Rust. Closure adalah fungsi anonim yang bisa menangkap nilai dari sekitarnya. Iterator menghasilkan urutan nilai satu per satu dan menyediakan adapter seperti `map`, `filter`, serta `sum`.
+
+Di backend, keduanya muncul saat memproses daftar transaksi, menyaring request yang tidak valid, menghitung total, atau mengubah hasil query menjadi response. Bab ini juga memakai kembali `minigrep` dari Bab 12 untuk menunjukkan perubahan kode yang lebih ringkas.
+
+## Urutan bab
+
+1. [Closure](closures/) membahas penangkapan environment, inferensi tipe, `move`, dan trait `Fn`.
+2. [Iterator](iterators/) membahas `Iterator`, `next`, adapter, dan sifat lazy.
+3. [Memperbaiki proyek I/O](improving-io/) membahas `Config::build` dengan iterator dan `search` yang lebih ringkas.
+4. [Performa loop dan iterator](performance/) membahas hasil benchmark buku dan zero-cost abstraction.
+5. [Studi kasus: Kasir Warung](studi-kasus/) memakai closure dan iterator untuk rekap transaksi.
+
+:::note[Kenapa begini?]
+Closure dan iterator adalah abstraksi. Kekhawatiran umum adalah abstraksi memperlambat program. Buku menunjukkan bahwa iterator dapat dikompilasi menjadi kode yang setara dengan loop biasa, tetapi pengukuran tetap perlu dilakukan pada kasus nyata. Jangan menganggap semua abstraksi otomatis cepat.
+:::
+
+:::tip[Tips]
+Tulis loop biasa lebih dulu jika alurnya belum jelas. Setelah perilakunya benar, ganti bagian yang berulang dengan adapter iterator bila hasilnya lebih mudah dibaca.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang bisa dilakukan closure tetapi tidak bisa dilakukan fungsi biasa?',
+      options: [
+        'Menangkap nilai dari environment tempat closure dibuat',
+        'Mengembalikan nilai',
+        'Menerima parameter',
+        'Dipanggil berulang kali',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Closure dapat menangkap referensi atau kepemilikan nilai di sekitarnya.',
+        'Salah. Fungsi biasa juga bisa mengembalikan nilai.',
+        'Salah. Fungsi biasa menerima parameter.',
+        'Salah. Fungsi biasa bisa dipanggil berulang kali.',
+      ],
+      explanation:
+        'Kemampuan menangkap environment adalah pembeda utama closure.',
+    },
+    {
+      question: 'Apa arti iterator bersifat lazy?',
+      options: [
+        'Adapter tidak melakukan apa pun sampai iterator dikonsumsi',
+        'Iterator tidak pernah menghasilkan nilai',
+        'Iterator berjalan di thread terpisah',
+        'Iterator menyimpan semua nilai di disk',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Kerja baru terjadi saat metode konsumsi seperti collect atau sum dipanggil.',
+        'Salah. Iterator tetap menghasilkan nilai saat dikonsumsi.',
+        'Salah. Laziness bukan soal thread.',
+        'Salah. Iterator tidak menulis ke disk.',
+      ],
+      explanation:
+        'Karena lazy, rantai adapter perlu diakhiri metode yang mengonsumsi iterator.',
+    },
+    {
+      question: 'Apa yang dilakukan collect?',
+      options: [
+        'Mengonsumsi iterator dan mengumpulkan hasilnya ke collection',
+        'Membuat iterator baru tanpa menjalankannya',
+        'Menghapus semua item',
+        'Mengubah closure menjadi fungsi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. collect menjalankan iterator dan membangun collection.',
+        'Salah. Adapter yang membuat iterator baru.',
+        'Salah. collect tidak menghapus item.',
+        'Salah. collect tidak mengubah closure.',
+      ],
+      explanation:
+        'Anotasi tipe kadang diperlukan karena collect bisa menghasilkan beberapa jenis collection.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

@@ -1,0 +1,237 @@
+---
+title: '15.2 Deref'
+description: 'Dereference reference dan smart pointer, implementasi Deref, serta deref coercion.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Operator `*` mengikuti pointer ke nilai yang ditunjuk. Reference biasa sudah mendukung dereference. Smart pointer bisa mendapatkan perilaku yang sama dengan mengimplementasikan trait `Deref`.
+
+## Reference dan dereference
+
+<RustPlayground
+  code={`fn main() {
+    let x = 5;
+    let y = &x;
+
+    assert_eq!(5, x);
+    assert_eq!(5, *y);
+
+    println!("x = {x}, *y = {}", *y);
+}`}
+  filename="src/main.rs"
+  label="Dereference reference ke i32"
+/>
+
+Membandingkan angka dengan reference tanpa `*` ditolak karena tipenya berbeda:
+
+<RustPlayground
+  code={`fn main() {
+    let x = 5;
+    let y = &x;
+
+    assert_eq!(5, y);
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error membandingkan i32 dengan reference"
+/>
+
+Pesan `can't compare i32 with &{integer}` menunjukkan bahwa reference bukan nilai yang ditunjuk. Gunakan `*y` untuk mengikuti reference.
+
+## Box seperti reference
+
+`Box<T>` juga bisa di-dereference dengan cara yang sama:
+
+<RustPlayground
+  code={`fn main() {
+    let x = 5;
+    let y = Box::new(x);
+
+    assert_eq!(5, x);
+    assert_eq!(5, *y);
+
+    println!("*y = {}", *y);
+}`}
+  filename="src/main.rs"
+  label="Dereference Box"
+/>
+
+## Smart pointer buatan sendiri
+
+Buat tuple struct `MyBox<T>` yang menyimpan satu nilai. Tanpa implementasi `Deref`, operator `*` tidak tahu cara mengakses isinya.
+
+<RustPlayground
+  code={`struct MyBox<T>(T);
+
+impl<T> MyBox<T> {
+    fn new(x: T) -> MyBox<T> {
+        MyBox(x)
+    }
+}
+
+fn main() {
+    let x = 5;
+    let y = MyBox::new(x);
+
+    assert_eq!(5, *y);
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error dereference tipe tanpa Deref"
+/>
+
+Pesan `type MyBox<{integer}> cannot be dereferenced` muncul karena belum ada implementasi `Deref`. Tambahkan implementasinya:
+
+<RustPlayground
+  code={`use std::ops::Deref;
+
+struct MyBox<T>(T);
+
+impl<T> MyBox<T> {
+    fn new(x: T) -> MyBox<T> {
+        MyBox(x)
+    }
+}
+
+impl<T> Deref for MyBox<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
+
+fn main() {
+    let x = 5;
+    let y = MyBox::new(x);
+
+    assert_eq!(5, *y);
+    println!("*y = {}", *y);
+}`}
+  filename="src/main.rs"
+  label="Implementasi Deref pada MyBox"
+/>
+
+`deref` mengembalikan `&T`, bukan `T`, karena mengembalikan nilai langsung akan memindahkan data keluar dari `self`. Rust menjalankan `*(y.deref())` saat menemui `*y`.
+
+## Deref coercion
+
+Deref coercion mengubah reference ke tipe yang mengimplementasikan `Deref` menjadi reference ke tipe target. Contoh paling umum adalah `&String` menjadi `&str` karena `String` mengimplementasikan `Deref<Target = str>`.
+
+<RustPlayground
+  code={`use std::ops::Deref;
+
+struct MyBox<T>(T);
+
+impl<T> MyBox<T> {
+    fn new(x: T) -> MyBox<T> {
+        MyBox(x)
+    }
+}
+
+impl<T> Deref for MyBox<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
+
+fn hello(name: &str) {
+    println!("Halo, {name}!");
+}
+
+fn main() {
+    let m = MyBox::new(String::from("Rust"));
+
+    hello(&m);
+}`}
+  filename="src/main.rs"
+  label="Deref coercion dari MyBox<String> ke &str"
+/>
+
+Rust memanggil `deref` pada `&MyBox<String>` untuk mendapatkan `&String`, lalu memanggil `deref` lagi pada `String` untuk mendapatkan `&str`. Jumlah konversi ditentukan saat kompilasi.
+
+## DerefMut
+
+`DerefMut` mengatur dereference untuk mutable reference. Deref coercion berlaku dalam tiga kasus:
+
+1. `&T` menjadi `&U` jika `T: Deref<Target = U>`.
+2. `&mut T` menjadi `&mut U` jika `T: DerefMut<Target = U>`.
+3. `&mut T` menjadi `&U` jika `T: Deref<Target = U>`.
+
+Reference immutable tidak pernah berubah menjadi mutable. Aturan borrow tidak menjamin bahwa hanya ada satu reference ke data, sehingga konversi itu tidak aman.
+
+:::note[Kalau di bahasa lain]
+Di JavaScript dan Python, akses properti object tidak memakai operator dereference eksplisit. Di Go, pointer di-dereference dengan `*`, tetapi tidak ada trait yang bisa diimplementasikan untuk mengubah perilaku operator. Rust memakai `Deref` agar smart pointer bisa dipakai di kode yang ditulis untuk reference biasa.
+:::
+
+:::tip[Tips]
+Implementasikan `Deref` saat wrapper benar-benar berperilaku seperti tipe di dalamnya. Kalau wrapper punya aturan sendiri, jangan memaksa deref hanya agar pemanggilan method lebih singkat.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa deref mengembalikan &T, bukan T?',
+      options: [
+        'Agar nilai tidak dipindahkan keluar dari self',
+        'Agar tipe menjadi Copy',
+        'Agar bisa dipakai lintas thread',
+        'Agar Box dialokasikan di stack',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Mengembalikan T akan memindahkan kepemilikan.',
+        'Salah. Deref tidak mengubah Copy.',
+        'Salah. Thread safety bukan alasan utama.',
+        'Salah. Box tetap di heap.',
+      ],
+      explanation:
+        'Deref memberi akses tanpa mengambil alih nilai di dalam smart pointer.',
+    },
+    {
+      question: 'Apa yang dilakukan deref coercion pada &String?',
+      options: [
+        'Mengubahnya menjadi &str',
+        'Mengubahnya menjadi String owned',
+        'Menghapus isi String',
+        'Membuat String menjadi mutable',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. String mengimplementasikan Deref<Target = str>.',
+        'Salah. Tidak ada pemindahan kepemilikan.',
+        'Salah. Isi tidak dihapus.',
+        'Salah. Coercion tidak menambah mutabilitas.',
+      ],
+      explanation:
+        'Coercion terjadi otomatis saat fungsi membutuhkan &str.',
+    },
+    {
+      question: 'Bisakah &mut T berubah menjadi &U?',
+      options: [
+        'Bisa, jika T: Deref<Target = U>',
+        'Tidak pernah bisa',
+        'Hanya jika U: Copy',
+        'Hanya untuk Box',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Mutable reference boleh menjadi immutable reference.',
+        'Salah. Kasus ketiga mengizinkannya.',
+        'Salah. Copy bukan syaratnya.',
+        'Salah. Berlaku untuk tipe dengan Deref.',
+      ],
+      explanation:
+        'Sebaliknya, &U tidak bisa menjadi &mut U karena aturan borrow.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />
