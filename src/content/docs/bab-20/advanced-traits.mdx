@@ -1,0 +1,348 @@
+---
+title: '20.2 Trait lanjutan'
+description: 'Associated type, operator overloading, disambiguasi, supertrait, dan newtype pattern.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Trait di Bab 10 cukup untuk sebagian besar kebutuhan. Bab ini membahas fitur trait yang muncul saat mendesain library: associated type, parameter generic dengan default, pemanggilan method yang ambigu, supertrait, dan newtype untuk aturan orphan.
+
+## Associated type
+
+Associated type adalah placeholder tipe di dalam trait. Implementor menentukan tipe konkretnya.
+
+<RustPlayground
+  code={`struct Counter {
+    count: u32,
+}
+
+impl Counter {
+    fn new() -> Counter {
+        Counter { count: 0 }
+    }
+}
+
+impl Iterator for Counter {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.count < 3 {
+            self.count += 1;
+            Some(self.count)
+        } else {
+            None
+        }
+    }
+}
+
+fn main() {
+    let angka: Vec<u32> = Counter::new().collect();
+    println!("{angka:?}");
+}`}
+  filename="src/main.rs"
+  label="Associated type Item pada Iterator"
+/>
+
+Dengan associated type, satu tipe hanya bisa mengimplementasikan trait sekali untuk satu `Item`. Kalau memakai parameter generic `Iterator<T>`, satu tipe bisa mengimplementasikan banyak `Iterator<T>` dan pemanggilan method menjadi ambigu.
+
+## Default generic parameter dan operator overloading
+
+Trait `Add` memiliki parameter generic `Rhs` dengan default `Self`:
+
+```rust
+trait Add<Rhs = Self> {
+    type Output;
+
+    fn add(self, rhs: Rhs) -> Self::Output;
+}
+```
+
+Karena default-nya `Self`, implementasi `Add for Point` bisa menjumlahkan dua `Point`:
+
+<RustPlayground
+  code={`use std::ops::Add;
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl Add for Point {
+    type Output = Point;
+
+    fn add(self, other: Point) -> Point {
+        Point {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
+    }
+}
+
+fn main() {
+    let hasil = Point { x: 1, y: 0 } + Point { x: 2, y: 3 };
+    println!("{hasil:?}");
+}`}
+  filename="src/main.rs"
+  label="Operator + untuk Point"
+/>
+
+Parameter default bisa diubah untuk menjumlahkan tipe berbeda:
+
+<RustPlayground
+  code={`use std::ops::Add;
+
+struct Millimeters(u32);
+struct Meters(u32);
+
+impl Add<Meters> for Millimeters {
+    type Output = Millimeters;
+
+    fn add(self, other: Meters) -> Millimeters {
+        Millimeters(self.0 + other.0 * 1000)
+    }
+}
+
+fn main() {
+    let panjang = Millimeters(500) + Meters(2);
+    println!("{} mm", panjang.0);
+}`}
+  filename="src/main.rs"
+  label="Add dengan parameter kanan berbeda"
+/>
+
+Operator overloading di Rust terbatas pada trait standard library seperti `Add`, `Sub`, dan `Index`. Gunakan saat maknanya jelas, bukan untuk membuat operator dengan perilaku mengejutkan.
+
+## Method dengan nama sama
+
+Satu tipe bisa memiliki method dari trait berbeda dan dari `impl` sendiri dengan nama sama. Pemanggilan `person.fly()` memilih method pada `impl` tipe. Untuk method trait, gunakan path trait.
+
+<RustPlayground
+  code={`trait Pilot {
+    fn fly(&self);
+}
+
+trait Wizard {
+    fn fly(&self);
+}
+
+struct Human;
+
+impl Pilot for Human {
+    fn fly(&self) {
+        println!("Kapten berbicara");
+    }
+}
+
+impl Wizard for Human {
+    fn fly(&self) {
+        println!("Terbang!");
+    }
+}
+
+impl Human {
+    fn fly(&self) {
+        println!("Melambaikan tangan");
+    }
+}
+
+fn main() {
+    let person = Human;
+    person.fly();
+    Pilot::fly(&person);
+    Wizard::fly(&person);
+}`}
+  filename="src/main.rs"
+  label="Disambiguasi method dengan nama sama"
+/>
+
+Untuk associated function tanpa receiver, gunakan fully qualified syntax `<Tipe as Trait>::function()`.
+
+Method trait pada `Dog` tidak bisa dipanggil hanya dengan `Animal::baby_name()` karena compiler tidak tahu implementasi mana yang dimaksud:
+
+<RustPlayground
+  code={`trait Animal {
+    fn baby_name() -> String;
+}
+
+struct Dog;
+
+impl Dog {
+    fn baby_name() -> String {
+        String::from("Spot")
+    }
+}
+
+impl Animal for Dog {
+    fn baby_name() -> String {
+        String::from("puppy")
+    }
+}
+
+fn main() {
+    println!("{}", Animal::baby_name());
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error associated function trait tanpa tipe"
+/>
+
+Pesan `cannot call associated function on trait without specifying the corresponding impl type` disertai saran `<Dog as Animal>::baby_name()`.
+
+## Supertrait
+
+Supertrait menyatakan bahwa implementor trait juga harus mengimplementasikan trait lain. Contoh `OutlinePrint: fmt::Display` membutuhkan `Display` agar bisa memakai `to_string`.
+
+<RustPlayground
+  code={`use std::fmt;
+
+trait OutlinePrint: fmt::Display {
+    fn outline_print(&self) {
+        let output = self.to_string();
+        let len = output.len();
+        println!("{}", "*".repeat(len + 4));
+        println!("*{}*", " ".repeat(len + 2));
+        println!("* {output} *");
+        println!("*{}*", " ".repeat(len + 2));
+        println!("{}", "*".repeat(len + 4));
+    }
+}
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+impl OutlinePrint for Point {}
+
+fn main() {
+    let p = Point { x: 1, y: 3 };
+    p.outline_print();
+}`}
+  filename="src/main.rs"
+  label="Supertrait Display pada OutlinePrint"
+/>
+
+Tanpa `impl Display`, `impl OutlinePrint for Point` ditolak karena bound supertrait tidak terpenuhi.
+
+## Newtype dan orphan rule
+
+Rust mengizinkan implementasi trait eksternal untuk tipe lokal. Kamu tidak bisa mengimplementasikan trait eksternal untuk tipe eksternal karena aturan orphan. Newtype membungkus tipe eksternal dalam tipe lokal sehingga implementasi menjadi sah.
+
+<RustPlayground
+  code={`use std::fmt;
+
+struct Wrapper(Vec<String>);
+
+impl fmt::Display for Wrapper {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[{}]", self.0.join(", "))
+    }
+}
+
+fn main() {
+    let w = Wrapper(vec![String::from("halo"), String::from("dunia")]);
+    println!("w = {w}");
+}`}
+  filename="src/main.rs"
+  label="Newtype Wrapper untuk implementasi Display"
+/>
+
+Newtype juga berguna untuk menambah makna pada tipe primitif, misalnya `UserId(u64)` atau `Email(String)`, sehingga nilai berbeda tidak tertukar.
+
+:::note[Kalau di bahasa lain]
+TypeScript memakai generic dan interface tanpa associated type. Java memakai generic interface dan method overload. Go memakai interface dan type embedding. Rust memakai associated type untuk satu implementasi per tipe, default generic parameter untuk fleksibilitas, dan newtype untuk mengatasi aturan orphan.
+:::
+
+:::tip[Tips]
+Gunakan associated type saat trait hanya masuk akal diimplementasikan sekali untuk satu tipe. Gunakan parameter generic saat trait perlu banyak implementasi dengan tipe parameter berbeda.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa keuntungan associated type pada Iterator?',
+      options: [
+        'Satu tipe hanya punya satu Item dan pemanggilan tidak ambigu',
+        'Semua item menjadi String',
+        'Iterator tidak perlu method next',
+        'Tipe item ditentukan saat runtime',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Item adalah bagian dari implementasi trait.',
+        'Salah. Item bisa tipe apa pun.',
+        'Salah. next tetap wajib.',
+        'Salah. Item ditentukan saat kompilasi.',
+      ],
+      explanation:
+        'Associated type mengikat satu tipe output pada implementasi.',
+    },
+    {
+      question: 'Apa arti Add<Rhs = Self>?',
+      options: [
+        'Parameter Rhs default ke tipe yang mengimplementasikan trait',
+        'Add hanya bisa untuk angka',
+        'Rhs selalu String',
+        'Add tidak punya Output',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Default memungkinkan penjumlahan tipe yang sama.',
+        'Salah. Add bisa untuk banyak tipe.',
+        'Salah. Rhs bukan String.',
+        'Salah. Add punya associated type Output.',
+      ],
+      explanation:
+        'Default generic parameter membuat pemakaian umum lebih ringkas.',
+    },
+    {
+      question: 'Kapan memakai fully qualified syntax?',
+      options: [
+        'Saat method atau associated function ambigu antara beberapa trait',
+        'Saat ingin membuat thread',
+        'Saat memakai Vec',
+        'Saat menulis macro',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Sintaks <Tipe as Trait>::method memilih implementasi.',
+        'Salah. Tidak terkait thread.',
+        'Salah. Vec tidak membutuhkan itu.',
+        'Salah. Macro bukan alasan utamanya.',
+      ],
+      explanation:
+        'Disambiguasi diperlukan saat nama sama berasal dari trait berbeda.',
+    },
+    {
+      question: 'Mengapa newtype membantu aturan orphan?',
+      options: [
+        'Karena tipe lokal membungkus tipe eksternal sehingga implementasi trait eksternal diizinkan',
+        'Karena newtype menghapus trait eksternal',
+        'Karena newtype membuat semua tipe menjadi lokal',
+        'Karena newtype menonaktifkan coherence',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Newtype adalah tipe lokal.',
+        'Salah. Trait eksternal tetap ada.',
+        'Salah. Tipe eksternal tetap eksternal.',
+        'Salah. Coherence tetap berlaku.',
+      ],
+      explanation:
+        'Wrapper lokal memenuhi syarat implementasi trait eksternal.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

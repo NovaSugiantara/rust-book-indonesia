@@ -1,0 +1,279 @@
+---
+title: '21.2 Thread pool'
+description: 'Worker, channel, Arc<Mutex<Receiver>>, dan antrean pekerjaan untuk server.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Server single-thread memproses koneksi satu per satu. Request ke `/sleep` menahan request lain selama tidur. Solusi buku adalah thread pool: sejumlah thread tetap mengambil pekerjaan dari antrean.
+
+## Simulasi request lambat
+
+```rust
+let (status_line, filename) = match &request_line[..] {
+    "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "hello.html"),
+    "GET /sleep HTTP/1.1" => {
+        thread::sleep(Duration::from_secs(5));
+        ("HTTP/1.1 200 OK", "hello.html")
+    }
+    _ => ("HTTP/1.1 404 NOT FOUND", "404.html"),
+};
+```
+
+Membuka `/sleep` lalu `/` membuat request kedua menunggu. Spawn thread per request memperbaiki perilaku tetapi bisa membuat thread tanpa batas jika request membanjir. Thread pool membatasi jumlah worker.
+
+## Antrean pekerjaan
+
+Pool memakai channel `mpsc`. `ThreadPool` memegang sender, setiap `Worker` memegang receiver yang dibagi dengan `Arc<Mutex<Receiver>>`. Setiap worker mengambil satu job, menjalankannya, lalu mengambil job berikutnya.
+
+Tipe job adalah closure yang hanya dipanggil sekali, bisa dikirim antar thread, dan hidup selama program:
+
+```rust
+type Job = Box<dyn FnOnce() + Send + 'static>;
+```
+
+`ThreadPool::execute` menerima closure, membungkusnya dalam `Box`, lalu mengirimnya ke channel.
+
+## Implementasi ThreadPool
+
+```rust
+use std::{
+    sync::{mpsc, Arc, Mutex},
+    thread,
+};
+
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
+pub struct ThreadPool {
+    workers: Vec<Worker>,
+    sender: mpsc::Sender<Job>,
+}
+
+impl ThreadPool {
+    /// Membuat pool dengan jumlah worker tertentu.
+    ///
+    /// # Panics
+    ///
+    /// Panic jika `size` nol.
+    pub fn new(size: usize) -> ThreadPool {
+        assert!(size > 0);
+
+        let (sender, receiver) = mpsc::channel();
+        let receiver = Arc::new(Mutex::new(receiver));
+        let mut workers = Vec::with_capacity(size);
+
+        for id in 0..size {
+            workers.push(Worker::new(id, Arc::clone(&receiver)));
+        }
+
+        ThreadPool { workers, sender }
+    }
+
+    pub fn execute<F>(&self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let job = Box::new(f);
+        self.sender.send(job).unwrap();
+    }
+}
+
+struct Worker {
+    id: usize,
+    thread: thread::JoinHandle<()>,
+}
+
+impl Worker {
+    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
+        let thread = thread::spawn(move || loop {
+            let message = receiver.lock().unwrap().recv();
+
+            match message {
+                Ok(job) => {
+                    println!("Worker {id} mengambil pekerjaan");
+                    job();
+                }
+                Err(_) => {
+                    println!("Worker {id} disconnected");
+                    break;
+                }
+            }
+        });
+
+        Worker { id, thread }
+    }
+}
+```
+
+`size` divalidasi agar pool tidak kosong. `Vec::with_capacity` menyiapkan ruang worker. `Job` adalah trait object karena setiap closure punya tipe anonymous berbeda.
+
+## `Arc<Mutex<Receiver>>`
+
+`mpsc::Receiver` tidak bisa di-clone. Semua worker perlu mengambil dari antrean yang sama, dan hanya satu yang boleh menerima pada satu waktu. `Arc` membagi kepemilikan, `Mutex` memberi akses eksklusif.
+
+Letakkan `recv` langsung di `let` agar lock tidak dipegang selama job berjalan:
+
+```rust
+let message = receiver.lock().unwrap().recv();
+```
+
+Kalau memakai `while let Ok(job) = receiver.lock().unwrap().recv()`, temporary guard bisa hidup sampai akhir blok dan lock tertahan selama `job()` berjalan. Akibatnya worker lain tidak bisa mengambil job dan request lambat kembali memblokir antrean.
+
+## Simulasi pool
+
+<RustPlayground
+  code={`use std::{
+    sync::{mpsc, Arc, Mutex},
+    thread,
+};
+
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
+fn main() {
+    let (tx, rx) = mpsc::channel::<Job>();
+    let rx = Arc::new(Mutex::new(rx));
+    let mut handles = Vec::new();
+
+    for id in 0..2 {
+        let rx = Arc::clone(&rx);
+        handles.push(thread::spawn(move || loop {
+            let job = rx.lock().unwrap().recv();
+
+            match job {
+                Ok(job) => {
+                    println!("Worker {id} mulai");
+                    job();
+                }
+                Err(_) => break,
+            }
+        }));
+    }
+
+    for nomor in 1..=4 {
+        tx.send(Box::new(move || {
+            println!("Memproses pekerjaan {nomor}");
+        }))
+        .unwrap();
+    }
+
+    drop(tx);
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+}`}
+  filename="src/main.rs"
+  label="Dua worker mengambil job dari channel"
+/>
+
+## Memakai pool di server
+
+```rust
+use kasir_server::ThreadPool;
+
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    let pool = ThreadPool::new(4);
+
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+
+        pool.execute(|| {
+            handle_connection(stream);
+        });
+    }
+}
+```
+
+`handle_connection` pindah ke worker. Selama satu worker menunggu `/sleep`, worker lain bisa menangani request `/`.
+
+:::note[Kalau di bahasa lain]
+Go memakai goroutine dan worker pool dari channel. Node.js memakai `worker_threads` atau cluster. Python memakai `ThreadPoolExecutor` atau `multiprocessing`. Rust membangun pool dari `thread`, `mpsc`, dan `Arc<Mutex<T>>`, dengan pemeriksaan `Send` saat kompilasi.
+:::
+
+:::tip[Tips]
+Batas jumlah worker adalah keputusan kapasitas. Terlalu kecil membuat antrean panjang; terlalu besar menghabiskan resource. Ukur beban dan sesuaikan dengan jenis pekerjaan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa Worker memakai Arc<Mutex<Receiver>>?',
+      options: [
+        'Karena Receiver tidak bisa di-clone dan perlu diakses bergantian',
+        'Karena Receiver hanya menerima angka',
+        'Karena Mutex membuat job lebih cepat',
+        'Karena Arc menghapus antrean',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Satu receiver dibagi ke banyak worker.',
+        'Salah. Receiver generik.',
+        'Salah. Tidak ada klaim kecepatan.',
+        'Salah. Arc tidak menghapus antrean.',
+      ],
+      explanation:
+        'Mutex memastikan hanya satu worker menerima job pada satu waktu.',
+    },
+    {
+      question: 'Apa tipe Job?',
+      options: [
+        'Box<dyn FnOnce() + Send + \'static>',
+        'String',
+        'JoinHandle<()>',
+        'Arc<Mutex<()>>',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Closure sekali panggil yang bisa dikirim antar thread.',
+        'Salah. Job bukan teks.',
+        'Salah. JoinHandle adalah handle thread.',
+        'Salah. Itu tipe sinkronisasi.',
+      ],
+      explanation:
+        'Trait object menyatukan closure dengan tipe anonymous berbeda.',
+    },
+    {
+      question: 'Mengapa while let pada receiver bisa menahan lock?',
+      options: [
+        'Karena temporary MutexGuard hidup sampai akhir blok',
+        'Karena while let tidak bisa memakai Result',
+        'Karena recv membutuhkan dua lock',
+        'Karena channel menutup otomatis',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Lock bisa tertahan selama job berjalan.',
+        'Salah. while let bisa memakai Result.',
+        'Salah. recv hanya butuh satu lock.',
+        'Salah. Penutupan channel terpisah.',
+      ],
+      explanation:
+        'Letakkan recv pada let statement agar guard dilepas sebelum job dijalankan.',
+    },
+    {
+      question: 'Apa manfaat thread pool dibanding spawn per request?',
+      options: [
+        'Membatasi jumlah thread dan resource',
+        'Menghapus kebutuhan channel',
+        'Membuat semua request selesai instan',
+        'Menghilangkan error I/O',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pool memberi batas worker.',
+        'Salah. Channel tetap dipakai.',
+        'Salah. Waktu proses tetap ada.',
+        'Salah. Error I/O tetap mungkin.',
+      ],
+      explanation:
+        'Pool mencegah pembuatan thread tanpa batas saat trafik meningkat.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

@@ -1,0 +1,205 @@
+---
+title: '21.1 Server single-thread'
+description: 'TcpListener, request HTTP, response, file HTML, dan routing sederhana.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Server dimulai dari `TcpListener` yang menunggu koneksi. Setiap koneksi menghasilkan `TcpStream`. Dari stream itu server membaca request HTTP dan menulis response.
+
+## Listener TCP
+
+```rust
+use std::net::TcpListener;
+
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+        println!("Koneksi diterima");
+    }
+}
+```
+
+`bind` mengikat alamat dan port. `incoming` menghasilkan iterator connection attempt. `unwrap` dipakai untuk contoh; server nyata perlu menangani error bind dan error koneksi.
+
+## Request HTTP
+
+Request HTTP berbentuk teks:
+
+```text
+Method Request-URI HTTP-Version CRLF
+headers CRLF
+message-body
+```
+
+Baris pertama adalah request line. `GET /health HTTP/1.1` berarti method `GET`, path `/health`, dan versi HTTP 1.1. Header mengikuti sampai baris kosong.
+
+`BufReader` dan trait `BufRead` menyediakan `lines` untuk membaca per baris. Contoh buku mengambil baris pertama saja karena routing hanya membutuhkan request line.
+
+## Response HTTP
+
+Response juga berbentuk teks:
+
+```text
+HTTP-Version Status-Code Reason-Phrase CRLF
+headers CRLF
+message-body
+```
+
+Response minimal `HTTP/1.1 200 OK\r\n\r\n` sudah valid. Untuk body, tambahkan `Content-Length` agar client tahu ukuran body.
+
+Routing sederhana bisa diuji tanpa listener:
+
+<RustPlayground
+  code={`fn route(request_line: &str) -> (&'static str, &'static str) {
+    match request_line {
+        "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "halaman utama"),
+        "GET /health HTTP/1.1" => ("HTTP/1.1 200 OK", "OK"),
+        _ => ("HTTP/1.1 404 NOT FOUND", "tidak ditemukan"),
+    }
+}
+
+fn main() {
+    println!("{:?}", route("GET /health HTTP/1.1"));
+    println!("{:?}", route("GET /tidak-ada HTTP/1.1"));
+}`}
+  filename="src/main.rs"
+  label="Routing request line tanpa socket"
+/>
+
+## Server lengkap single-thread
+
+Kode berikut mengikuti struktur buku: listener, `handle_connection`, routing, dan file HTML.
+
+```rust
+use std::{
+    fs,
+    io::{BufReader, prelude::*},
+    net::{TcpListener, TcpStream},
+};
+
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+        handle_connection(stream);
+    }
+}
+
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader = BufReader::new(&stream);
+    let request_line = match buf_reader.lines().next() {
+        Some(Ok(line)) => line,
+        _ => return,
+    };
+
+    let (status_line, filename) = match &request_line[..] {
+        "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "hello.html"),
+        _ => ("HTTP/1.1 404 NOT FOUND", "404.html"),
+    };
+
+    let contents = fs::read_to_string(filename).unwrap();
+    let length = contents.len();
+
+    let response =
+        format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
+
+    stream.write_all(response.as_bytes()).unwrap();
+}
+```
+
+Buat `hello.html` dan `404.html` di root proyek. Jalankan:
+
+```console
+$ cargo run
+$ curl -i http://127.0.0.1:7878/
+$ curl -i http://127.0.0.1:7878/tidak-ada
+```
+
+Request pertama mengembalikan HTML, request kedua mengembalikan halaman 404. Server ini memproses satu koneksi sampai selesai sebelum mengambil koneksi berikutnya.
+
+## Keterbatasan
+
+- Tidak ada timeout koneksi.
+- Error dibanyak tempat memakai `unwrap`.
+- Tidak ada pembatasan ukuran request atau header.
+- Tidak ada keep-alive atau parsing header lengkap.
+- Request lambat menahan semua request berikutnya.
+
+Ini cukup untuk belajar alur TCP dan HTTP, bukan untuk produksi. Bab berikutnya menambahkan thread pool untuk mengatasi request lambat.
+
+:::note[Kalau di bahasa lain]
+Node.js menyediakan `http.createServer` yang menangani parsing HTTP. Go memakai `net/http` dengan handler dan `http.Server`. Python punya `http.server` di standard library. Rust standard library hanya menyediakan TCP; parsing HTTP dilakukan manual atau lewat crate seperti hyper dan axum.
+:::
+
+:::tip[Tips]
+Gunakan `curl -i` untuk melihat status line dan header. Browser menambahkan request lain seperti favicon, sehingga log bisa menunjukkan lebih dari satu koneksi.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dihasilkan TcpListener::incoming?',
+      options: [
+        'Iterator connection attempt berisi TcpStream',
+        'Daftar file HTML',
+        'Thread pool',
+        'Response HTTP',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Setiap item adalah hasil koneksi.',
+        'Salah. File dibaca terpisah.',
+        'Salah. Thread pool dibuat manual.',
+        'Salah. Response ditulis setelah request dibaca.',
+      ],
+      explanation:
+        'Server menangani setiap stream yang berhasil terhubung.',
+    },
+    {
+      question: 'Mengapa response membutuhkan Content-Length?',
+      options: [
+        'Agar client tahu ukuran body response',
+        'Agar koneksi TCP terbuka',
+        'Agar file HTML dibuat',
+        'Agar request line terbaca',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Header ini memberi ukuran body.',
+        'Salah. TCP sudah terbuka sebelum response.',
+        'Salah. File dibuat terpisah.',
+        'Salah. Request line dibaca dari request.',
+      ],
+      explanation:
+        'Tanpa Content-Length, client harus menebak akhir body atau menunggu koneksi ditutup.',
+    },
+    {
+      question: 'Apa masalah utama server single-thread?',
+      options: [
+        'Request lambat memblokir request berikutnya',
+        'Tidak bisa mengirim HTML',
+        'Tidak bisa memakai TCP',
+        'Tidak bisa mencetak log',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Semua koneksi diproses berurutan.',
+        'Salah. Server bisa mengirim HTML.',
+        'Salah. Server memakai TCP.',
+        'Salah. Log bisa dicetak.',
+      ],
+      explanation:
+        'Thread pool atau async diperlukan agar request lain bisa diproses saat satu request menunggu.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

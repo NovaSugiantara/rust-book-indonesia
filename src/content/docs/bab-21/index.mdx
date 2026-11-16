@@ -1,0 +1,82 @@
+---
+title: 'Bab 21: Web server multithread'
+description: 'Membangun server TCP manual, thread pool, graceful shutdown, dan jembatan ke Capstone.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Bab ini menggabungkan banyak konsep sebelumnya menjadi server HTTP sederhana: TCP listener, parsing request, response, file HTML, thread pool, channel, `Arc<Mutex<T>>`, dan `Drop`. Server ini bukan pengganti framework produksi, tetapi memperlihatkan lapisan yang biasanya disembunyikan framework.
+
+## Urutan bab
+
+1. [Server single-thread](single-thread/) membahas listener TCP, request HTTP, response, dan routing sederhana.
+2. [Thread pool](multithread/) membahas `ThreadPool`, `Worker`, channel, dan antrean pekerjaan.
+3. [Graceful shutdown](graceful-shutdown/) membahas `Drop`, penutupan channel, dan `join`.
+4. [Studi kasus: server Kasir Warung](studi-kasus/) menguji endpoint health, menu, laporan, dan 404 lewat curl.
+
+:::note[Kenapa begini?]
+Server produksi memakai runtime async, parser HTTP, router, dan connection management. Membangun versi manual membuat kamu memahami masalah yang diselesaikan alat tersebut. Setelah bab ini, Capstone memakai axum dan Tokio untuk hal yang sama dengan lebih sedikit kode infrastruktur.
+:::
+
+:::tip[Tips]
+Jalankan server hanya di `127.0.0.1` saat belajar. Jangan mengekspos server contoh ke internet tanpa pemahaman keamanan, timeout, dan batas resource.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Protokol apa yang dipakai server bab ini?',
+      options: ['TCP dengan pesan HTTP di atasnya', 'UDP saja', 'WebSocket saja', 'Database protocol'],
+      answer: 0,
+      optionNotes: [
+        'Benar. HTTP dikirim di atas koneksi TCP.',
+        'Salah. Server memakai TCP.',
+        'Salah. WebSocket bukan fokus bab ini.',
+        'Salah. Database protocol berbeda.',
+      ],
+      explanation:
+        'Server membaca byte TCP lalu menafsirkan request line dan header HTTP.',
+    },
+    {
+      question: 'Mengapa server single-thread bermasalah untuk request lambat?',
+      options: [
+        'Karena request berikutnya menunggu request sebelumnya selesai',
+        'Karena TCP tidak mendukung koneksi',
+        'Karena HTTP tidak bisa memakai file',
+        'Karena thread pool terlalu besar',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pemrosesan berjalan berurutan.',
+        'Salah. TCP mendukung koneksi.',
+        'Salah. Server bisa mengirim file.',
+        'Salah. Single-thread belum memakai pool.',
+      ],
+      explanation:
+        'Thread pool memungkinkan beberapa koneksi diproses bersamaan.',
+    },
+    {
+      question: 'Apa fungsi ThreadPool?',
+      options: [
+        'Membatasi jumlah thread dan membagi pekerjaan dari antrean',
+        'Membuat thread baru untuk setiap request tanpa batas',
+        'Menggantikan TCP listener',
+        'Menyimpan file HTML',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Worker tetap dan pekerjaan dikirim lewat channel.',
+        'Salah. Itu model spawn per request.',
+        'Salah. Listener tetap dibutuhkan.',
+        'Salah. File dibaca terpisah.',
+      ],
+      explanation:
+        'Pool mencegah pembuatan thread tanpa batas saat banyak koneksi masuk.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

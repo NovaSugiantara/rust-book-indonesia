@@ -1,0 +1,282 @@
+---
+title: '20.6 Studi kasus: validasi dan error response'
+description: 'Memakai macro validasi kecil dan trait lanjutan untuk memetakan error Kasir Warung ke response.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Kasir Warung sudah punya `KasirError` dan handler CLI. Sekarang tambahkan macro validasi kecil untuk aturan yang berulang, lalu trait dengan associated type untuk memetakan error menjadi status dan body response.
+
+<StudyCase title="Kasir Warung: validasi dan response" intro="Membuat macro validasi, trait ErrorResponse, dan handler yang memetakan error ke status HTTP.">
+  <StudyCaseStep
+    title="Macro validasi"
+    goal="Menghilangkan pengulangan if dan return Err pada aturan input."
+  >
+    ```rust
+    macro_rules! validasi {
+        ($syarat:expr, $pesan:expr) => {
+            if !$syarat {
+                return Err(KasirError::InputTidakValid(
+                    String::from($pesan),
+                ));
+            }
+        };
+    }
+    ```
+
+    Pemakaian:
+
+    ```rust
+    fn validasi_bayar(kode: &str, total: u32) -> Result<(), KasirError> {
+        validasi!(!kode.is_empty(), "kode menu kosong");
+        validasi!(total > 0, "total harus lebih dari nol");
+        Ok(())
+    }
+    ```
+
+    Macro hanya dipakai untuk pola yang benar-benar berulang. Aturan yang kompleks tetap lebih jelas sebagai kode biasa.
+
+    <Fragment slot="hint">
+      `$syarat:expr` menerima ekspresi boolean. `$pesan:expr` menerima teks error.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Aturan validasi menjadi satu baris dan tetap menghasilkan `Err` yang sama.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Trait ErrorResponse"
+    goal="Memetakan error ke status dan body tanpa mencampur logika HTTP di enum."
+  >
+    ```rust
+    trait ErrorResponse {
+        type Body;
+
+        fn status(&self) -> u16;
+        fn body(&self) -> Self::Body;
+    }
+
+    impl ErrorResponse for KasirError {
+        type Body = String;
+
+        fn status(&self) -> u16 {
+            match self {
+                KasirError::InputTidakValid(_) => 400,
+                KasirError::PembayaranGagal(_) => 502,
+            }
+        }
+
+        fn body(&self) -> String {
+            match self {
+                KasirError::InputTidakValid(pesan) => pesan.clone(),
+                KasirError::PembayaranGagal(pesan) => {
+                    format!("pembayaran gagal: {pesan}")
+                }
+            }
+        }
+    }
+    ```
+
+    Associated type `Body` membuat trait fleksibel: implementasi lain bisa memakai `Vec<u8>` atau tipe JSON.
+
+    <Fragment slot="hint">
+      Jangan menaruh tipe response framework di enum domain. Trait pemetaan menjaga batas layer.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Enum error tetap bersih, sedangkan pemetaan HTTP berada di satu implementasi.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Handler mensimulasikan response"
+    goal="Menggunakan trait untuk menghasilkan status dan body."
+  >
+    ```rust
+    fn tangani(kode: &str, total: u32) -> (u16, String) {
+        match validasi_bayar(kode, total) {
+            Ok(()) => (200, String::from("pembayaran diterima")),
+            Err(error) => (error.status(), error.body()),
+        }
+    }
+    ```
+
+    Pemanggilan `error.status()` dan `error.body()` bekerja karena `KasirError` mengimplementasikan `ErrorResponse`. Method ini tidak perlu menambah match di handler.
+
+    <Fragment slot="hint">
+      Untuk framework nyata, body bisa dikonversi ke JSON oleh implementasi `IntoResponse`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Handler hanya memanggil validasi dan pemetaan error, tanpa detail aturan input.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Batas desain"
+    goal="Menentukan kapan macro dan trait lanjutan tidak perlu dipakai."
+  >
+    Macro validasi berguna karena polanya pendek dan berulang. Kalau aturan mulai bercabang, tulis fungsi validasi biasa. Trait dengan associated type berguna saat beberapa error atau response memiliki tipe body berbeda. Untuk satu tipe error dan satu tipe body, fungsi biasa sudah cukup.
+
+    <Fragment slot="hint">
+      Jangan memakai macro untuk mengganti semua `if`. Error yang dihasilkan harus tetap mudah dilacak ke baris pemanggil.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Fitur lanjutan dipakai pada batas yang jelas: validasi berulang dan pemetaan error.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum KasirError {
+    InputTidakValid(String),
+    PembayaranGagal(String),
+}
+
+macro_rules! validasi {
+    ($syarat:expr, $pesan:expr) => {
+        if !$syarat {
+            return Err(KasirError::InputTidakValid(String::from($pesan)));
+        }
+    };
+}
+
+trait ErrorResponse {
+    type Body;
+
+    fn status(&self) -> u16;
+    fn body(&self) -> Self::Body;
+}
+
+impl ErrorResponse for KasirError {
+    type Body = String;
+
+    fn status(&self) -> u16 {
+        match self {
+            KasirError::InputTidakValid(_) => 400,
+            KasirError::PembayaranGagal(_) => 502,
+        }
+    }
+
+    fn body(&self) -> String {
+        match self {
+            KasirError::InputTidakValid(pesan) => pesan.clone(),
+            KasirError::PembayaranGagal(pesan) => {
+                format!("pembayaran gagal: {pesan}")
+            }
+        }
+    }
+}
+
+fn validasi_bayar(kode: &str, total: u32) -> Result<(), KasirError> {
+    validasi!(!kode.is_empty(), "kode menu kosong");
+    validasi!(total > 0, "total harus lebih dari nol");
+    Ok(())
+}
+
+fn tangani(kode: &str, total: u32) -> (u16, String) {
+    match validasi_bayar(kode, total) {
+        Ok(()) => (200, String::from("pembayaran diterima")),
+        Err(error) => (error.status(), error.body()),
+    }
+}
+
+fn main() {
+    println!("{:?}", tangani("KOPI", 24_000));
+    println!("{:?}", tangani("", 24_000));
+    println!("{:?}", tangani("KOPI", 0));
+}`}
+  filename="src/main.rs"
+  label="Macro validasi dan trait ErrorResponse"
+/>
+
+## Keadaan setelah Bab 20
+
+- `validasi!` menjadi macro kecil untuk aturan input yang berulang.
+- `KasirError` tetap menjadi error domain.
+- `ErrorResponse` memetakan error ke status dan body dengan associated type.
+- Handler mensimulasikan response tanpa mencampur detail HTTP di enum.
+- Macro dipakai hanya untuk pola pendek; aturan kompleks tetap fungsi biasa.
+- Trait lanjutan dipakai pada batas layer, bukan untuk semua tipe.
+- Tidak ada `unsafe` di kode Kasir Warung.
+- Belum ada implementasi framework HTTP nyata; itu masuk Capstone.
+
+:::note[Kalau di bahasa lain]
+Decorator dan middleware sering dipakai untuk validasi di TypeScript, PHP, dan Python. Rust bisa memakai macro untuk pola serupa, tetapi macro harus dipakai hemat karena bekerja pada sintaks. Trait dengan associated type mirip generic interface di TypeScript atau Java, tetapi implementasinya diperiksa saat kompilasi.
+:::
+
+:::tip[Tips]
+Kalau macro menghasilkan error yang sulit dibaca, ganti dengan fungsi biasa. Waktu yang dihemat dari boilerplate tidak sebanding dengan waktu debugging yang hilang.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Kapan macro validasi lebih tepat daripada fungsi?',
+      options: [
+        'Saat pola if dan return Err benar-benar berulang dan pendek',
+        'Saat aturan validasi sangat bercabang',
+        'Saat ingin menghindari semua tipe',
+        'Saat butuh database',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Macro cocok untuk boilerplate pendek.',
+        'Salah. Aturan kompleks lebih jelas sebagai fungsi.',
+        'Salah. Macro tidak menghapus tipe.',
+        'Salah. Tidak terkait database.',
+      ],
+      explanation:
+        'Gunakan macro hanya saat sintaks berulang tidak bisa dirapikan dengan fungsi.',
+    },
+    {
+      question: 'Apa fungsi associated type Body pada ErrorResponse?',
+      options: [
+        'Menentukan tipe body response per implementasi',
+        'Menghapus body response',
+        'Mengubah status menjadi String',
+        'Membuat trait menjadi unsafe',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Setiap implementasi memilih tipe body sendiri.',
+        'Salah. Body tetap ada.',
+        'Salah. Status tetap u16.',
+        'Salah. Associated type bukan unsafe.',
+      ],
+      explanation:
+        'Associated type membuat trait fleksibel tanpa parameter generic yang berlebihan.',
+    },
+    {
+      question: 'Mengapa logika HTTP tidak ditaruh di enum KasirError?',
+      options: [
+        'Agar domain tidak bergantung pada framework dan layer response',
+        'Agar enum tidak bisa di-match',
+        'Agar error tidak bisa ditampilkan',
+        'Agar program lebih cepat',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pemisahan layer menjaga domain tetap bersih.',
+        'Salah. Enum tetap bisa di-match.',
+        'Salah. Error tetap bisa ditampilkan.',
+        'Salah. Bukan soal kecepatan.',
+      ],
+      explanation:
+        'Trait pemetaan memisahkan aturan domain dari representasi HTTP.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

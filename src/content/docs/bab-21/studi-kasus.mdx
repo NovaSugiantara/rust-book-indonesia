@@ -1,0 +1,345 @@
+---
+title: '21.4 Studi kasus: server Kasir Warung'
+description: 'Server TCP manual dengan thread pool, endpoint health, menu, laporan, 404, dan jembatan ke Capstone.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Server contoh di buku mengembalikan HTML. Studi kasus ini membuat server Kasir Warung dengan endpoint teks sederhana, thread pool, dan graceful shutdown setelah empat koneksi untuk demonstrasi.
+
+## Routing
+
+Router memakai request line. `GET /health` mengembalikan status, `GET /menu` mengembalikan daftar menu, `GET /laporan` mengembalikan rekap, dan path lain menghasilkan 404.
+
+<RustPlayground
+  code={`fn route(request_line: &str) -> (&'static str, &'static str) {
+    match request_line {
+        "GET /health HTTP/1.1" => ("HTTP/1.1 200 OK", "OK\\n"),
+        "GET /menu HTTP/1.1" => (
+            "HTTP/1.1 200 OK",
+            "KOPI 12000\\nROTI 8000\\nTEH 5000\\n",
+        ),
+        "GET /laporan HTTP/1.1" => (
+            "HTTP/1.1 200 OK",
+            "tunai: Rp58000\\nQRIS: Rp80000\\n",
+        ),
+        _ => ("HTTP/1.1 404 NOT FOUND", "tidak ditemukan\\n"),
+    }
+}
+
+fn main() {
+    for baris in [
+        "GET /health HTTP/1.1",
+        "GET /menu HTTP/1.1",
+        "GET /tidak-ada HTTP/1.1",
+    ] {
+        println!("{:?}", route(baris));
+    }
+}`}
+  filename="src/main.rs"
+  label="Routing endpoint Kasir Warung"
+/>
+
+## lib.rs
+
+`ThreadPool` sama seperti halaman sebelumnya, dengan `sender` bertipe `Option` agar bisa ditutup saat `Drop`.
+
+```rust
+use std::{
+    sync::{mpsc, Arc, Mutex},
+    thread,
+};
+
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
+pub struct ThreadPool {
+    workers: Vec<Worker>,
+    sender: Option<mpsc::Sender<Job>>,
+}
+
+impl ThreadPool {
+    /// Membuat pool dengan jumlah worker tertentu.
+    ///
+    /// # Panics
+    ///
+    /// Panic jika `size` nol.
+    pub fn new(size: usize) -> ThreadPool {
+        assert!(size > 0);
+
+        let (sender, receiver) = mpsc::channel();
+        let receiver = Arc::new(Mutex::new(receiver));
+        let mut workers = Vec::with_capacity(size);
+
+        for id in 0..size {
+            workers.push(Worker::new(id, Arc::clone(&receiver)));
+        }
+
+        ThreadPool {
+            workers,
+            sender: Some(sender),
+        }
+    }
+
+    pub fn execute<F>(&self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let job = Box::new(f);
+        self.sender.as_ref().unwrap().send(job).unwrap();
+    }
+}
+
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        drop(self.sender.take());
+
+        for worker in self.workers.drain(..) {
+            println!("Mematikan worker {}", worker.id);
+            if let Err(error) = worker.thread.join() {
+                println!("Worker panic: {error:?}");
+            }
+        }
+    }
+}
+
+struct Worker {
+    id: usize,
+    thread: thread::JoinHandle<()>,
+}
+
+impl Worker {
+    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
+        let thread = thread::spawn(move || loop {
+            let message = receiver.lock().unwrap().recv();
+
+            match message {
+                Ok(job) => {
+                    println!("Worker {id} mengambil pekerjaan");
+                    job();
+                }
+                Err(_) => {
+                    println!("Worker {id} disconnected");
+                    break;
+                }
+            }
+        });
+
+        Worker { id, thread }
+    }
+}
+```
+
+## main.rs
+
+```rust
+use kasir_server::ThreadPool;
+use std::{
+    io::{BufReader, prelude::*},
+    net::{TcpListener, TcpStream},
+};
+
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    let pool = ThreadPool::new(4);
+
+    println!("Server berjalan di http://127.0.0.1:7878");
+
+    for stream in listener.incoming().take(4) {
+        let stream = stream.unwrap();
+
+        pool.execute(|| {
+            handle_connection(stream);
+        });
+    }
+
+    println!("Menerima 4 koneksi, mematikan server");
+}
+
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader = BufReader::new(&stream);
+    let request_line = match buf_reader.lines().next() {
+        Some(Ok(line)) => line,
+        _ => return,
+    };
+
+    let (status_line, body) = match &request_line[..] {
+        "GET /health HTTP/1.1" => ("HTTP/1.1 200 OK", "OK\n"),
+        "GET /menu HTTP/1.1" => (
+            "HTTP/1.1 200 OK",
+            "KOPI 12000\nROTI 8000\nTEH 5000\n",
+        ),
+        "GET /laporan HTTP/1.1" => (
+            "HTTP/1.1 200 OK",
+            "tunai: Rp58000\nQRIS: Rp80000\n",
+        ),
+        _ => ("HTTP/1.1 404 NOT FOUND", "tidak ditemukan\n"),
+    };
+
+    let response = format!(
+        "{status_line}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+
+    stream.write_all(response.as_bytes()).unwrap();
+}
+```
+
+`take(4)` hanya untuk demonstrasi. Server nyata tidak membatasi jumlah koneksi dan perlu sinyal shutdown.
+
+## Pengujian lokal
+
+Proyek diuji dengan `cargo build`, `cargo run`, lalu empat request `curl`:
+
+```console
+$ cargo build
+Finished `dev` profile [unoptimized + debuginfo] target(s)
+
+$ cargo run
+Server berjalan di http://127.0.0.1:7878
+```
+
+Hasil request:
+
+```console
+$ curl -sS -i http://127.0.0.1:7878/health
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+Content-Length: 3
+Connection: close
+
+OK
+```
+
+```console
+$ curl -sS -i http://127.0.0.1:7878/menu
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+Content-Length: 30
+Connection: close
+
+KOPI 12000
+ROTI 8000
+TEH 5000
+```
+
+```console
+$ curl -sS -i http://127.0.0.1:7878/laporan
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+Content-Length: 29
+Connection: close
+
+tunai: Rp58000
+QRIS: Rp80000
+```
+
+```console
+$ curl -sS -i http://127.0.0.1:7878/tidak-ada
+HTTP/1.1 404 NOT FOUND
+Content-Type: text/plain; charset=utf-8
+Content-Length: 16
+Connection: close
+
+tidak ditemukan
+```
+
+Setelah empat koneksi, server menutup antrean dan menunggu worker selesai:
+
+```text
+Menerima 4 koneksi, mematikan server
+Mematikan worker 0
+Worker 3 mengambil pekerjaan
+Worker 0 disconnected
+Worker 3 disconnected
+Worker 2 disconnected
+Worker 1 disconnected
+Mematikan worker 1
+Mematikan worker 2
+Mematikan worker 3
+```
+
+## Jembatan ke Capstone
+
+Server manual ini memperlihatkan lapisan yang digantikan Tokio dan axum:
+
+- Tokio menyediakan runtime async dan I/O non-blocking, sehingga satu thread bisa menangani banyak koneksi yang menunggu.
+- Hyper dan axum mem-parse HTTP, mengelola header, keep-alive, dan response.
+- Axum menyediakan router, extractor `Path`, `Json`, `State`, dan middleware.
+- Graceful shutdown ditangani runtime atau framework, bukan loop `take`.
+- Connection pool database dan operasi async menggantikan panggilan blocking di handler.
+- Thread pool manual tetap berguna untuk pekerjaan CPU-bound lewat mekanisme seperti `spawn_blocking`.
+
+Capstone akan memakai axum, Tokio, SQLite, dan `sqlx` untuk membangun API Kasir Warung. Fokusnya berpindah dari membangun infrastruktur TCP ke desain endpoint, validasi, error HTTP, dan test.
+
+:::note[Kalau di bahasa lain]
+Node.js memakai `http` atau framework seperti Express, dengan event loop dan worker untuk CPU-bound. Go memakai `net/http` dan goroutine. Python memakai `http.server` atau ASGI framework. Rust produksi biasanya memakai hyper dan axum di atas Tokio, bukan server TCP manual.
+:::
+
+:::tip[Tips]
+Bangun versi manual sekali untuk memahami lapisannya, lalu pakai framework untuk produksi. Jangan mengganti framework dengan server manual hanya untuk menghindari dependency.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dilakukan router pada server ini?',
+      options: [
+        'Mencocokkan request line dengan endpoint dan memilih status serta body',
+        'Membuka koneksi TCP',
+        'Membuat thread pool',
+        'Membaca file database',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Router memetakan path ke response.',
+        'Salah. Koneksi dibuka listener.',
+        'Salah. Pool dibuat di main.',
+        'Salah. Database tidak dipakai di contoh.',
+      ],
+      explanation:
+        'Router adalah match pada request line.',
+    },
+    {
+      question: 'Mengapa take(4) tidak dipakai di produksi?',
+      options: [
+        'Karena server produksi harus terus menerima koneksi',
+        'Karena take hanya untuk TCP',
+        'Karena take menghapus file',
+        'Karena take membuat worker baru',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Batas itu hanya demonstrasi shutdown.',
+        'Salah. take adalah metode iterator.',
+        'Salah. Tidak menghapus file.',
+        'Salah. Tidak membuat worker.',
+      ],
+      explanation:
+        'Produksi memakai sinyal shutdown, bukan jumlah koneksi tetap.',
+    },
+    {
+      question: 'Apa yang digantikan Tokio dan axum?',
+      options: [
+        'Runtime async, parsing HTTP, routing, dan connection management',
+        'Seluruh bahasa Rust',
+        'Hanya file HTML',
+        'Hanya thread pool',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Framework menangani infrastruktur HTTP.',
+        'Salah. Bahasa tetap Rust.',
+        'Salah. File hanyalah salah satu bagian.',
+        'Salah. Thread pool hanya satu komponen.',
+      ],
+      explanation:
+        'Capstone memakai framework agar fokus pada API dan domain.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

@@ -1,0 +1,162 @@
+---
+title: '19.2 Refutability'
+description: 'Pattern irrefutable dan refutable, let else, serta arti error pattern yang tidak cocok.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Pattern dibagi menjadi dua: irrefutable dan refutable. Pattern irrefutable selalu cocok untuk semua nilai yang mungkin. Pattern refutable bisa gagal cocok untuk sebagian nilai.
+
+## Irrefutable dan refutable
+
+`let x = 5;` memakai pattern `x` yang selalu cocok. Ini irrefutable.
+
+`Some(x)` pada `Option` adalah refutable karena nilai bisa saja `None`. Pattern ini tidak bisa dipakai di `let` biasa karena tidak ada cara menangani `None`.
+
+Kalau pattern refutable dipakai di tempat yang membutuhkan irrefutable, compiler menolak:
+
+<RustPlayground
+  code={`fn main() {
+    let some_option_value: Option<i32> = None;
+    let Some(x) = some_option_value;
+
+    println!("{x}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error let dengan pattern refutable"
+/>
+
+Pesan `refutable pattern in local binding` muncul karena `let` tidak menyediakan cabang untuk nilai yang tidak cocok. Compiler menyarankan `let...else`.
+
+## let else
+
+`let...else` menerima pattern refutable dan menjalankan blok `else` jika pattern tidak cocok. Blok `else` harus keluar dari scope, misalnya dengan `return`, `break`, atau panic.
+
+<RustPlayground
+  code={`fn ambil_angka(nilai: Option<i32>) -> i32 {
+    let Some(angka) = nilai else {
+        return 0;
+    };
+
+    angka
+}
+
+fn main() {
+    println!("{}", ambil_angka(Some(7)));
+    println!("{}", ambil_angka(None));
+}`}
+  filename="src/main.rs"
+  label="let else menangani pattern yang tidak cocok"
+/>
+
+`let...else` berguna untuk early return saat validasi gagal. Setelah blok `else`, variabel dari pattern dijamin tersedia.
+
+Kalau pattern pada `let...else` irrefutable, blok `else` tidak akan pernah tercapai. Compiler memberi warning, bukan error:
+
+```rust
+fn main() {
+    let x = 5 else {
+        return;
+    };
+
+    println!("{x}");
+}
+```
+
+Warning `unreachable else clause` menunjukkan bahwa pattern selalu cocok. Dalam kasus itu, gunakan `let` biasa.
+
+## Match dan kelengkapan
+
+`match` harus menangani semua kemungkinan. Arm terakhir boleh memakai pattern irrefutable seperti `_` atau nama variabel untuk menangkap sisanya.
+
+<RustPlayground
+  code={`fn main() {
+    let nilai = Some(3);
+
+    match nilai {
+        Some(0) => println!("nol"),
+        Some(n) => println!("angka {n}"),
+        None => println!("tidak ada"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Match lengkap tanpa wildcard"
+/>
+
+Kalau satu variant dihilangkan, compiler menolak. Ini keuntungan `match` dibanding `if let`: penambahan variant baru akan memunculkan error di semua match yang belum menanganinya.
+
+`if let`, `while let`, dan `let...else` menerima pattern refutable karena memang punya jalur untuk kasus yang tidak cocok. Namun `if let` tidak memeriksa kelengkapan, jadi cabang yang tidak ditangani bisa menjadi bug logika.
+
+:::note[Kalau di bahasa lain]
+TypeScript dan Python tidak memeriksa kelengkapan pattern seperti `match` Rust. Di Go, type switch memeriksa tipe tetapi tidak memiliki destructuring pattern yang kaya. Rust memakai perbedaan refutable dan irrefutable untuk menentukan pattern mana yang valid di suatu konstruk.
+:::
+
+:::tip[Tips]
+Pakai `match` untuk enum yang akan berevolusi. Pakai `if let` saat hanya satu variant yang menarik dan sisanya memang boleh diabaikan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa arti pattern irrefutable?',
+      options: [
+        'Pattern yang selalu cocok untuk semua nilai',
+        'Pattern yang tidak pernah cocok',
+        'Pattern yang hanya untuk angka',
+        'Pattern yang harus memakai wildcard',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Contohnya nama variabel.',
+        'Salah. Itu bukan irrefutable.',
+        'Salah. Berlaku untuk banyak tipe.',
+        'Salah. Wildcard bukan syarat.',
+      ],
+      explanation:
+        'Let dan parameter fungsi membutuhkan pattern irrefutable.',
+    },
+    {
+      question: 'Kapan let else berguna?',
+      options: [
+        'Saat pattern bisa gagal dan kegagalan harus keluar dari scope',
+        'Saat pattern selalu cocok',
+        'Saat ingin mengabaikan semua nilai',
+        'Saat membuat thread',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Blok else menangani kasus tidak cocok.',
+        'Salah. Jika selalu cocok, let biasa cukup.',
+        'Salah. let else tidak mengabaikan nilai.',
+        'Salah. Tidak terkait thread.',
+      ],
+      explanation:
+        'let else sering dipakai untuk early return pada validasi.',
+    },
+    {
+      question: 'Mengapa match lebih aman saat enum bertambah?',
+      options: [
+        'Karena compiler memeriksa kelengkapan pattern',
+        'Karena match selalu lebih cepat',
+        'Karena match tidak memakai pattern',
+        'Karena match menghapus variant lama',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Variant baru memunculkan error di match yang belum lengkap.',
+        'Salah. Tidak ada klaim kecepatan.',
+        'Salah. Match memakai pattern.',
+        'Salah. Variant tidak dihapus.',
+      ],
+      explanation:
+        'Exhaustiveness membuat perubahan enum terlihat saat kompilasi.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

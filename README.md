@@ -32,7 +32,7 @@ Aturan link internal saat menambah halaman:
 ## Isi saat ini
 
 - Halaman depan berbahasa Indonesia dengan ringkasan progres.
-- Sidebar untuk 21 bab buku Rust. Bab 1 sampai Bab 18 sudah lengkap, bab lain masih halaman "Segera hadir".
+- Sidebar untuk 21 bab buku Rust. Bab 1 sampai Bab 21 sudah lengkap; capstone dan proyek bonus tersedia sebagai materi terpisah.
 - Bab 1: instalasi, Hello World, Cargo, dan studi kasus Kasir Warung.
 - Bab 2: game tebak angka dengan input, crate rand, match, dan loop.
 - Bab 3: variabel, tipe data, fungsi, komentar, dan control flow.
@@ -51,6 +51,9 @@ Aturan link internal saat menambah halaman:
 - Bab 16: thread, channel, Mutex, Arc, Send/Sync, dan worker transaksi.
 - Bab 17: future, async/await, task, stream, timeout, dan pembayaran async dengan padanan Tokio.
 - Bab 18: encapsulation, trait object, dynamic dispatch, object safety, state pattern, dan registry pembayaran.
+- Bab 19: pattern di match, let, if let, loop, destructuring, match guard, dan parser perintah.
+- Bab 20: unsafe Rust, trait dan tipe lanjutan, function pointer, macro_rules, dan derive macro.
+- Bab 21: server TCP manual, thread pool, graceful shutdown, dan jembatan ke Capstone.
 - Capstone: halaman rencana API Kasir Warung dengan axum, Tokio, dan SQLite, plus perbandingan axum, actix-web, dan rocket. Detail implementasi menyusul setelah Bab 21.
 - Proyek Bonus: URL shortener dengan statistik klik, kode lengkap di `proyek-bonus/`, halaman pengantar dan empat langkah di situs.
 - Komponen playground, kuis, studi kasus, dan penanda progres. Semuanya berjalan tanpa backend.

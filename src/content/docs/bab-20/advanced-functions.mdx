@@ -1,0 +1,191 @@
+---
+title: '20.4 Fungsi dan closure lanjutan'
+description: 'Function pointer, closure yang dikembalikan, dan batas opaque type impl Trait.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Function pointer dan closure adalah dua cara mengirim perilaku ke fungsi lain. Function pointer cocok untuk fungsi biasa tanpa environment, sedangkan closure diperlukan saat perilaku membawa nilai dari luar.
+
+## Function pointer
+
+Tipe `fn(i32) -> i32` adalah function pointer. Ia menunjuk fungsi biasa, bukan closure yang menangkap environment.
+
+<RustPlayground
+  code={`fn add_one(x: i32) -> i32 {
+    x + 1
+}
+
+fn do_twice(f: fn(i32) -> i32, arg: i32) -> i32 {
+    f(arg) + f(arg)
+}
+
+fn main() {
+    let hasil = do_twice(add_one, 5);
+    println!("Hasil: {hasil}");
+}`}
+  filename="src/main.rs"
+  label="Function pointer sebagai parameter"
+/>
+
+Function pointer mengimplementasikan trait `Fn`, sehingga bisa dipakai di tempat yang meminta closure. Sebaliknya, closure yang menangkap environment tidak bisa dikonversi menjadi function pointer biasa karena membutuhkan data tambahan.
+
+## Function pointer dan method
+
+Function pointer juga bisa menunjuk constructor enum atau method yang tidak membutuhkan receiver.
+
+<RustPlayground
+  code={`fn main() {
+    let angka = vec![1, 2, 3];
+    let teks: Vec<String> = angka.iter().map(ToString::to_string).collect();
+
+    println!("{teks:?}");
+}`}
+  filename="src/main.rs"
+  label="ToString::to_string sebagai function pointer"
+/>
+
+Bentuk ini setara dengan closure `|i| i.to_string()`, tetapi lebih ringkas saat tidak ada nilai yang perlu ditangkap.
+
+Constructor enum juga bisa dipakai:
+
+<RustPlayground
+  code={`#[derive(Debug)]
+enum Status {
+    Value(u32),
+    Stop,
+}
+
+fn main() {
+    let status: Vec<Status> = (0u32..5).map(Status::Value).collect();
+    println!("{status:?}");
+}`}
+  filename="src/main.rs"
+  label="Constructor enum sebagai function pointer"
+/>
+
+## Mengembalikan closure
+
+Closure memiliki tipe anonymous yang tidak bisa ditulis langsung. Untuk mengembalikannya, gunakan `impl Fn`, `impl FnMut`, atau `impl FnOnce`.
+
+<RustPlayground
+  code={`fn returns_closure() -> impl Fn(i32) -> i32 {
+    |x| x + 1
+}
+
+fn returns_initialized_closure(init: i32) -> impl Fn(i32) -> i32 {
+    move |x| x + init
+}
+
+fn main() {
+    let tambah_satu = returns_closure();
+    let tambah_seratus = returns_initialized_closure(100);
+
+    println!("{}", tambah_satu(5));
+    println!("{}", tambah_seratus(5));
+}`}
+  filename="src/main.rs"
+  label="Mengembalikan closure dengan impl Fn"
+/>
+
+Closure kedua memakai `move` agar `init` ikut masuk ke closure. Tanpa `move`, closure akan meminjam `init` yang merupakan parameter lokal dan bisa tidak valid setelah fungsi kembali.
+
+## Opaque type yang berbeda
+
+Setiap `impl Fn` adalah opaque type yang unik. Dua fungsi yang mengembalikan `impl Fn(i32) -> i32` belum tentu mengembalikan tipe yang sama.
+
+<RustPlayground
+  code={`fn returns_closure() -> impl Fn(i32) -> i32 {
+    |x| x + 1
+}
+
+fn returns_initialized_closure(init: i32) -> impl Fn(i32) -> i32 {
+    move |x| x + init
+}
+
+fn main() {
+    let handlers = vec![returns_closure(), returns_initialized_closure(123)];
+
+    for handler in handlers {
+        println!("{}", handler(5));
+    }
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mencampur dua opaque closure"
+/>
+
+Pesan `expected opaque type, found a different opaque type` muncul karena `impl Trait` di dua fungsi berbeda menghasilkan tipe anonymous berbeda. Untuk menyimpan keduanya dalam satu collection, gunakan trait object seperti `Box<dyn Fn(i32) -> i32>`.
+
+:::note[Kalau di bahasa lain]
+JavaScript dan Python memperlakukan fungsi sebagai nilai biasa tanpa membedakan function pointer dan closure. Go memiliki function type dan closure. Rust membedakan `fn` pointer yang tidak membawa environment dari closure yang membawa state, serta memakai `impl Fn` untuk mengembalikan closure.
+:::
+
+:::tip[Tips]
+Gunakan function pointer saat perilaku tidak membawa state. Gunakan closure saat perlu menangkap konfigurasi atau data dari luar. Untuk collection campuran, gunakan trait object.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa perbedaan fn pointer dan closure?',
+      options: [
+        'Fn pointer tidak membawa environment, closure bisa menangkap nilai',
+        'Fn pointer selalu lebih cepat',
+        'Closure tidak bisa dipanggil',
+        'Fn pointer hanya untuk method',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Closure membawa state yang ditangkap.',
+        'Salah. Tidak ada klaim kecepatan.',
+        'Salah. Closure bisa dipanggil.',
+        'Salah. Fn pointer juga untuk fungsi biasa.',
+      ],
+      explanation:
+        'Function pointer cocok untuk perilaku stateless, closure untuk stateful.',
+    },
+    {
+      question: 'Mengapa dua impl Fn dari fungsi berbeda tidak bisa satu Vec?',
+      options: [
+        'Karena masing-masing adalah opaque type yang berbeda',
+        'Karena closure tidak bisa disimpan',
+        'Karena Vec hanya untuk angka',
+        'Karena impl Trait tidak bisa dikembalikan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler membuat tipe anonymous unik.',
+        'Salah. Closure bisa disimpan dengan tipe yang tepat.',
+        'Salah. Vec generik.',
+        'Salah. impl Trait bisa dikembalikan.',
+      ],
+      explanation:
+        'Gunakan Box<dyn Fn> untuk menyatukan tipe closure yang berbeda.',
+    },
+    {
+      question: 'Kapan move diperlukan pada closure yang dikembalikan?',
+      options: [
+        'Saat closure memakai nilai lokal yang harus ikut dimiliki',
+        'Saat closure tidak punya parameter',
+        'Saat closure mengembalikan unit',
+        'Saat closure tidak dipanggil',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. move memindahkan nilai ke closure.',
+        'Salah. Parameter bukan penentu.',
+        'Salah. Return type bukan penentu.',
+        'Salah. move tetap soal kepemilikan.',
+      ],
+      explanation:
+        'Tanpa move, closure bisa meminjam nilai yang tidak hidup cukup lama.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

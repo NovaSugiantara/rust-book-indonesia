@@ -1,0 +1,178 @@
+---
+title: '20.3 Tipe lanjutan'
+description: 'Newtype, type alias, never type, dan dynamically sized type dengan Sized.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Sistem tipe Rust bisa mengekspresikan lebih dari struct dan enum biasa. Newtype menambah makna pada tipe, alias mempersingkat signature, never type menandai fungsi yang tidak kembali, dan `Sized` menjelaskan tipe yang ukurannya diketahui saat kompilasi.
+
+## Newtype untuk keamanan tipe
+
+Newtype adalah tuple struct dengan satu field. Ia membungkus tipe lain dan menciptakan tipe baru yang berbeda.
+
+<RustPlayground
+  code={`struct UserId(u64);
+struct OrderId(u64);
+
+fn kirim_notifikasi(user: UserId) {
+    println!("Notifikasi untuk user {}", user.0);
+}
+
+fn main() {
+    let user = UserId(42);
+    let order = OrderId(42);
+
+    kirim_notifikasi(user);
+    println!("Order {}", order.0);
+}`}
+  filename="src/main.rs"
+  label="Newtype memisahkan UserId dan OrderId"
+/>
+
+Tanpa newtype, `UserId` dan `OrderId` sama-sama `u64` dan bisa tertukar tanpa error. Newtype membuat kesalahan itu ditolak compiler.
+
+Newtype juga dipakai untuk implementasi trait eksternal pada tipe eksternal, seperti `Wrapper(Vec<String>)` yang mengimplementasikan `Display` di halaman trait lanjutan.
+
+## Type alias
+
+`type` membuat nama lain untuk tipe yang sudah ada. Alias tidak menciptakan tipe baru dan tidak menambah pemeriksaan.
+
+<RustPlayground
+  code={`type Hasil<T> = Result<T, String>;
+
+fn parse_angka(teks: &str) -> Hasil<i32> {
+    teks.parse::<i32>().map_err(|_| String::from("bukan angka"))
+}
+
+fn main() {
+    println!("{:?}", parse_angka("12"));
+    println!("{:?}", parse_angka("dua"));
+}`}
+  filename="src/main.rs"
+  label="Type alias untuk Result dengan error String"
+/>
+
+Alias berguna untuk signature panjang seperti `Box<dyn Fn() + Send + 'static>`. Karena alias hanya nama lain, ia tidak mencegah `Hasil<i32>` dipakai sebagai `Result<i32, String>`.
+
+## Never type
+
+Never type ditulis `!`. Ia menandai ekspresi yang tidak pernah menghasilkan nilai, misalnya `panic!`, `return`, `break`, atau loop tak berujung.
+
+```rust
+fn berhenti() -> ! {
+    panic!("program berhenti");
+}
+```
+
+Never type bisa masuk ke cabang `match` yang tidak menghasilkan nilai, karena compiler tahu cabang itu tidak akan melanjutkan eksekusi. Contohnya `continue` di dalam loop saat parsing gagal:
+
+```rust
+let angka: u32 = match teks.parse() {
+    Ok(n) => n,
+    Err(_) => continue,
+};
+```
+
+`continue` bertipe `!`, sehingga cabang `Err` tidak perlu menghasilkan `u32`.
+
+## Dynamically sized type dan Sized
+
+Sebagian besar tipe memiliki ukuran yang diketahui saat kompilasi dan otomatis mengimplementasikan `Sized`. `str` dan slice seperti `[T]` adalah dynamically sized type: ukurannya baru diketahui saat runtime.
+
+Karena ukurannya tidak diketahui, nilai `str` tidak bisa disimpan langsung sebagai variabel. Gunakan reference atau pointer seperti `&str` atau `Box<str>`.
+
+<RustPlayground
+  code={`fn main() {
+    let s: str = "Halo";
+    println!("{s}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error menyimpan str tanpa indirection"
+/>
+
+Pesan `the size for values of type str cannot be known at compilation time` muncul karena compiler perlu ukuran pasti untuk variabel di stack. `&str` bekerja karena reference memiliki ukuran tetap.
+
+Function generic secara default membutuhkan `T: Sized`. Untuk menerima tipe unsized lewat reference, gunakan `T: ?Sized`:
+
+```rust
+fn tampilkan<T: ?Sized + std::fmt::Display>(nilai: &T) {
+    println!("{nilai}");
+}
+```
+
+`?Sized` berarti tipe boleh unsized. Parameter tetap harus berupa reference atau pointer karena nilainya tidak bisa disimpan langsung.
+
+:::note[Kalau di bahasa lain]
+TypeScript memakai type alias dan interface untuk memberi nama bentuk data, tetapi alias hilang saat runtime. Java memakai wrapper class dan generic. Go memakai type definition untuk membuat tipe baru dan type alias untuk nama lain. Rust membedakan newtype (tipe baru) dan alias (nama lain) secara tegas.
+:::
+
+:::tip[Tips]
+Gunakan newtype saat ingin mencegah tertukar atau menambah invariant. Gunakan alias hanya untuk mempersingkat nama tanpa mengubah jaminan tipe.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa perbedaan newtype dan type alias?',
+      options: [
+        'Newtype menciptakan tipe baru, alias hanya nama lain',
+        'Alias menciptakan tipe baru',
+        'Newtype tidak bisa membungkus tipe lain',
+        'Keduanya identik',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Newtype adalah struct baru.',
+        'Salah. Alias tidak menciptakan tipe baru.',
+        'Salah. Newtype justru membungkus.',
+        'Salah. Jaminan tipenya berbeda.',
+      ],
+      explanation:
+        'Newtype mencegah tertukar; alias hanya mempersingkat.',
+    },
+    {
+      question: 'Apa arti return type !?',
+      options: [
+        'Fungsi tidak pernah kembali dengan nilai',
+        'Fungsi selalu mengembalikan angka',
+        'Fungsi mengembalikan Option',
+        'Fungsi tidak punya parameter',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Never type menandai divergensi.',
+        'Salah. Bukan angka.',
+        'Salah. Bukan Option.',
+        'Salah. Parameter terpisah.',
+      ],
+      explanation:
+        'panic, return, break, dan loop tak berujung bertipe !.',
+    },
+    {
+      question: 'Mengapa str tidak bisa disimpan langsung?',
+      options: [
+        'Karena ukurannya tidak diketahui saat kompilasi',
+        'Karena str tidak punya method',
+        'Karena str hanya untuk String',
+        'Karena str tidak bisa dibaca',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. str adalah dynamically sized type.',
+        'Salah. str punya method.',
+        'Salah. String memiliki str.',
+        'Salah. str bisa dibaca lewat reference.',
+      ],
+      explanation:
+        'Gunakan &str, Box<str>, atau tipe lain dengan indirection.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

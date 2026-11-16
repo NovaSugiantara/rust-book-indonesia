@@ -250,9 +250,44 @@ export const chapters: Chapter[] = [
       { label: '18.4 Studi kasus: registry pembayaran', slug: 'bab-18/studi-kasus' },
     ],
   },
-  { number: 19, title: 'Pattern dan matching', slug: 'bab-19', pages: [{ label: 'Ringkasan bab', slug: 'bab-19' }] },
-  { number: 20, title: 'Fitur lanjutan', slug: 'bab-20', pages: [{ label: 'Ringkasan bab', slug: 'bab-20' }] },
-  { number: 21, title: 'Proyek akhir: web server multithread', slug: 'bab-21', pages: [{ label: 'Ringkasan bab', slug: 'bab-21' }] },
+  {
+    number: 19,
+    title: 'Pattern dan matching',
+    slug: 'bab-19',
+    pages: [
+      { label: 'Ringkasan bab', slug: 'bab-19' },
+      { label: '19.1 Tempat memakai pattern', slug: 'bab-19/places' },
+      { label: '19.2 Refutability', slug: 'bab-19/refutability' },
+      { label: '19.3 Sintaks pattern', slug: 'bab-19/syntax' },
+      { label: '19.4 Studi kasus: parser perintah', slug: 'bab-19/studi-kasus' },
+    ],
+  },
+  {
+    number: 20,
+    title: 'Fitur lanjutan',
+    slug: 'bab-20',
+    pages: [
+      { label: 'Ringkasan bab', slug: 'bab-20' },
+      { label: '20.1 Unsafe Rust', slug: 'bab-20/unsafe' },
+      { label: '20.2 Trait lanjutan', slug: 'bab-20/advanced-traits' },
+      { label: '20.3 Tipe lanjutan', slug: 'bab-20/advanced-types' },
+      { label: '20.4 Fungsi dan closure lanjutan', slug: 'bab-20/advanced-functions' },
+      { label: '20.5 Macro', slug: 'bab-20/macros' },
+      { label: '20.6 Studi kasus: validasi dan error response', slug: 'bab-20/studi-kasus' },
+    ],
+  },
+  {
+    number: 21,
+    title: 'Proyek akhir: web server multithread',
+    slug: 'bab-21',
+    pages: [
+      { label: 'Ringkasan bab', slug: 'bab-21' },
+      { label: '21.1 Server single-thread', slug: 'bab-21/single-thread' },
+      { label: '21.2 Thread pool', slug: 'bab-21/multithread' },
+      { label: '21.3 Graceful shutdown', slug: 'bab-21/graceful-shutdown' },
+      { label: '21.4 Studi kasus: server Kasir Warung', slug: 'bab-21/studi-kasus' },
+    ],
+  },
 ];
 
 export const capstonePages: ChapterPage[] = [

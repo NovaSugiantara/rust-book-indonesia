@@ -1,0 +1,306 @@
+---
+title: '19.4 Studi kasus: parser perintah Kasir Warung'
+description: 'Membaca perintah CLI dengan enum, destructuring, dan match guard.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+CLI Kasir Warung sudah menerima argumen file. Sekarang tambahkan parser perintah sederhana agar operator bisa mengetik `bayar KOPI 24000`, `laporan 2026-11-17`, atau `keluar`. Pattern membuat setiap bentuk perintah eksplisit.
+
+<StudyCase title="Kasir Warung: parser perintah" intro="Mengubah input teks menjadi enum perintah, memvalidasi dengan match guard, lalu menjalankan handler.">
+  <StudyCaseStep
+    title="Definisikan bentuk perintah"
+    goal="Membuat enum yang mewakili setiap perintah yang didukung."
+  >
+    ```rust
+    #[derive(Debug, PartialEq)]
+    pub enum Perintah {
+        Bayar { kode: String, total: u32 },
+        Laporan { tanggal: Option<String> },
+        Keluar,
+    }
+    ```
+
+    `Bayar` membawa data kode dan total. `Laporan` membawa tanggal opsional. `Keluar` tidak membawa data.
+
+    <Fragment slot="hint">
+      Enum membuat perintah yang tidak dikenal menjadi kasus eksplisit, bukan string bebas yang tersebar.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Setiap perintah memiliki bentuk data yang jelas dan bisa dicocokkan dengan match.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Parse token dengan match"
+    goal="Membaca kata pertama dan membongkar argumen berikutnya."
+  >
+    ```rust
+    pub fn parse(input: &str) -> Result<Perintah, String> {
+        let mut bagian = input.split_whitespace();
+
+        match bagian.next() {
+            Some("bayar") => {
+                let kode = bagian
+                    .next()
+                    .ok_or("kode menu kurang")?
+                    .to_uppercase();
+
+                let total = bagian
+                    .next()
+                    .ok_or("total kurang")?
+                    .parse::<u32>()
+                    .map_err(|_| String::from("total bukan angka"))?;
+
+                Ok(Perintah::Bayar { kode, total })
+            }
+            Some("laporan") => Ok(Perintah::Laporan {
+                tanggal: bagian.next().map(str::to_string),
+            }),
+            Some("keluar") => Ok(Perintah::Keluar),
+            Some(lain) => Err(format!("perintah tidak dikenal: {lain}")),
+            None => Err(String::from("perintah kosong")),
+        }
+    }
+    ```
+
+    `split_whitespace` menghasilkan iterator token. Setiap `next()` mengembalikan `Option`, sehingga argumen yang hilang bisa ditangani tanpa panic.
+
+    <Fragment slot="hint">
+      Periksa jumlah argumen sebelum mengakses indeks, atau gunakan iterator seperti contoh ini.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Input yang salah menghasilkan pesan yang menyebut bagian yang kurang atau tidak valid.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Validasi dengan match guard"
+    goal="Menolak nilai yang tidak masuk akal sebelum perintah dijalankan."
+  >
+    ```rust
+    pub fn validasi(perintah: &Perintah) -> Result<(), String> {
+        match perintah {
+            Perintah::Bayar { kode, total } if kode.is_empty() => {
+                Err(String::from("kode menu kosong"))
+            }
+            Perintah::Bayar { total, .. } if *total == 0 => {
+                Err(String::from("total harus lebih dari nol"))
+            }
+            Perintah::Bayar { .. } => Ok(()),
+            Perintah::Laporan { .. } | Perintah::Keluar => Ok(()),
+        }
+    }
+    ```
+
+    Match guard memeriksa kondisi yang tidak bisa dinyatakan hanya dengan bentuk pattern. `..` mengabaikan field yang tidak dipakai.
+
+    <Fragment slot="hint">
+      Urutan arm penting. Arm yang lebih spesifik diletakkan sebelum arm umum.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Perintah yang valid lolos, sedangkan kode kosong atau total nol ditolak dengan pesan jelas.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Jalankan perintah"
+    goal="Mencocokkan enum dan memanggil handler yang sesuai."
+  >
+    ```rust
+    pub fn jalankan(perintah: &Perintah) -> Result<(), String> {
+        match perintah {
+            Perintah::Bayar { kode, total } => {
+                println!("Membayar {kode} sebesar Rp{total}");
+                Ok(())
+            }
+            Perintah::Laporan { tanggal: Some(tanggal) } => {
+                println!("Laporan tanggal {tanggal}");
+                Ok(())
+            }
+            Perintah::Laporan { tanggal: None } => {
+                println!("Laporan hari ini");
+                Ok(())
+            }
+            Perintah::Keluar => {
+                println!("Sampai jumpa");
+                Ok(())
+            }
+        }
+    }
+    ```
+
+    Pattern `Some(tanggal)` dan `None` memisahkan dua bentuk laporan. Compiler memastikan tidak ada variant yang terlewat.
+
+    <Fragment slot="hint">
+      Jika nanti ada perintah baru, tambahkan variant dan biarkan compiler menunjukkan semua match yang perlu diperbarui.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Parser, validasi, dan handler terpisah, sehingga aturan input tidak bercampur dengan aksi.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+<RustPlayground
+  code={`#[derive(Debug, PartialEq)]
+enum Perintah {
+    Bayar { kode: String, total: u32 },
+    Laporan { tanggal: Option<String> },
+    Keluar,
+}
+
+fn parse(input: &str) -> Result<Perintah, String> {
+    let mut bagian = input.split_whitespace();
+
+    match bagian.next() {
+        Some("bayar") => {
+            let kode = bagian.next().ok_or("kode menu kurang")?.to_uppercase();
+            let total = bagian
+                .next()
+                .ok_or("total kurang")?
+                .parse::<u32>()
+                .map_err(|_| String::from("total bukan angka"))?;
+
+            Ok(Perintah::Bayar { kode, total })
+        }
+        Some("laporan") => Ok(Perintah::Laporan {
+            tanggal: bagian.next().map(str::to_string),
+        }),
+        Some("keluar") => Ok(Perintah::Keluar),
+        Some(lain) => Err(format!("perintah tidak dikenal: {lain}")),
+        None => Err(String::from("perintah kosong")),
+    }
+}
+
+fn validasi(perintah: &Perintah) -> Result<(), String> {
+    match perintah {
+        Perintah::Bayar { kode, .. } if kode.is_empty() => {
+            Err(String::from("kode menu kosong"))
+        }
+        Perintah::Bayar { total, .. } if *total == 0 => {
+            Err(String::from("total harus lebih dari nol"))
+        }
+        Perintah::Bayar { .. } => Ok(()),
+        Perintah::Laporan { .. } | Perintah::Keluar => Ok(()),
+    }
+}
+
+fn jalankan(perintah: &Perintah) -> Result<(), String> {
+    match perintah {
+        Perintah::Bayar { kode, total } => {
+            println!("Membayar {kode} sebesar Rp{total}");
+        }
+        Perintah::Laporan { tanggal: Some(tanggal) } => {
+            println!("Laporan tanggal {tanggal}");
+        }
+        Perintah::Laporan { tanggal: None } => {
+            println!("Laporan hari ini");
+        }
+        Perintah::Keluar => println!("Sampai jumpa"),
+    }
+
+    Ok(())
+}
+
+fn main() {
+    for input in ["bayar kopi 24000", "laporan 2026-11-17", "keluar"] {
+        match parse(input).and_then(|p| validasi(&p).map(|_| p)) {
+            Ok(perintah) => jalankan(&perintah).unwrap(),
+            Err(error) => eprintln!("{input}: {error}"),
+        }
+    }
+}`}
+  filename="src/main.rs"
+  label="Parser perintah dengan enum dan match guard"
+/>
+
+## Keadaan setelah Bab 19
+
+- `Perintah` menjadi enum untuk `Bayar`, `Laporan`, dan `Keluar`.
+- `parse` membaca token dan membongkar argumen tanpa indexing.
+- `validasi` memakai match guard untuk kode kosong dan total nol.
+- `jalankan` mencocokkan variant dan memanggil aksi yang sesuai.
+- Input tidak dikenal menghasilkan error, bukan panic.
+- Enum baru akan memaksa semua `match` diperbarui saat kompilasi.
+- Belum ada parser argumen dengan flag atau quoting; itu bisa ditambahkan jika format CLI bertambah kompleks.
+
+:::note[Kalau di bahasa lain]
+Parser CLI di Node.js sering memakai `process.argv` dan library argumen. Di Go, `flag` atau library CLI membaca argumen. Di Python, `argparse` menyediakan parser. Rust memakai enum dan pattern agar setiap bentuk perintah memiliki tipe dan penanganan eksplisit.
+:::
+
+:::tip[Tips]
+Pisahkan parsing, validasi, dan eksekusi. Ketiganya punya jenis kegagalan berbeda dan lebih mudah dites sendiri-sendiri.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa perintah direpresentasikan sebagai enum?',
+      options: [
+        'Agar setiap bentuk perintah memiliki data dan penanganan yang eksplisit',
+        'Agar input tidak perlu divalidasi',
+        'Agar semua perintah menjadi String',
+        'Agar parser berjalan di thread lain',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Enum memisahkan variant dan data yang dibawa.',
+        'Salah. Validasi tetap diperlukan.',
+        'Salah. Enum justru menghindari string bebas.',
+        'Salah. Tidak terkait thread.',
+      ],
+      explanation:
+        'Compiler bisa memeriksa match yang belum lengkap saat variant bertambah.',
+    },
+    {
+      question: 'Apa fungsi match guard pada validasi total?',
+      options: [
+        'Menolak total nol tanpa harus membuat pattern khusus',
+        'Mengubah total menjadi String',
+        'Menjalankan perintah dua kali',
+        'Mengabaikan semua error',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Guard menambahkan kondisi pada pattern Bayar.',
+        'Salah. Guard tidak mengubah tipe.',
+        'Salah. Guard tidak mengulang aksi.',
+        'Salah. Guard justru menangani kasus error.',
+      ],
+      explanation:
+        'Guard berguna saat kondisi bergantung pada nilai yang diikat pattern.',
+    },
+    {
+      question: 'Apa yang terjadi jika parse menerima perintah kosong?',
+      options: [
+        'Mengembalikan Err perintah kosong',
+        'Panic',
+        'Membuat perintah Keluar',
+        'Mengulang input',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. `next()` menghasilkan None dan ditangani.',
+        'Salah. Tidak ada unwrap pada None.',
+        'Salah. Tidak ada default Keluar.',
+        'Salah. Parser tidak mengulang input.',
+      ],
+      explanation:
+        'Input pengguna ditangani sebagai error yang bisa ditampilkan.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

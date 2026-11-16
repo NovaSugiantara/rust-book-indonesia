@@ -1,0 +1,89 @@
+---
+title: 'Bab 20: Fitur lanjutan'
+description: 'Unsafe Rust, trait dan tipe lanjutan, fn pointer, serta macro deklaratif dan prosedural.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Bab ini membuka fitur yang lebih jarang dipakai: `unsafe`, associated type, default generic parameter, newtype, never type, dynamically sized type, function pointer, dan macro. Sebagian besar kode backend tidak membutuhkannya langsung, tetapi kamu akan bertemu konsep ini saat membaca crate, menulis FFI, atau membuat derive macro.
+
+## Urutan bab
+
+1. [Unsafe Rust](unsafe/) membahas lima kemampuan unsafe, raw pointer, FFI, dan batas penggunaannya.
+2. [Trait lanjutan](advanced-traits/) membahas associated type, operator overloading, disambiguasi, supertrait, dan newtype.
+3. [Tipe lanjutan](advanced-types/) membahas newtype, type alias, never type, dan `Sized`.
+4. [Fungsi dan closure lanjutan](advanced-functions/) membahas function pointer dan closure yang dikembalikan.
+5. [Macro](macros/) membahas `macro_rules!` dan procedural macro, termasuk derive seperti serde.
+6. [Studi kasus: validasi dan error response](studi-kasus/) memakai macro kecil dan trait lanjutan.
+
+:::note[Kenapa begini?]
+Fitur lanjutan bukan tujuan. Mereka alat untuk masalah tertentu. `unsafe` untuk batas yang tidak bisa dibuktikan compiler, trait lanjutan untuk API library, dan macro untuk menghilangkan boilerplate yang benar-benar berulang.
+:::
+
+:::tip[Tips]
+Jangan memakai fitur bab ini hanya agar kode terlihat canggih. Kode aman dan jelas lebih bernilai daripada abstraksi yang sulit ditinjau. Setiap `unsafe` perlu alasan dan dokumentasi keselamatan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dibahas di bab ini?',
+      options: [
+        'Unsafe, trait dan tipe lanjutan, fn pointer, serta macro',
+        'Dasar ownership dan borrow',
+        'Hanya async dan thread',
+        'Hanya instalasi Cargo',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Fokusnya fitur lanjutan Rust.',
+        'Salah. Ownership dibahas jauh sebelumnya.',
+        'Salah. Async dan thread sudah dibahas.',
+        'Salah. Instalasi ada di Bab 1.',
+      ],
+      explanation:
+        'Bab ini melengkapi fitur yang tidak selalu dipakai di aplikasi biasa.',
+    },
+    {
+      question: 'Apakah unsafe mematikan borrow checker?',
+      options: [
+        'Tidak, unsafe hanya membuka lima kemampuan tambahan',
+        'Ya, semua pemeriksaan dimatikan',
+        'Ya, tetapi hanya untuk reference',
+        'Tidak, karena unsafe tidak pernah dipakai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pemeriksaan lain tetap berjalan.',
+        'Salah. Borrow checker tetap aktif.',
+        'Salah. Tidak ada pengecualian seperti itu.',
+        'Salah. Unsafe ada dan dipakai di beberapa crate.',
+      ],
+      explanation:
+        'Unsafe membuka operasi tertentu, bukan menonaktifkan seluruh keamanan.',
+    },
+    {
+      question: 'Kapan macro lebih tepat daripada fungsi?',
+      options: [
+        'Saat kode perlu menghasilkan kode lain atau menerima variasi argumen saat kompilasi',
+        'Saat ingin mengganti semua fungsi',
+        'Saat program butuh database',
+        'Saat ingin menghindari tipe',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Macro bekerja pada level sintaks dan generasi kode.',
+        'Salah. Fungsi tetap pilihan utama.',
+        'Salah. Macro bukan pengganti database.',
+        'Salah. Macro tidak menghapus sistem tipe.',
+      ],
+      explanation:
+        'Gunakan macro saat fungsi biasa tidak bisa mengekspresikan bentuk pemanggilan yang diinginkan.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

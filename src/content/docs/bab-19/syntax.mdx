@@ -1,0 +1,321 @@
+---
+title: '19.3 Sintaks pattern'
+description: 'Literal, range, destructuring, wildcard, match guard, dan at binding.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Pattern bisa berupa literal, nama variabel, range, destructuring struct atau enum, wildcard, dan kombinasi semuanya. Halaman ini merangkum sintaks yang paling sering dipakai.
+
+## Literal, beberapa pattern, dan range
+
+Pattern literal mencocokkan nilai tertentu. Operator `|` mencocokkan beberapa pattern. `..=` mencocokkan range inklusif untuk angka atau `char`.
+
+<RustPlayground
+  code={`fn main() {
+    let nilai = 5;
+
+    match nilai {
+        1 | 2 => println!("satu atau dua"),
+        3..=5 => println!("tiga sampai lima"),
+        _ => println!("lainnya"),
+    }
+
+    let huruf = 'c';
+    match huruf {
+        'a'..='j' => println!("huruf awal"),
+        'k'..='z' => println!("huruf akhir"),
+        _ => println!("bukan huruf latin kecil"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Literal, or pattern, dan range"
+/>
+
+Range hanya valid untuk tipe yang bisa diperiksa kosongnya saat kompilasi, yaitu angka dan `char`.
+
+## Nama variabel menutupi nama luar
+
+Pattern nama variabel selalu cocok dan mengikat nilai. Di dalam `match`, nama itu menutupi variabel luar dengan nama sama.
+
+<RustPlayground
+  code={`fn main() {
+    let x = Some(5);
+    let y = 10;
+
+    match x {
+        Some(50) => println!("dapat 50"),
+        Some(y) => println!("cocok, y = {y}"),
+        _ => println!("default, x = {x:?}"),
+    }
+
+    println!("di akhir: x = {x:?}, y = {y}");
+}`}
+  filename="src/main.rs"
+  label="Pattern nama variabel menutupi y luar"
+/>
+
+`Some(y)` mengikat nilai 5 ke `y` baru, sehingga `y` luar tetap 10 setelah match. Untuk membandingkan dengan `y` luar, gunakan nama lain dan match guard.
+
+## Destructuring struct
+
+<RustPlayground
+  code={`struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = Point { x: 0, y: 7 };
+
+    let Point { x, y } = p;
+    println!("x = {x}, y = {y}");
+
+    match p {
+        Point { x, y: 0 } => println!("di sumbu x pada {x}"),
+        Point { x: 0, y } => println!("di sumbu y pada {y}"),
+        Point { x, y } => println!("di titik ({x}, {y})"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Destructuring struct dan literal field"
+/>
+
+Field bisa diikat dengan nama lain (`x: a`), disingkat (`x`), atau dicocokkan dengan literal (`y: 0`).
+
+## Destructuring enum
+
+<RustPlayground
+  code={`enum Message {
+    Quit,
+    Move { x: i32, y: i32 },
+    Write(String),
+    ChangeColor(i32, i32, i32),
+}
+
+fn main() {
+    let pesan = Message::Move { x: 3, y: 4 };
+
+    match pesan {
+        Message::Quit => println!("quit"),
+        Message::Move { x, y } => println!("pindah ke ({x}, {y})"),
+        Message::Write(teks) => println!("teks: {teks}"),
+        Message::ChangeColor(r, g, b) => println!("warna {r} {g} {b}"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Destructuring variant enum"
+/>
+
+Variant tuple memakai pattern tuple, variant struct memakai pattern struct. Enum tanpa data hanya dicocokkan sebagai nilai.
+
+Pattern bisa bersarang. Contohnya `Message::ChangeColor(Color::Rgb(r, g, b))` membongkar dua enum sekaligus.
+
+## Mengabaikan nilai
+
+`_` mencocokkan apa pun tanpa mengikat. `..` mengabaikan sisa bagian. Nama yang diawali garis bawah seperti `_x` tetap mengikat nilai, hanya menekan warning variabel tidak terpakai.
+
+<RustPlayground
+  code={`struct Point {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+fn main() {
+    let angka = (2, 4, 8, 16, 32);
+
+    match angka {
+        (first, _, third, ..) => println!("{first} {third}"),
+    }
+
+    let p = Point { x: 1, y: 2, z: 3 };
+    let Point { x, .. } = p;
+    println!("x = {x}");
+}`}
+  filename="src/main.rs"
+  label="Mengabaikan sebagian nilai dengan _ dan .."
+/>
+
+Perhatikan perbedaan `_` dan `_s`. `_s` tetap memindahkan nilai ke variabel, sehingga nilai asli tidak bisa dipakai lagi:
+
+<RustPlayground
+  code={`fn main() {
+    let s = Some(String::from("Halo"));
+
+    if let Some(_s) = s {
+        println!("ditemukan");
+    }
+
+    println!("{s:?}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error _s tetap mengikat dan memindahkan nilai"
+/>
+
+Pesan `borrow of moved value: s` muncul karena `_s` mengambil kepemilikan `String`. Dengan `_`, nilai tidak diikat dan `s` tetap bisa dipakai.
+
+`..` harus tidak ambigu. Dua `..` dalam satu tuple pattern ditolak:
+
+<RustPlayground
+  code={`fn main() {
+    let angka = (2, 4, 8, 16, 32);
+
+    match angka {
+        (.., second, ..) => println!("{second}"),
+    }
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error penggunaan .. ganda"
+/>
+
+Pesan `.. can only be used once per tuple pattern` muncul karena compiler tidak tahu bagian mana yang harus diabaikan sebelum dan sesudah `second`.
+
+## Match guard
+
+Match guard adalah kondisi `if` tambahan setelah pattern. Ia bisa memakai variabel dari pattern dan variabel luar. Guard hanya tersedia di `match`, bukan `if let` atau `while let`.
+
+<RustPlayground
+  code={`fn main() {
+    let angka = Some(4);
+
+    match angka {
+        Some(x) if x % 2 == 0 => println!("{x} genap"),
+        Some(x) => println!("{x} ganjil"),
+        None => println!("tidak ada"),
+    }
+
+    let x = Some(5);
+    let y = 10;
+
+    match x {
+        Some(n) if n == y => println!("cocok dengan y"),
+        _ => println!("tidak cocok"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Match guard dengan variabel pattern dan variabel luar"
+/>
+
+Guard berlaku untuk seluruh pattern di arm. Pada `4 | 5 | 6 if y`, kondisi `if y` berlaku untuk ketiga nilai, bukan hanya nilai terakhir.
+
+## At binding
+
+`@` mengikat nilai sekaligus menguji pattern. Contoh buku memeriksa `id` dalam range sambil menyimpan nilainya.
+
+<RustPlayground
+  code={`enum Message {
+    Hello { id: i32 },
+}
+
+fn main() {
+    let pesan = Message::Hello { id: 5 };
+
+    match pesan {
+        Message::Hello { id: id @ 3..=7 } => {
+            println!("id dalam range: {id}");
+        }
+        Message::Hello { id: 10..=12 } => {
+            println!("id di range lain");
+        }
+        Message::Hello { id } => println!("id lain: {id}"),
+    }
+}`}
+  filename="src/main.rs"
+  label="At binding untuk menguji dan menyimpan nilai"
+/>
+
+Tanpa `@`, arm dengan range tidak bisa memakai nilai `id` karena nilai itu tidak diikat ke variabel.
+
+:::note[Kalau di bahasa lain]
+JavaScript dan Python mendukung destructuring object atau tuple. Python 3.10 menambahkan `match` dengan pattern, tetapi aturan exhaustiveness dan refutability berbeda. Rust memeriksa bentuk dan kelengkapan pattern saat kompilasi, serta membedakan pattern yang mengikat, mengabaikan, dan menguji nilai.
+:::
+
+:::tip[Tips]
+Beri nama variabel yang menjelaskan perannya. Pattern panjang lebih mudah dibaca jika setiap bagian punya nama yang jelas, bukan `a`, `b`, `c`.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa arti id @ 3..=7?',
+      options: [
+        'Menguji id dalam range sambil mengikat nilainya ke variabel id',
+        'Mengalikan id dengan range',
+        'Mengabaikan id',
+        'Membuat range baru',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. @ melakukan pengujian dan pengikatan sekaligus.',
+        'Salah. @ bukan operator aritmetika.',
+        'Salah. Nilai tetap diikat.',
+        'Salah. Range tidak dibuat baru.',
+      ],
+      explanation:
+        'At binding berguna saat nilai yang lolos range masih dibutuhkan di body arm.',
+    },
+    {
+      question: 'Apa perbedaan _ dan _s?',
+      options: [
+        '_ tidak mengikat, _s mengikat dan bisa memindahkan nilai',
+        'Keduanya selalu mengikat',
+        'Keduanya tidak pernah mengikat',
+        '_s hanya untuk angka',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. _s tetap variabel, hanya menekan warning.',
+        'Salah. _ tidak mengikat.',
+        'Salah. _s mengikat.',
+        'Salah. Berlaku untuk banyak tipe.',
+      ],
+      explanation:
+        'Karena _s mengikat, nilai non-Copy bisa dipindahkan.',
+    },
+    {
+      question: 'Kapan match guard dijalankan?',
+      options: [
+        'Setelah pattern cocok dan kondisi if juga benar',
+        'Sebelum pattern dicocokkan',
+        'Hanya jika pattern gagal',
+        'Hanya di if let',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Guard menambah syarat setelah pattern cocok.',
+        'Salah. Pattern diperiksa lebih dulu.',
+        'Salah. Guard bukan penanganan gagal.',
+        'Salah. Guard hanya di match.',
+      ],
+      explanation:
+        'Guard bisa memakai binding dari pattern dan variabel luar.',
+    },
+    {
+      question: 'Mengapa dua .. dalam satu tuple pattern ditolak?',
+      options: [
+        'Karena compiler tidak bisa menentukan bagian yang diabaikan',
+        'Karena .. hanya untuk struct',
+        'Karena tuple tidak punya panjang',
+        'Karena .. menghapus nilai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Posisi binding menjadi ambigu.',
+        'Salah. .. juga bisa di tuple.',
+        'Salah. Tuple punya panjang tetap.',
+        'Salah. .. hanya mengabaikan.',
+      ],
+      explanation:
+        'Gunakan satu .. dan binding yang posisinya jelas.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

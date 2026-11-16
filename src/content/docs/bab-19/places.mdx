@@ -1,0 +1,235 @@
+---
+title: '19.1 Tempat memakai pattern'
+description: 'Pattern di match, let, if let, while let, for, dan parameter fungsi.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Pattern tidak hanya ada di `match`. Hampir setiap tempat yang mengikat nilai memakai pattern, meskipun bentuknya sering sangat sederhana seperti nama variabel.
+
+## Match arm
+
+Setiap arm `match` terdiri dari pattern dan ekspresi. Semua kemungkinan harus tercakup.
+
+<RustPlayground
+  code={`fn main() {
+    let nilai = Some(3);
+
+    match nilai {
+        None => println!("tidak ada"),
+        Some(i) => println!("ada {i}"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Pattern di match arm"
+/>
+
+Pattern `Some(i)` mengikat isi `Some` ke variabel `i`. Pattern `None` tidak membawa data.
+
+## Let dan destructuring
+
+`let` juga memakai pattern. Nama variabel adalah pattern paling sederhana. Tuple pattern membongkar beberapa nilai sekaligus.
+
+<RustPlayground
+  code={`fn main() {
+    let (x, y, z) = (1, 2, 3);
+    println!("{x} {y} {z}");
+}`}
+  filename="src/main.rs"
+  label="Destructuring tuple dengan let"
+/>
+
+Jumlah elemen pattern harus cocok dengan nilai:
+
+<RustPlayground
+  code={`fn main() {
+    let (x, y) = (1, 2, 3);
+    println!("{x} {y}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error jumlah elemen tuple tidak cocok"
+/>
+
+Pesan `expected a tuple with 3 elements, found one with 2 elements` menunjukkan pattern dan nilai memiliki bentuk berbeda. Gunakan `_` atau `..` untuk mengabaikan bagian yang tidak dipakai.
+
+## if let dan else if let
+
+`if let` menangani satu pattern. Kamu bisa menggabungkannya dengan `else if`, `else if let`, dan `else` untuk beberapa kondisi yang tidak harus saling berkaitan.
+
+<RustPlayground
+  code={`fn main() {
+    let favorite_color: Option<&str> = None;
+    let is_tuesday = false;
+    let age: Result<u8, _> = "34".parse();
+
+    if let Some(color) = favorite_color {
+        println!("Warna favorit: {color}");
+    } else if is_tuesday {
+        println!("Selasa memakai hijau");
+    } else if let Ok(umur) = age {
+        if umur > 30 {
+            println!("Memakai ungu");
+        } else {
+            println!("Memakai oranye");
+        }
+    } else {
+        println!("Memakai biru");
+    }
+}`}
+  filename="src/main.rs"
+  label="Kombinasi if let dan else if let"
+/>
+
+`Ok(umur)` memperkenalkan variabel baru yang hanya berlaku di blok itu. Karena `if let` tidak memeriksa kelengkapan, kasus yang tidak cocok harus ditangani dengan `else` atau diterima sebagai kemungkinan.
+
+## while let
+
+`while let` menjalankan loop selama pattern cocok. Contoh buku memakai channel: loop berhenti saat `recv` menghasilkan `Err` karena pengirim ditutup.
+
+<RustPlayground
+  code={`use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        for nilai in [1, 2, 3] {
+            tx.send(nilai).unwrap();
+        }
+    });
+
+    while let Ok(nilai) = rx.recv() {
+        println!("{nilai}");
+    }
+}`}
+  filename="src/main.rs"
+  label="while let pada channel receiver"
+/>
+
+## For loop
+
+Pattern setelah `for` membongkar setiap item. `enumerate` menghasilkan tuple indeks dan nilai.
+
+<RustPlayground
+  code={`fn main() {
+    let huruf = vec!['a', 'b', 'c'];
+
+    for (index, value) in huruf.iter().enumerate() {
+        println!("{value} ada di indeks {index}");
+    }
+}`}
+  filename="src/main.rs"
+  label="Pattern tuple di for loop"
+/>
+
+## Parameter fungsi
+
+Parameter fungsi juga pattern. Kamu bisa langsung membongkar tuple di signature:
+
+<RustPlayground
+  code={`fn print_coordinates(&(x, y): &(i32, i32)) {
+    println!("Lokasi: ({x}, {y})");
+}
+
+fn main() {
+    let point = (3, 5);
+    print_coordinates(&point);
+}`}
+  filename="src/main.rs"
+  label="Destructuring tuple di parameter fungsi"
+/>
+
+Pattern yang sama bisa dipakai di parameter closure. Ini berguna saat memproses pasangan kunci dan nilai dari iterator.
+
+:::note[Kalau di bahasa lain]
+JavaScript memakai destructuring di assignment dan parameter. Python memakai unpacking tuple dan `match` sejak 3.10. Go tidak memiliki pattern matching umum, tetapi bisa memakai type switch dan multiple assignment. Rust menyatukan destructuring, match, dan pengecekan kelengkapan dalam satu sistem pattern.
+:::
+
+:::tip[Tips]
+Jika pattern mulai panjang, pertimbangkan struct atau enum dengan nama field yang jelas. Pattern yang mudah dibaca lebih penting daripada pattern yang sesingkat mungkin.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Di mana saja pattern bisa dipakai?',
+      options: [
+        'Match, let, if let, while let, for, dan parameter fungsi',
+        'Hanya di match',
+        'Hanya di let',
+        'Hanya di fungsi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Banyak konstruk mengikat nilai lewat pattern.',
+        'Salah. let dan loop juga memakai pattern.',
+        'Salah. match dan parameter juga.',
+        'Salah. match juga memakai pattern.',
+      ],
+      explanation:
+        'Pattern adalah bagian umum dari cara Rust mengikat dan memeriksa nilai.',
+    },
+    {
+      question: 'Apa yang terjadi jika elemen tuple pattern tidak cocok?',
+      options: [
+        'Compiler menolak dengan mismatched types',
+        'Elemen berlebih diabaikan otomatis',
+        'Program panic saat runtime',
+        'Tuple dipotong',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Bentuk pattern dan nilai harus cocok.',
+        'Salah. Tidak ada pengabaian otomatis.',
+        'Salah. Ini error kompilasi.',
+        'Salah. Nilai tidak dipotong.',
+      ],
+      explanation:
+        'Gunakan _ atau .. jika ada bagian yang sengaja diabaikan.',
+    },
+    {
+      question: 'Kapan while let berhenti?',
+      options: [
+        'Saat pattern tidak cocok lagi',
+        'Setelah satu iterasi',
+        'Saat variabel di-drop',
+        'Saat loop dipanggil',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Loop berjalan selama pattern cocok.',
+        'Salah. Bisa banyak iterasi.',
+        'Salah. Drop bukan kondisi loop.',
+        'Salah. Loop tidak berhenti karena dipanggil.',
+      ],
+      explanation:
+        'Pada channel, Err dari recv membuat pattern Ok tidak cocok dan loop berhenti.',
+    },
+    {
+      question: 'Apa keuntungan destructuring di parameter fungsi?',
+      options: [
+        'Langsung mengikat bagian nilai yang dibutuhkan',
+        'Membuat fungsi selalu inline',
+        'Menghapus pemeriksaan tipe',
+        'Mengubah parameter menjadi global',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Signature dapat membongkar tuple atau struct.',
+        'Salah. Tidak ada hubungan dengan inlining.',
+        'Salah. Tipe tetap diperiksa.',
+        'Salah. Parameter tetap lokal.',
+      ],
+      explanation:
+        'Contohnya &(x, y) langsung mengikat koordinat.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

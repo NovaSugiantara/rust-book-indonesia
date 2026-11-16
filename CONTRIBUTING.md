@@ -53,7 +53,7 @@ Kasir Warung dimulai sebagai CLI di Bab 1 dan tumbuh menjadi layanan backend. Se
 
 Aturan peta:
 
-- Bab 4 sampai 18 sudah ditulis. Jangan menulis bab 19 sampai 21 sebelum ada tugas khusus untuk bab itu.
+- Bab 4 sampai 21 sudah ditulis.
 - Setiap bab yang menyentuh Kasir Warung harus meninggalkan kode yang bisa dijalankan dan output contoh yang benar.
 - Jangan memakai fitur dari bab yang belum diajarkan tanpa penjelasan singkat. Kalau terpaksa, jelaskan alasannya di callout.
 - Bab 4 dan 5 mengubah cara data transaksi disimpan. Jangan mempertahankan array harga dari Bab 3 kalau struct sudah tersedia.
@@ -255,6 +255,26 @@ src/
 │   │   ├── trait-objects.mdx
 │   │   ├── design-patterns.mdx
 │   │   └── studi-kasus.mdx
+│   ├── bab-19/
+│   │   ├── index.mdx
+│   │   ├── places.mdx
+│   │   ├── refutability.mdx
+│   │   ├── syntax.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-20/
+│   │   ├── index.mdx
+│   │   ├── unsafe.mdx
+│   │   ├── advanced-traits.mdx
+│   │   ├── advanced-types.mdx
+│   │   ├── advanced-functions.mdx
+│   │   ├── macros.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-21/
+│   │   ├── index.mdx
+│   │   ├── single-thread.mdx
+│   │   ├── multithread.mdx
+│   │   ├── graceful-shutdown.mdx
+│   │   └── studi-kasus.mdx
 │   ├── capstone/
 │   │   ├── index.mdx
 │   │   └── framework.mdx
@@ -264,7 +284,6 @@ src/
 │   │   ├── langkah-2.mdx
 │   │   ├── langkah-3.mdx
 │   │   └── langkah-4.mdx
-│   └── bab-19.mdx ... bab-21.mdx
 ├── data/chapters.ts
 ├── scripts/progress.ts
 └── styles/custom.css
@@ -1137,6 +1156,129 @@ Kontrak setelah Bab 18:
 - Registry belum thread-safe; untuk state bersama gunakan `Arc<Mutex<Registry>>` atau `Arc<RwLock<Registry>>`.
 - Test registry mencakup metode terdaftar dan kunci yang tidak dikenal.
 - Belum ada plugin loading dari file atau jaringan.
+
+### Keadaan setelah Bab 19
+
+Bab 19 menambahkan parser perintah CLI berbasis enum dan pattern. Perintah yang tidak dikenal atau argumen yang kurang menjadi error, bukan panic.
+
+```text
+kasir_warung/
+├── Cargo.toml
+├── Cargo.lock
+├── kasir-core/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── menu.rs
+│       ├── transaksi.rs
+│       ├── laporan.rs
+│       ├── rangkuman.rs
+│       ├── cache.rs
+│       ├── worker.rs
+│       ├── pembayaran.rs
+│       ├── registry.rs
+│       └── perintah.rs
+├── kasir-cli/
+│   ├── Cargo.toml
+│   └── src/main.rs
+└── target/
+```
+
+Kontrak setelah Bab 19:
+
+- `Perintah` memiliki variant `Bayar`, `Laporan`, dan `Keluar`.
+- `parse` memakai `split_whitespace` dan `next` tanpa indexing.
+- `validasi` memakai match guard untuk kode kosong dan total nol.
+- `jalankan` mencocokkan setiap variant dan memanggil aksi yang sesuai.
+- Input kosong, perintah tidak dikenal, dan argumen kurang menghasilkan error.
+- Variant baru memaksa semua `match` diperbarui saat kompilasi.
+- Belum ada flag, quoting, atau subcommand bertingkat; parser masih sederhana.
+
+### Keadaan setelah Bab 20
+
+Bab 20 menambahkan macro validasi kecil dan trait pemetaan error. Keduanya dipakai pada batas layer, bukan untuk mengubah model domain.
+
+```text
+kasir_warung/
+├── Cargo.toml
+├── Cargo.lock
+├── kasir-core/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── menu.rs
+│       ├── transaksi.rs
+│       ├── laporan.rs
+│       ├── rangkuman.rs
+│       ├── cache.rs
+│       ├── worker.rs
+│       ├── pembayaran.rs
+│       ├── registry.rs
+│       ├── perintah.rs
+│       └── response.rs
+├── kasir-cli/
+│   ├── Cargo.toml
+│   └── src/main.rs
+└── target/
+```
+
+Kontrak setelah Bab 20:
+
+- `validasi!` menjadi macro untuk aturan input pendek dan berulang.
+- `KasirError` tetap menjadi error domain.
+- `ErrorResponse` memiliki associated type `Body` dan method `status` serta `body`.
+- `KasirError` mengimplementasikan `ErrorResponse`.
+- Handler memetakan error ke status dan body tanpa mencampur detail HTTP di enum.
+- Macro tidak dipakai untuk aturan validasi yang kompleks.
+- Tidak ada `unsafe` di kode Kasir Warung.
+- Belum ada implementasi framework HTTP nyata; itu masuk Bab 21 dan Capstone.
+
+### Keadaan setelah Bab 21
+
+Bab 21 menambahkan package `kasir-server` yang menjalankan server TCP manual dengan thread pool. Server memakai router sederhana dan graceful shutdown untuk demonstrasi.
+
+```text
+kasir_warung/
+├── Cargo.toml
+├── Cargo.lock
+├── kasir-core/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── menu.rs
+│       ├── transaksi.rs
+│       ├── laporan.rs
+│       ├── rangkuman.rs
+│       ├── cache.rs
+│       ├── worker.rs
+│       ├── pembayaran.rs
+│       ├── registry.rs
+│       ├── perintah.rs
+│       └── response.rs
+├── kasir-cli/
+│   ├── Cargo.toml
+│   └── src/main.rs
+├── kasir-server/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       └── main.rs
+└── target/
+```
+
+Kontrak setelah Bab 21:
+
+- Root workspace memuat `kasir-core`, `kasir-cli`, dan `kasir-server`.
+- `kasir-server` memakai `TcpListener` di `127.0.0.1:7878`.
+- `ThreadPool` memiliki empat worker dan antrean `mpsc`.
+- `Job` adalah `Box<dyn FnOnce() + Send + 'static>`.
+- Endpoint: `GET /health`, `GET /menu`, `GET /laporan`; path lain menghasilkan 404.
+- Respons memakai status line, `Content-Type: text/plain`, `Content-Length`, dan `Connection: close`.
+- `take(4)` hanya untuk demonstrasi shutdown.
+- `Drop` menutup sender, worker keluar saat `recv` error, lalu `join` menunggu semua worker.
+- Kode lengkap diuji lokal dengan `cargo build`, `cargo run`, dan empat request `curl`.
+- Server manual ini menjadi jembatan ke Capstone: Tokio dan axum menggantikan runtime, parsing HTTP, routing, dan graceful shutdown.
+- Belum ada database, JSON, autentikasi, atau timeout produksi; itu masuk Capstone.
 
 ### Aturan untuk bab berikutnya
 

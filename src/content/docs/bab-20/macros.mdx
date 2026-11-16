@@ -1,0 +1,203 @@
+---
+title: '20.5 Macro'
+description: 'macro_rules, procedural macro, derive seperti serde, dan kapan memakai macro.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Macro menghasilkan atau mengubah kode saat kompilasi. Ia berbeda dari fungsi: macro bekerja pada sintaks, bisa menerima jumlah argumen bervariasi, dan bisa menghasilkan item baru seperti struct, impl, atau module.
+
+## Macro versus fungsi
+
+Fungsi menerima nilai dengan tipe dan jumlah parameter yang tetap. Macro menerima token sintaks dan mencocokkannya dengan aturan. Karena itu `println!` bisa menerima format dan argumen bervariasi, sedangkan fungsi biasa tidak bisa.
+
+Macro berguna untuk menghilangkan boilerplate yang benar-benar berulang. Namun macro lebih sulit dibaca, di-debug, dan dianalisis tooling. Jangan mengganti fungsi biasa dengan macro tanpa alasan.
+
+## macro_rules
+
+`macro_rules!` mendefinisikan macro deklaratif dengan pattern dan ekspansi.
+
+<RustPlayground
+  code={`macro_rules! tambah_semua {
+    ($($x:expr),*) => {{
+        let mut total = 0;
+        $(
+            total += $x;
+        )*
+        total
+    }};
+}
+
+fn main() {
+    println!("{}", tambah_semua!(1, 2, 3, 4));
+}`}
+  filename="src/main.rs"
+  label="Macro deklaratif dengan repetition"
+/>
+
+`$($x:expr),*` berarti nol atau lebih ekspresi dipisahkan koma. Bagian `$( ... )*` mengulang ekspansi untuk setiap ekspresi.
+
+Kalau pemanggilan tidak cocok dengan aturan, compiler menolak:
+
+<RustPlayground
+  code={`macro_rules! tambah_semua {
+    ($($x:expr),*) => {{
+        let mut total = 0;
+        $(
+            total += $x;
+        )*
+        total
+    }};
+}
+
+fn main() {
+    println!("{}", tambah_semua!(1 2));
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error token macro tidak cocok"
+/>
+
+Pesan `no rules expected 2` muncul karena macro mengharapkan koma di antara ekspresi. Macro error terjadi saat ekspansi, sebelum type checking normal.
+
+## vec macro
+
+Macro `vec!` di standard library kira-kira bekerja seperti ini:
+
+```rust
+#[macro_export]
+macro_rules! vec {
+    ( $( $x:expr ),* ) => {
+        {
+            let mut temp_vec = Vec::new();
+            $(
+                temp_vec.push($x);
+            )*
+            temp_vec
+        }
+    };
+}
+```
+
+Ekspansi `vec![1, 2, 3]` menjadi kode yang membuat `Vec`, mendorong setiap nilai, lalu mengembalikan vector. Implementasi asli punya optimisasi tambahan, tetapi pola dasarnya sama.
+
+## Procedural macro
+
+Procedural macro bekerja pada `TokenStream` dan biasanya ditulis di crate terpisah dengan `proc-macro = true`. Ada tiga jenis:
+
+- Custom derive, dipakai dengan `#[derive(Nama)]`.
+- Attribute-like, dipakai sebagai atribut pada item.
+- Function-like, dipanggil seperti fungsi, misalnya `sql!(...)`.
+
+Contoh derive macro untuk trait `HelloMacro`:
+
+```rust
+use hello_macro::HelloMacro;
+use hello_macro_derive::HelloMacro;
+
+#[derive(HelloMacro)]
+struct Pancakes;
+
+fn main() {
+    Pancakes::hello_macro();
+}
+```
+
+Derive macro membaca nama struct dan menghasilkan implementasi trait. Untuk memproses sintaks, crate macro biasanya memakai `syn` dan `quote`:
+
+```rust
+use proc_macro::TokenStream;
+use quote::quote;
+
+#[proc_macro_derive(HelloMacro)]
+pub fn hello_macro_derive(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    let name = &ast.ident;
+
+    let generated = quote! {
+        impl HelloMacro for #name {
+            fn hello_macro() {
+                println!("Hello, Macro! My name is {}!", stringify!(#name));
+            }
+        }
+    };
+
+    generated.into()
+}
+```
+
+Di backend, pola ini terlihat pada `#[derive(Serialize, Deserialize)]` dari serde. Derive menghasilkan kode serialisasi dan deserialisasi berdasarkan field struct, sehingga kamu tidak menulis konversi JSON secara manual. Attribute macro muncul pada framework web seperti `#[route(GET, "/")]`, sedangkan function-like macro muncul pada query builder atau DSL.
+
+## Batas macro
+
+Macro tidak memiliki informasi tipe seperti fungsi. Kesalahan bisa muncul pada kode hasil ekspansi, sehingga pesan error lebih sulit dibaca. Macro juga dapat membuat compile time bertambah dan IDE kurang memahami kode.
+
+Kalau fungsi, generic, atau trait bisa menyelesaikan masalah, pilih itu. Gunakan macro saat sintaks pemanggilan atau generasi kode memang tidak bisa dicapai dengan abstraksi biasa.
+
+:::note[Kalau di bahasa lain]
+C dan C++ memakai preprocessor berbasis teks. Lisp dan Julia memiliki macro yang bekerja pada AST. Rust memakai `macro_rules!` untuk pattern token dan procedural macro untuk memanipulasi `TokenStream`. Derive macro Rust mirip code generator dekorator pada bahasa lain, tetapi berjalan saat kompilasi.
+:::
+
+:::tip[Tips]
+Uji macro dengan `cargo expand` untuk melihat kode hasil ekspansi. Pesan error yang membingungkan sering berasal dari kode yang dihasilkan, bukan dari pemanggilan macro.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa perbedaan utama macro dan fungsi?',
+      options: [
+        'Macro bekerja pada token sintaks dan bisa menghasilkan kode',
+        'Macro selalu lebih cepat saat runtime',
+        'Fungsi tidak bisa menerima argumen',
+        'Macro tidak bisa dipanggil',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Macro adalah ekspansi sintaks.',
+        'Salah. Tidak ada klaim runtime otomatis.',
+        'Salah. Fungsi menerima argumen.',
+        'Salah. Macro dipanggil dengan !.',
+      ],
+      explanation:
+        'Macro memungkinkan variasi sintaks yang tidak bisa dilakukan fungsi biasa.',
+    },
+    {
+      question: 'Apa fungsi syn dan quote pada procedural macro?',
+      options: [
+        'syn mem-parse token, quote membangun token output',
+        'syn menjalankan program, quote menghentikannya',
+        'Keduanya database',
+        'Keduanya untuk async runtime',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Keduanya tool umum untuk procedural macro.',
+        'Salah. Bukan runtime program.',
+        'Salah. Bukan database.',
+        'Salah. Tidak terkait async runtime.',
+      ],
+      explanation:
+        'syn mengubah TokenStream menjadi AST, quote menghasilkan TokenStream baru.',
+    },
+    {
+      question: 'Contoh derive macro yang umum di backend?',
+      options: ['Serialize dan Deserialize dari serde', 'tokio::main', 'Vec', 'String'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Serde menghasilkan kode serialisasi.',
+        'Salah. tokio::main adalah attribute macro, bukan derive.',
+        'Salah. Vec adalah tipe, bukan derive.',
+        'Salah. String adalah tipe.',
+      ],
+      explanation:
+        'Derive macro menghasilkan implementasi trait berdasarkan definisi tipe.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

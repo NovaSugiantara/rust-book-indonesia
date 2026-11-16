@@ -1,0 +1,227 @@
+---
+title: '21.3 Graceful shutdown'
+description: 'Drop, penutupan sender, drain worker, dan join agar request selesai sebelum server berhenti.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Tanpa cleanup, Ctrl-C mematikan semua thread seketika. Graceful shutdown menutup antrean, membiarkan worker menyelesaikan pekerjaan yang sudah diterima, lalu menunggu thread selesai.
+
+## Drop pada ThreadPool
+
+Ide pertama adalah memanggil `join` pada setiap worker saat pool di-drop. Namun `join` mengambil kepemilikan `JoinHandle`, sedangkan loop hanya punya mutable reference ke worker. Memindahkan field dari borrowed value ditolak:
+
+<RustPlayground
+  code={`use std::thread;
+
+struct Worker {
+    thread: thread::JoinHandle<()>,
+}
+
+fn matikan(workers: &mut Vec<Worker>) {
+    for worker in workers {
+        worker.thread.join().unwrap();
+    }
+}
+
+fn main() {
+    let mut workers = vec![Worker {
+        thread: thread::spawn(|| {}),
+    }];
+    matikan(&mut workers);
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error join pada JoinHandle yang dipinjam"
+/>
+
+Solusi buku memakai `Vec::drain(..)` untuk mengambil kepemilikan setiap worker, lalu `join`.
+
+## Menutup antrean
+
+`join` saja tidak cukup. Worker loop terus menunggu job dari `recv`. Kalau sender masih hidup, `recv` tidak pernah error dan `join` menunggu selamanya.
+
+Ubah `sender` menjadi `Option<Sender<Job>>`. Pada `Drop`, ambil sender dengan `take` lalu drop. Channel tertutup, semua `recv` menerima `Err`, dan worker keluar dari loop.
+
+```rust
+pub struct ThreadPool {
+    workers: Vec<Worker>,
+    sender: Option<mpsc::Sender<Job>>,
+}
+
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        drop(self.sender.take());
+
+        for worker in self.workers.drain(..) {
+            println!("Mematikan worker {}", worker.id);
+            if let Err(error) = worker.thread.join() {
+                println!("Worker panic: {error:?}");
+            }
+        }
+    }
+}
+```
+
+Worker harus keluar saat `recv` error:
+
+```rust
+let message = receiver.lock().unwrap().recv();
+
+match message {
+    Ok(job) => job(),
+    Err(_) => break,
+}
+```
+
+`drop(self.sender.take())` menutup channel sebelum `join`. Urutan ini penting. Kalau `join` dilakukan sebelum sender ditutup, program bisa deadlock.
+
+## Simulasi shutdown
+
+<RustPlayground
+  code={`use std::{
+    sync::mpsc,
+    thread,
+};
+
+fn main() {
+    let (tx, rx) = mpsc::channel::<u32>();
+
+    let worker = thread::spawn(move || loop {
+        match rx.recv() {
+            Ok(nilai) => println!("Memproses {nilai}"),
+            Err(_) => {
+                println!("Channel ditutup, worker berhenti");
+                break;
+            }
+        }
+    });
+
+    tx.send(1).unwrap();
+    tx.send(2).unwrap();
+    drop(tx);
+
+    worker.join().unwrap();
+    println!("Semua pekerjaan selesai");
+}`}
+  filename="src/main.rs"
+  label="Menutup channel lalu menunggu worker selesai"
+/>
+
+## Membatasi request untuk demonstrasi
+
+Server produksi tidak berhenti setelah beberapa request. Untuk memperlihatkan graceful shutdown, buku memakai `incoming().take(2)`. Contoh Kasir Warung memakai `take(4)` agar empat endpoint bisa diuji.
+
+```rust
+for stream in listener.incoming().take(4) {
+    let stream = stream.unwrap();
+
+    pool.execute(|| {
+        handle_connection(stream);
+    });
+}
+
+println!("Menerima 4 koneksi, mematikan server");
+```
+
+Setelah loop selesai, `pool` keluar scope, `Drop` berjalan, sender ditutup, dan semua worker di-join.
+
+## Output pengujian
+
+Server Kasir Warung diuji lokal dengan `cargo run` dan empat request `curl`. Log server:
+
+```text
+Server berjalan di http://127.0.0.1:7878
+Worker 0 mengambil pekerjaan
+Worker 1 mengambil pekerjaan
+Worker 2 mengambil pekerjaan
+Menerima 4 koneksi, mematikan server
+Mematikan worker 0
+Worker 3 mengambil pekerjaan
+Worker 0 disconnected
+Worker 3 disconnected
+Worker 2 disconnected
+Worker 1 disconnected
+Mematikan worker 1
+Mematikan worker 2
+Mematikan worker 3
+```
+
+Urutan worker bisa berbeda. Yang penting, pekerjaan yang sudah diterima diselesaikan sebelum thread berhenti.
+
+## Batas graceful shutdown
+
+`take(4)` hanya untuk demonstrasi. Server nyata perlu sinyal berhenti seperti Ctrl-C atau SIGTERM, timeout shutdown, dan penanganan worker yang panic. `join` mengembalikan `Result`, jadi panic worker bisa dilaporkan, bukan diabaikan.
+
+:::note[Kalau di bahasa lain]
+Go memakai context dan `http.Server.Shutdown` untuk graceful shutdown. Node.js memakai `server.close` dan menunggu koneksi selesai. Python `http.server` punya `shutdown`. Rust manual harus menutup antrean dan join sendiri; framework biasanya menyediakan mekanisme ini.
+:::
+
+:::tip[Tips]
+Uji shutdown dengan request lambat. Pastikan request yang sudah diterima selesai, request baru ditolak, dan proses tidak menunggu selamanya.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa sender perlu di-drop sebelum join?',
+      options: [
+        'Agar recv error dan worker keluar dari loop',
+        'Agar worker membuat thread baru',
+        'Agar listener berhenti menerima TCP',
+        'Agar file HTML terhapus',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Channel tertutup saat semua sender di-drop.',
+        'Salah. Worker tidak membuat thread baru.',
+        'Salah. Listener diatur loop incoming.',
+        'Salah. File tidak terkait.',
+      ],
+      explanation:
+        'Tanpa penutupan channel, worker menunggu job selamanya.',
+    },
+    {
+      question: 'Mengapa Vec::drain dipakai pada Drop?',
+      options: [
+        'Agar setiap Worker diambil kepemilikannya dan JoinHandle bisa di-join',
+        'Agar worker tidak dibuat',
+        'Agar channel tetap terbuka',
+        'Agar request baru diterima',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. drain memindahkan item keluar dari vector.',
+        'Salah. Worker tetap dibuat saat new.',
+        'Salah. Channel justru ditutup.',
+        'Salah. Setelah drop, pool tidak menerima request.',
+      ],
+      explanation:
+        'join membutuhkan ownership JoinHandle, sedangkan drain memberi ownership worker.',
+    },
+    {
+      question: 'Apa risiko jika join dilakukan sebelum sender ditutup?',
+      options: [
+        'Program bisa menunggu selamanya karena worker masih menunggu job',
+        'Worker langsung panic',
+        'Channel otomatis tertutup',
+        'Listener menolak koneksi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. recv tidak akan error selama sender hidup.',
+        'Salah. Worker tetap menunggu.',
+        'Salah. Channel baru tertutup saat sender di-drop.',
+        'Salah. Listener tidak terkait langsung.',
+      ],
+      explanation:
+        'Urutan shutdown menentukan apakah worker bisa keluar dari loop.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

@@ -1,0 +1,89 @@
+---
+title: 'Bab 19: Pattern dan matching'
+description: 'Pattern di match, let, if let, loop, dan fungsi untuk membongkar data dengan aman.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Pattern adalah bentuk yang dicocokkan dengan nilai. Kamu sudah memakainya sejak `let x = 5`, `match`, dan `if let`, tetapi bab ini membahas seluruh sintaks dan aturan yang membuat pattern bisa dipakai dengan percaya diri.
+
+Di backend, pattern muncul saat membaca request, memetakan error, menangani varian response, dan membongkar struktur data dari database. Pattern membuat cabang kode eksplisit dan memaksa kasus yang belum ditangani terlihat.
+
+## Urutan bab
+
+1. [Tempat memakai pattern](places/) membahas `match`, `let`, `if let`, `while let`, `for`, dan parameter fungsi.
+2. [Refutability](refutability/) membahas pattern yang selalu cocok dan yang bisa gagal.
+3. [Sintaks pattern](syntax/) membahas literal, range, destructuring, `_`, `..`, match guard, dan `@`.
+4. [Studi kasus: parser perintah](studi-kasus/) memakai enum dan match guard untuk membaca perintah CLI.
+
+:::note[Kenapa begini?]
+`match` memeriksa kelengkapan pattern saat kompilasi. `if let` lebih ringkas tetapi tidak memeriksa kelengkapan. Pilih `match` saat semua kemungkinan harus ditangani, dan `if let` saat hanya satu kasus yang relevan.
+:::
+
+:::tip[Tips]
+Saat menambah variant enum, biarkan compiler menunjukkan semua `match` yang belum menangani variant baru. Jangan langsung mengganti dengan `_` jika variant itu perlu penanganan khusus.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa fungsi pattern?',
+      options: [
+        'Mencocokkan nilai dan membongkar bagiannya',
+        'Mengubah semua nilai menjadi String',
+        'Menjalankan thread baru',
+        'Mengalokasikan heap',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pattern mendeskripsikan bentuk nilai.',
+        'Salah. Pattern bukan konversi tipe.',
+        'Salah. Pattern tidak membuat thread.',
+        'Salah. Pattern bukan alokasi.',
+      ],
+      explanation:
+        'Pattern dipakai di match, let, if let, loop, dan parameter fungsi.',
+    },
+    {
+      question: 'Mengapa match harus exhaustive?',
+      options: [
+        'Agar semua kemungkinan nilai ditangani',
+        'Agar program berjalan lebih cepat',
+        'Agar semua tipe menjadi Copy',
+        'Agar match bisa dipakai di loop',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler memeriksa kelengkapan.',
+        'Salah. Ini soal keamanan logika, bukan kecepatan.',
+        'Salah. Exhaustiveness tidak mengubah Copy.',
+        'Salah. Match tetap bisa dipakai di loop.',
+      ],
+      explanation:
+        'Compiler menolak match yang melewatkan variant atau nilai yang mungkin.',
+    },
+    {
+      question: 'Apa perbedaan utama match dan if let?',
+      options: [
+        'Match memeriksa kelengkapan, if let tidak',
+        'If let lebih aman untuk semua kasus',
+        'Match hanya untuk angka',
+        'If let tidak bisa memakai pattern',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. If let hanya menangani satu pattern.',
+        'Salah. If let bisa melewatkan kasus lain.',
+        'Salah. Match bekerja untuk banyak tipe.',
+        'Salah. If let memakai pattern.',
+      ],
+      explanation:
+        'Gunakan match saat kelengkapan penting, if let saat satu kasus cukup.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

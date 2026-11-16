@@ -1,0 +1,249 @@
+---
+title: '20.1 Unsafe Rust'
+description: 'Lima kemampuan unsafe, raw pointer, FFI, static mut, dan cara membungkusnya dengan API aman.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Unsafe Rust adalah bagian bahasa yang memungkinkan operasi di luar jaminan memory safety compiler. Ini bukan mode bebas aturan. Borrow checker dan pemeriksaan tipe tetap berjalan; `unsafe` hanya membuka lima operasi khusus.
+
+## Lima kemampuan unsafe
+
+1. Dereference raw pointer.
+2. Memanggil function atau method unsafe.
+3. Mengakses atau mengubah static mutable.
+4. Mengimplementasikan unsafe trait.
+5. Mengakses field `union`.
+
+Blok unsafe sebaiknya kecil. Bungkus dengan API aman agar pemakai tidak perlu menulis unsafe sendiri.
+
+## Raw pointer
+
+Raw pointer bertipe `*const T` dan `*mut T`. Berbeda dari reference, raw pointer boleh null, boleh tidak valid, boleh ada beberapa pointer mutable ke lokasi yang sama, dan tidak otomatis dibersihkan.
+
+Membuat raw pointer aman. Yang membutuhkan unsafe adalah dereference:
+
+<RustPlayground
+  code={`fn main() {
+    let mut num = 5;
+
+    let r1 = &raw const num;
+    let r2 = &raw mut num;
+
+    unsafe {
+        println!("r1 = {}", *r1);
+        println!("r2 = {}", *r2);
+    }
+}`}
+  filename="src/main.rs"
+  label="Membuat dan menderereference raw pointer"
+/>
+
+Tanpa blok unsafe, dereference ditolak:
+
+<RustPlayground
+  code={`fn main() {
+    let num = 5;
+    let r = &raw const num;
+
+    println!("{}", *r);
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error dereference raw pointer di luar unsafe"
+/>
+
+Pesan `dereference of raw pointer is unsafe` muncul karena compiler tidak bisa membuktikan pointer menunjuk memory valid. Kamu yang bertanggung jawab memastikan alamat dan masa hidupnya benar.
+
+## Unsafe function
+
+Function unsafe memiliki kontrak yang harus dipenuhi pemanggil. Memanggilnya juga membutuhkan blok unsafe:
+
+<RustPlayground
+  code={`unsafe fn dangerous() {
+    println!("dipanggil");
+}
+
+fn main() {
+    dangerous();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error memanggil unsafe function tanpa unsafe"
+/>
+
+Pesan `call to unsafe function is unsafe and requires unsafe block` menunjukkan bahwa pemanggil harus membaca dokumentasi dan memenuhi kontrak. Di dalam unsafe function, operasi unsafe tetap perlu blok unsafe terpisah agar batasnya terlihat.
+
+## Safe abstraction
+
+Function `split_at_mut` di standard library membagi satu mutable slice menjadi dua bagian yang tidak tumpang tindih. Implementasi aman dengan indeks ditolak borrow checker karena compiler tidak tahu kedua bagian berbeda.
+
+Compiler tidak bisa membuktikan pemisahan itu, sehingga implementasi memakai raw pointer dan unsafe di dalam function aman:
+
+<RustPlayground
+  code={`use std::slice;
+
+fn split_at_mut(values: &mut [i32], mid: usize) -> (&mut [i32], &mut [i32]) {
+    let len = values.len();
+    let ptr = values.as_mut_ptr();
+
+    assert!(mid <= len);
+
+    unsafe {
+        (
+            slice::from_raw_parts_mut(ptr, mid),
+            slice::from_raw_parts_mut(ptr.add(mid), len - mid),
+        )
+    }
+}
+
+fn main() {
+    let mut data = vec![1, 2, 3, 4, 5, 6];
+    let (kiri, kanan) = split_at_mut(&mut data, 3);
+
+    println!("{kiri:?} {kanan:?}");
+}`}
+  filename="src/main.rs"
+  label="Safe abstraction di atas raw pointer"
+/>
+
+`assert!(mid <= len)` memastikan offset valid. Kedua slice tidak tumpang tindih karena panjangnya dihitung dari `mid`. API luar tetap aman dan tidak mengekspos unsafe.
+
+## FFI
+
+FFI memungkinkan Rust memanggil code C atau sebaliknya. Fungsi dari bahasa lain tidak mengikuti aturan Rust, sehingga deklarasi dan pemanggilannya membutuhkan unsafe.
+
+```rust
+unsafe extern "C" {
+    fn abs(input: i32) -> i32;
+}
+
+fn main() {
+    unsafe {
+        println!("{}", abs(-3));
+    }
+}
+```
+
+`extern "C"` menentukan ABI. Kalau fungsi terbukti aman untuk semua input yang valid, fungsi itu bisa ditandai `safe` di dalam blok unsafe extern. Penandaan itu adalah janji yang tetap harus kamu buktikan.
+
+Untuk mengekspor fungsi Rust ke C, gunakan `#[unsafe(no_mangle)]` dan `extern "C"`. Name mangling dimatikan agar nama fungsi bisa ditemukan linker C.
+
+## Static mutable dan unsafe trait
+
+`static` immutable aman diakses. `static mut` membutuhkan unsafe karena akses dari beberapa thread bisa menjadi data race. Untuk state global, primitif concurrency dari Bab 16 lebih aman daripada `static mut`.
+
+Unsafe trait dipakai saat implementor harus memenuhi invariant yang tidak bisa diperiksa compiler. Contohnya menandai tipe sebagai `Send` atau `Sync` secara manual. Jangan lakukan itu kecuali kamu benar-benar memahami jaminannya.
+
+## Miri
+
+Miri adalah tool runtime untuk mendeteksi undefined behavior pada kode unsafe. Miri membutuhkan nightly:
+
+```console
+$ rustup +nightly component add miri
+$ cargo +nightly miri run
+```
+
+Miri hanya memeriksa code yang benar-benar dijalankan. Kalau Miri tidak menemukan bug, bukan berarti kode pasti benar.
+
+## Di backend
+
+Backend developer biasanya bertemu unsafe lewat:
+
+- binding FFI ke library sistem,
+- crate low-level untuk kriptografi, database driver, atau runtime,
+- implementasi tipe concurrency khusus,
+- optimisasi yang tidak bisa dinyatakan di safe Rust.
+
+Jangan memakai unsafe untuk menghindari borrow checker. Kalau terpaksa, isolasi dalam module kecil, tulis komentar `SAFETY`, sediakan API aman, dan uji dengan Miri serta test yang mencakup invariant.
+
+:::note[Kalau di bahasa lain]
+C dan C++ memberi akses memori mentah secara default. Go menyediakan `unsafe.Pointer` untuk operasi khusus, tetapi tetap menghindarinya di kode biasa. Java dan Python menyembunyikan pointer di balik runtime. Rust membatasi operasi berbahaya ke blok `unsafe` yang eksplisit, sehingga area audit menjadi lebih kecil.
+:::
+
+:::tip[Tips]
+Setiap blok unsafe harus punya alasan yang bisa ditulis dalam satu kalimat dan komentar `SAFETY` yang menjelaskan invariant. Kalau tidak bisa, mungkin ada desain aman yang belum dipertimbangkan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dilakukan unsafe?',
+      options: [
+        'Membuka lima operasi khusus tanpa mematikan borrow checker',
+        'Mematikan semua pemeriksaan compiler',
+        'Membuat semua pointer valid',
+        'Menghapus kebutuhan test',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pemeriksaan lain tetap berjalan.',
+        'Salah. Borrow checker tetap aktif.',
+        'Salah. Validitas pointer menjadi tanggung jawab programmer.',
+        'Salah. Test tetap diperlukan.',
+      ],
+      explanation:
+        'Unsafe adalah janji eksplisit bahwa invariant dipenuhi manual.',
+    },
+    {
+      question: 'Mengapa dereference raw pointer butuh unsafe?',
+      options: [
+        'Karena compiler tidak bisa membuktikan pointer menunjuk memory valid',
+        'Karena raw pointer selalu null',
+        'Karena raw pointer hanya untuk C',
+        'Karena raw pointer tidak punya tipe',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Validitas alamat tidak dapat dijamin compiler.',
+        'Salah. Raw pointer boleh null, bukan selalu null.',
+        'Salah. Bisa dipakai di Rust murni.',
+        'Salah. Raw pointer punya tipe.',
+      ],
+      explanation:
+        'Programmer harus memastikan alamat, alignment, dan masa hidupnya.',
+    },
+    {
+      question: 'Apa tujuan safe abstraction seperti split_at_mut?',
+      options: [
+        'Menyembunyikan unsafe di balik API yang memenuhi invariant',
+        'Menghapus semua unsafe dari program',
+        'Membuat raw pointer otomatis aman',
+        'Mengganti test dengan compiler',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Pemakai luar tidak perlu menulis unsafe.',
+        'Salah. Implementasi tetap memakai unsafe.',
+        'Salah. Raw pointer tetap berbahaya.',
+        'Salah. Test tetap penting.',
+      ],
+      explanation:
+        'Blok unsafe kecil dan teraudit membungkus operasi yang sulit dibuktikan compiler.',
+    },
+    {
+      question: 'Kapan FFI membutuhkan unsafe?',
+      options: [
+        'Saat memanggil fungsi dari bahasa lain yang tidak mengikuti aturan Rust',
+        'Hanya saat memakai String',
+        'Saat membuat fungsi Rust biasa',
+        'Saat memakai Vec',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler tidak bisa memeriksa kontrak bahasa lain.',
+        'Salah. String bukan penyebabnya.',
+        'Salah. Fungsi Rust biasa aman.',
+        'Salah. Vec bukan FFI.',
+      ],
+      explanation:
+        'Pemanggil harus memenuhi kontrak ABI dan keselamatan fungsi asing.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />
