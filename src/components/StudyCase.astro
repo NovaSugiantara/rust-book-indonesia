@@ -20,15 +20,18 @@ const { title, intro } = Astro.props;
 
 <style>
   .study-case {
+    max-width: 100%;
+    min-width: 0;
     margin: 2rem 0;
-    padding: 1.25rem;
+    padding: 1rem;
     border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.7rem;
+    border-radius: 0.5rem;
     background: var(--sl-color-gray-6);
   }
 
   .sc-header {
-    margin-bottom: 1.5rem;
+    min-width: 0;
+    margin-bottom: 1.25rem;
   }
 
   .sc-kicker {
@@ -43,23 +46,27 @@ const { title, intro } = Astro.props;
   .sc-header h2 {
     margin: 0;
     font-size: var(--sl-text-2xl);
+    overflow-wrap: anywhere;
   }
 
   .sc-intro {
+    max-width: 100%;
     margin: 0.65rem 0 0;
-    max-width: 65ch;
     color: var(--sl-color-gray-2);
+    overflow-wrap: anywhere;
   }
 
   .sc-steps {
     counter-reset: study-step;
     display: grid;
-    gap: 1.5rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+    min-width: 0;
   }
 
   @media (max-width: 40rem) {
     .study-case {
-      padding: 0.85rem;
+      padding: 0.75rem;
     }
   }
 </style>

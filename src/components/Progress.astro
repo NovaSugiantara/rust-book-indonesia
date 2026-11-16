@@ -51,10 +51,12 @@ const base = import.meta.env.BASE_URL;
 
 <style>
   .progress-overview {
+    max-width: 100%;
+    min-width: 0;
     margin: 2rem 0;
-    padding: 1.1rem;
+    padding: 1rem;
     border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.7rem;
+    border-radius: 0.5rem;
     background: var(--sl-color-gray-6);
   }
 
@@ -64,23 +66,31 @@ const base = import.meta.env.BASE_URL;
     align-items: flex-end;
     justify-content: space-between;
     gap: 0.5rem 1.5rem;
+    min-width: 0;
     margin-bottom: 0.75rem;
+  }
+
+  .po-head > * {
+    min-width: 0;
   }
 
   .po-head h2 {
     margin: 0;
     font-size: var(--sl-text-xl);
+    overflow-wrap: anywhere;
   }
 
   .po-summary {
     margin: 0.3rem 0 0;
     color: var(--sl-color-gray-2);
+    overflow-wrap: anywhere;
   }
 
   .po-quiz {
     margin: 0;
     font-size: var(--sl-text-sm);
     color: var(--sl-color-gray-2);
+    overflow-wrap: anywhere;
   }
 
   .po-bar {
@@ -101,8 +111,9 @@ const base = import.meta.env.BASE_URL;
 
   .po-list {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
     gap: 0.5rem;
+    min-width: 0;
     margin: 1rem 0;
     padding: 0;
     list-style: none;
@@ -114,10 +125,11 @@ const base = import.meta.env.BASE_URL;
     align-items: baseline;
     justify-content: space-between;
     gap: 0.25rem 0.75rem;
+    min-width: 0;
     min-height: 2.75rem;
-    padding: 0.55rem 0.7rem;
+    padding: 0.6rem 0.75rem;
     border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.4rem;
+    border-radius: 0.35rem;
     background: var(--sl-color-bg);
     text-decoration: none;
     color: var(--sl-color-text);
@@ -133,8 +145,10 @@ const base = import.meta.env.BASE_URL;
   }
 
   .po-title {
+    min-width: 0;
     font-size: var(--sl-text-sm);
     font-weight: 600;
+    overflow-wrap: anywhere;
   }
 
   .po-count {
@@ -156,6 +170,13 @@ const base = import.meta.env.BASE_URL;
     margin: 0;
     font-size: var(--sl-text-xs);
     color: var(--sl-color-gray-2);
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 40rem) {
+    .progress-overview {
+      padding: 0.75rem;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

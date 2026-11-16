@@ -30,7 +30,9 @@ const hasSolution = Astro.slots.has('solution');
 <style>
   .sc-step {
     counter-increment: study-step;
-    padding-bottom: 1.5rem;
+    min-width: 0;
+    max-width: 100%;
+    padding-bottom: 1.25rem;
     border-bottom: 1px solid var(--sl-color-gray-5);
   }
 
@@ -40,11 +42,14 @@ const hasSolution = Astro.slots.has('solution');
   }
 
   .sc-step h3 {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 0.6rem;
     align-items: baseline;
+    min-width: 0;
     margin: 0 0 0.4rem;
     font-size: var(--sl-text-lg);
+    overflow-wrap: anywhere;
   }
 
   .sc-step h3::before {
@@ -53,18 +58,49 @@ const hasSolution = Astro.slots.has('solution');
     align-items: center;
     justify-content: center;
     flex: none;
+    align-self: start;
     width: 1.7rem;
     height: 1.7rem;
     border-radius: 50%;
     background: var(--sl-color-text-accent);
     color: var(--sl-color-bg);
-    font-size: var(--sl-text-sm);
+    font-size: var(--sl-text-xs);
     font-weight: 700;
   }
 
   .sc-goal {
+    min-width: 0;
     margin: 0 0 0.75rem;
     color: var(--sl-color-gray-2);
+    overflow-wrap: anywhere;
+  }
+
+  .sc-body,
+  .sc-details {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .sc-body > * {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .sc-body :where(.expressive-code, figure, pre) {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .sc-body pre {
+    overflow-x: auto;
+  }
+
+  .sc-body :not(pre) > code,
+  .sc-goal code,
+  .sc-step h3 code,
+  .sc-details code {
+    overflow-wrap: anywhere;
   }
 
   .sc-body > :first-child {
@@ -76,31 +112,40 @@ const hasSolution = Astro.slots.has('solution');
   }
 
   .sc-disclosure {
+    min-width: 0;
+    max-width: 100%;
     margin-top: 0.75rem;
     border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.45rem;
+    border-radius: 0.35rem;
     background: var(--sl-color-bg);
   }
 
   .sc-disclosure summary {
+    min-width: 0;
     min-height: 2.75rem;
     display: flex;
     align-items: center;
-    padding: 0.5rem 0.8rem;
+    padding: 0.5rem 0.75rem;
     font-weight: 600;
     font-size: var(--sl-text-sm);
+    overflow-wrap: anywhere;
     cursor: pointer;
   }
 
   .sc-disclosure summary:focus-visible {
     outline: 2px solid var(--sl-color-text-accent);
     outline-offset: 2px;
-    border-radius: 0.45rem;
+    border-radius: 0.35rem;
   }
 
   .sc-details {
-    padding: 0 0.8rem 0.8rem;
+    padding: 0 0.75rem 0.75rem;
     font-size: var(--sl-text-sm);
+  }
+
+  .sc-details :where(.expressive-code, figure, pre) {
+    max-width: 100%;
+    min-width: 0;
   }
 
   .sc-details > :first-child {
