@@ -1,0 +1,230 @@
+---
+import { chapters, totalPages } from '../data/chapters';
+
+const base = import.meta.env.BASE_URL;
+---
+
+<section class="progress-overview" data-progress-overview data-total={totalPages} aria-labelledby="progress-title">
+  <div class="po-head">
+    <div>
+      <h2 id="progress-title">Progres belajarmu</h2>
+      <p class="po-summary" data-po-summary>0 dari {totalPages} halaman selesai.</p>
+    </div>
+    <p class="po-quiz" data-po-quiz>Kuis: belum ada jawaban.</p>
+  </div>
+
+  <div
+    class="po-bar"
+    role="progressbar"
+    aria-labelledby="progress-title"
+    aria-valuemin="0"
+    aria-valuemax={totalPages}
+    aria-valuenow="0"
+    data-po-bar
+  >
+    <span data-po-fill></span>
+  </div>
+
+  <ol class="po-list">
+    {chapters.map((chapter) => (
+      <li
+        class="po-item"
+        data-po-chapter
+        data-pages={chapter.pages.map((page) => `${base}${page.slug}/`).join(',')}
+      >
+        <a href={`${base}${chapter.slug}/`}>
+          <span class="po-title">{chapter.number}. {chapter.title}</span>
+          <span class="po-count" data-po-count>
+            0 / {chapter.pages.length} halaman
+          </span>
+        </a>
+      </li>
+    ))}
+  </ol>
+
+  <p class="po-note">
+    Progres disimpan di localStorage, yaitu penyimpanan kecil di browser ini. Kalau penyimpanan
+    diblokir, semua halaman tetap bisa dibaca dan playground tetap jalan, tetapi progres tidak
+    tersimpan.
+  </p>
+</section>
+
+<style>
+  .progress-overview {
+    margin: 2rem 0;
+    padding: 1.1rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.7rem;
+    background: var(--sl-color-gray-6);
+  }
+
+  .po-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.5rem 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .po-head h2 {
+    margin: 0;
+    font-size: var(--sl-text-xl);
+  }
+
+  .po-summary {
+    margin: 0.3rem 0 0;
+    color: var(--sl-color-gray-2);
+  }
+
+  .po-quiz {
+    margin: 0;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+  }
+
+  .po-bar {
+    height: 0.65rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--sl-color-gray-5);
+  }
+
+  .po-bar span {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: var(--sl-color-text-accent);
+    transition: width 180ms ease-out;
+  }
+
+  .po-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 0.5rem;
+    margin: 1rem 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .po-item a {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25rem 0.75rem;
+    min-height: 2.75rem;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.4rem;
+    background: var(--sl-color-bg);
+    text-decoration: none;
+    color: var(--sl-color-text);
+  }
+
+  .po-item a:hover {
+    border-color: var(--sl-color-text-accent);
+  }
+
+  .po-item a:focus-visible {
+    outline: 2px solid var(--sl-color-text-accent);
+    outline-offset: 2px;
+  }
+
+  .po-title {
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+  }
+
+  .po-count {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-2);
+  }
+
+  .po-item[data-complete='true'] a {
+    border-color: var(--sl-color-green-high);
+  }
+
+  .po-item[data-complete='true'] .po-title::after {
+    content: ' (selesai)';
+    font-weight: 400;
+    color: var(--sl-color-green-high);
+  }
+
+  .po-note {
+    margin: 0;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-2);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .po-bar span {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  import { readProgress } from '../scripts/progress';
+
+  function update() {
+    const root = document.querySelector<HTMLElement>('[data-progress-overview]');
+    if (!root) return;
+
+    const progress = readProgress();
+    const total = Number(root.getAttribute('data-total') ?? '0');
+    const items = Array.from(root.querySelectorAll<HTMLElement>('[data-po-chapter]'));
+    const allPages: string[] = [];
+    let completed = 0;
+
+    for (const item of items) {
+      const pages = (item.getAttribute('data-pages') ?? '')
+        .split(',')
+        .map((page) => page.trim())
+        .filter(Boolean);
+      allPages.push(...pages);
+      const done = pages.filter((page) => progress[page]?.completed === true).length;
+      completed += done;
+
+      const counter = item.querySelector<HTMLElement>('[data-po-count]');
+      if (counter) {
+        counter.textContent = `${done} / ${pages.length} halaman`;
+      }
+      item.dataset.complete = String(pages.length > 0 && done === pages.length);
+    }
+
+    const summary = root.querySelector<HTMLElement>('[data-po-summary]');
+    if (summary) {
+      summary.textContent = `${completed} dari ${total} halaman selesai.`;
+    }
+
+    const bar = root.querySelector<HTMLElement>('[data-po-bar]');
+    const fill = root.querySelector<HTMLElement>('[data-po-fill]');
+    if (bar) bar.setAttribute('aria-valuenow', String(completed));
+    if (fill) fill.style.width = total > 0 ? `${Math.round((completed / total) * 100)}%` : '0%';
+
+    let quizCorrect = 0;
+    let quizTotal = 0;
+    let quizAnswered = 0;
+    for (const page of new Set(allPages)) {
+      const quiz = progress[page]?.quiz;
+      if (!quiz) continue;
+      quizCorrect += quiz.correct;
+      quizTotal += quiz.total;
+      quizAnswered += 1;
+    }
+
+    const quizSummary = root.querySelector<HTMLElement>('[data-po-quiz]');
+    if (quizSummary) {
+      quizSummary.textContent =
+        quizAnswered === 0
+          ? 'Kuis: belum ada jawaban.'
+          : `Kuis: ${quizCorrect} dari ${quizTotal} soal benar di ${quizAnswered} halaman.`;
+    }
+  }
+
+  update();
+  window.addEventListener('rustbook:progress', update);
+  window.addEventListener('storage', update);
+</script>

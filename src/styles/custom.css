@@ -1,0 +1,63 @@
+:root {
+  --sl-color-accent-low: #fbe2d6;
+  --sl-color-accent: #b7410e;
+  --sl-color-accent-high: #4a1a06;
+  --sl-color-text-accent: #9a3a0c;
+}
+
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #4a1a06;
+  --sl-color-accent: #ff9b70;
+  --sl-color-accent-high: #ffd9c7;
+  --sl-color-text-accent: #ffb08c;
+}
+
+starlight-theme-select label {
+  --sl-select-width: 9em !important;
+}
+
+starlight-lang-select label {
+  --sl-select-width: 13em !important;
+}
+
+.home-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-cards li {
+  padding: 1rem;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.6rem;
+  background: var(--sl-color-gray-6);
+}
+
+.home-cards h3 {
+  margin: 0 0 0.4rem;
+  font-size: var(--sl-text-base);
+}
+
+.home-cards p {
+  margin: 0;
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-2);
+  line-height: 1.6;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)) {
+  text-underline-offset: 0.18em;
+}
+
+.sl-markdown-content :where(h2, h3) {
+  scroll-margin-top: 5rem;
+}
+
+@media (max-width: 40rem) {
+  .home-cards {
+    grid-template-columns: 1fr;
+  }
+}

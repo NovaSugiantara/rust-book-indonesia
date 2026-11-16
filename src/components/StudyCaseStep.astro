@@ -1,0 +1,113 @@
+---
+interface Props {
+  title: string;
+  goal: string;
+}
+
+const { title, goal } = Astro.props;
+const hasHint = Astro.slots.has('hint');
+const hasSolution = Astro.slots.has('solution');
+---
+
+<section class="sc-step">
+  <h3>{title}</h3>
+  <p class="sc-goal"><strong>Tujuan:</strong> {goal}</p>
+  <div class="sc-body"><slot /></div>
+  {hasHint && (
+    <details class="sc-disclosure">
+      <summary>Butuh hint?</summary>
+      <div class="sc-details"><slot name="hint" /></div>
+    </details>
+  )}
+  {hasSolution && (
+    <details class="sc-disclosure">
+      <summary>Lihat solusi</summary>
+      <div class="sc-details"><slot name="solution" /></div>
+    </details>
+  )}
+</section>
+
+<style>
+  .sc-step {
+    counter-increment: study-step;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+
+  .sc-step:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
+  .sc-step h3 {
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    margin: 0 0 0.4rem;
+    font-size: var(--sl-text-lg);
+  }
+
+  .sc-step h3::before {
+    content: counter(study-step);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 50%;
+    background: var(--sl-color-text-accent);
+    color: var(--sl-color-bg);
+    font-size: var(--sl-text-sm);
+    font-weight: 700;
+  }
+
+  .sc-goal {
+    margin: 0 0 0.75rem;
+    color: var(--sl-color-gray-2);
+  }
+
+  .sc-body > :first-child {
+    margin-top: 0;
+  }
+
+  .sc-body > :last-child {
+    margin-bottom: 0;
+  }
+
+  .sc-disclosure {
+    margin-top: 0.75rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.45rem;
+    background: var(--sl-color-bg);
+  }
+
+  .sc-disclosure summary {
+    min-height: 2.75rem;
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.8rem;
+    font-weight: 600;
+    font-size: var(--sl-text-sm);
+    cursor: pointer;
+  }
+
+  .sc-disclosure summary:focus-visible {
+    outline: 2px solid var(--sl-color-text-accent);
+    outline-offset: 2px;
+    border-radius: 0.45rem;
+  }
+
+  .sc-details {
+    padding: 0 0.8rem 0.8rem;
+    font-size: var(--sl-text-sm);
+  }
+
+  .sc-details > :first-child {
+    margin-top: 0;
+  }
+
+  .sc-details > :last-child {
+    margin-bottom: 0;
+  }
+</style>

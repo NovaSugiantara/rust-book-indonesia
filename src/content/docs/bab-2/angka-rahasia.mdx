@@ -1,0 +1,182 @@
+---
+title: '2.3 Angka rahasia'
+description: 'Menambahkan crate rand dan membuat angka rahasia acak antara 1 dan 100.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Game akan membosankan kalau angka rahasianya sama setiap kali dijalankan. Kita butuh angka acak. Rust belum menyertakan pembangkit angka acak untuk kebutuhan umum di standard library, jadi kita memakai crate `rand`.
+
+Crate adalah paket kode Rust. Proyek yang sedang kita bangun adalah binary crate, yaitu program yang bisa dijalankan. `rand` adalah library crate, yaitu kumpulan kode yang dipakai oleh program lain dan tidak dijalankan sendirian.
+
+## Menambahkan rand ke Cargo.toml
+
+Buka `Cargo.toml` dan tambahkan `rand` di bawah `[dependencies]`:
+
+```toml
+[package]
+name = "guessing_game"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.10.1"
+```
+
+Angka `0.10.1` adalah versi minimum yang kita minta. Cargo memahami Semantic Versioning, jadi `0.10.1` adalah singkatan dari `^0.10.1`: versi 0.10.1 atau lebih baru, tetapi masih di bawah 0.11.0. Selama API publiknya tidak berubah, Cargo boleh memakai patch release yang lebih baru.
+
+Simpan file, lalu jalankan `cargo build`:
+
+```console
+$ cargo build
+    Updating crates.io index
+  Downloaded rand v0.10.1
+  ...
+   Compiling rand v0.10.1
+   Compiling guessing_game v0.1.0 (file:///projects/guessing_game)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.03s
+```
+
+Cargo mengunduh `rand` beserta crate yang dibutuhkan `rand`, lalu mengompilasi semuanya. Baris dan versi patch bisa berbeda di komputermu. Selama masih di seri 0.10, kode di bab ini seharusnya cocok.
+
+## Cargo.lock
+
+Build pertama dengan dependency membuat `Cargo.lock`. File itu mencatat versi persis setiap crate yang dipakai. Build berikutnya akan memakai versi yang sama sampai kamu memintanya berubah. Ini membuat build bisa direproduksi di komputer lain.
+
+Kalau kamu ingin memperbarui dependency dalam batas versi di `Cargo.toml`, jalankan:
+
+```console
+$ cargo update
+```
+
+Jangan mengedit `Cargo.lock` manual. Cargo yang mengelola isinya.
+
+## Membuat angka acak
+
+Tambahkan import dan dua baris berikut ke `src/main.rs`:
+
+```rust
+use rand::prelude::*;
+
+fn main() {
+    let secret_number = rand::rng().random_range(1..=100);
+
+    println!("The secret number is: {secret_number}");
+}
+```
+
+`use rand::prelude::*;` membawa item yang paling sering dipakai dari crate `rand` ke scope. Tanda `*` berarti semua item publik di module `prelude`.
+
+`rand::rng()` mengembalikan random number generator untuk thread saat ini. Generator itu di-seed oleh sistem operasi, jadi hasilnya berbeda antar program.
+
+Method `.random_range(1..=100)` meminta angka dalam rentang 1 sampai 100. Tanda `..=` membuat batas atas ikut disertakan, berbeda dengan `..` yang berhenti sebelum batas atas.
+
+Baris `println!` mencetak angka rahasia. Itu berguna saat pengembangan, tetapi harus dihapus di versi final. Kalau angka rahasia dicetak, pemain tidak perlu menebak lagi.
+
+## Versi playground
+
+Playground menyediakan crate `rand` versi 0.10.x, jadi contoh ini bisa langsung dijalankan. Klik beberapa kali untuk melihat angka yang berubah.
+
+<RustPlayground
+  code={`use rand::prelude::*;
+
+fn main() {
+    let secret_number = rand::rng().random_range(1..=100);
+    println!("The secret number is: {secret_number}");
+}`}
+  filename="src/main.rs"
+  label="Membuat angka acak dengan crate rand"
+/>
+
+Karena kita belum memakai input, contoh ini tidak terpengaruh keterbatasan stdin pada playground.
+
+:::tip[Tips]
+Kalau ingin membaca dokumentasi crate yang sudah diunduh, jalankan `cargo doc --open`. Dokumentasi itu dibuat dari crate di proyekmu, jadi versinya cocok dengan yang sedang dipakai.
+:::
+
+:::note[Kenapa begini?]
+Rentang `1..=100` lebih mudah dibaca daripada menulis `rand::rng().random_range(1..101)`. Keduanya menghasilkan angka 1 sampai 100, tetapi yang pertama menyatakan batas akhir secara eksplisit.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Di bagian mana crate rand ditambahkan?',
+      options: [
+        'Di bawah [dependencies] pada Cargo.toml',
+        'Di dalam fungsi main',
+        'Di file Cargo.lock',
+        'Di folder target/debug',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Cargo membaca daftar dependency dari bagian [dependencies].',
+        'Salah. Kode Rust tidak mendeklarasikan dependency untuk Cargo.',
+        'Salah. Cargo.lock dihasilkan dan dikelola Cargo.',
+        'Salah. target/debug berisi hasil build.',
+      ],
+      explanation:
+        'Cargo.toml adalah manifest proyek. Dependency eksternal ditulis di bagian [dependencies].',
+    },
+    {
+      question: 'Apa fungsi Cargo.lock?',
+      options: [
+        'Mencatat versi persis dependency agar build bisa direproduksi',
+        'Menyimpan kode program utama',
+        'Mengunci file agar tidak bisa diedit',
+        'Menyimpan angka rahasia game',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Cargo.lock menyimpan versi yang dipilih Cargo saat build pertama.',
+        'Salah. Kode utama ada di src/main.rs.',
+        'Salah. Namanya lock, tetapi file itu tidak mengunci akses tulis.',
+        'Salah. Angka rahasia dibuat saat program berjalan.',
+      ],
+      explanation:
+        'Dengan Cargo.lock, build berikutnya memakai versi dependency yang sama sampai kamu menjalankan cargo update atau mengubah Cargo.toml.',
+    },
+    {
+      question: 'Apa arti rentang 1..=100?',
+      options: [
+        'Angka 1 sampai 100, termasuk 1 dan 100',
+        'Angka 1 sampai 99, tanpa 100',
+        'Angka 2 sampai 100, tanpa 1',
+        'Angka 1 dan 100 saja',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. ..= adalah rentang inklusif di kedua ujung.',
+        'Salah. Itu perilaku 1..100.',
+        'Salah. Batas bawah 1 tetap disertakan.',
+        'Salah. Semua angka di antara batas juga termasuk.',
+      ],
+      explanation:
+        'random_range memilih satu nilai dari rentang. Dengan 1..=100, nilai 1 dan 100 sama-sama mungkin.',
+    },
+    {
+      question: 'Mengapa println! yang mencetak angka rahasia harus dihapus di versi final?',
+      options: [
+        'Karena pemain jadi bisa melihat jawabannya',
+        'Karena println! tidak bisa mencetak angka',
+        'Karena angka acak tidak boleh ditampilkan di terminal',
+        'Karena Cargo akan menolak build',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Game kehilangan tantangannya kalau jawaban tercetak.',
+        'Salah. println! bisa mencetak angka.',
+        'Salah. Menampilkan angka di terminal tidak dilarang.',
+        'Salah. Build tetap berhasil.',
+      ],
+      explanation:
+        'Mencetak angka rahasia berguna saat pengembangan untuk memastikan angkanya masuk akal, tetapi tidak boleh ada di versi yang dimainkan orang lain.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

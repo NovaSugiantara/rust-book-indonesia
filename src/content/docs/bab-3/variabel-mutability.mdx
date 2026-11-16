@@ -1,0 +1,205 @@
+---
+title: '3.1 Variabel dan mutability'
+description: 'Membuat variabel, mengubah nilainya dengan mut, memakai konstanta, dan memahami shadowing.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Variabel Rust immutable secara default. Artinya, setelah sebuah nilai diikat ke nama, nilai itu tidak bisa diganti. Aturan ini terasa ketat saat pertama kali, tetapi membantu mencegah perubahan yang tidak disengaja.
+
+Kamu tetap bisa membuat variabel mutable dengan menambahkan `mut`. Bedanya, perubahan nilai menjadi keputusan yang terlihat jelas di kode.
+
+## Variabel immutable
+
+Kode berikut sengaja salah. Variabel `x` diberi nilai 5, lalu dicoba diisi 6 tanpa `mut`.
+
+<RustPlayground
+  code={`fn main() {
+    let x = 5;
+    println!("The value of x is: {x}");
+    x = 6;
+    println!("The value of x is: {x}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mengubah variabel immutable"
+/>
+
+Compiler menolak dengan pesan `cannot assign twice to immutable variable`. Pesan itu menyebut baris pertama saat `x` diberi nilai dan baris saat kamu mencoba mengubahnya. Compiler juga biasanya menyarankan menambahkan `mut`.
+
+## Variabel mutable
+
+Tambahkan `mut` setelah `let`:
+
+<RustPlayground
+  code={`fn main() {
+    let mut x = 5;
+    println!("The value of x is: {x}");
+    x = 6;
+    println!("The value of x is: {x}");
+}`}
+  filename="src/main.rs"
+  label="Mengubah nilai variabel mutable"
+/>
+
+Sekarang program mencetak 5 lalu 6. `mut` memberi izin mengubah nilai yang terikat ke `x`. Keyword ini juga memberi tahu pembaca kode bahwa nilai tersebut memang akan berubah.
+
+:::note[Kenapa begini?]
+Immutable sebagai default membuat kode lebih mudah dinalar. Kalau sebuah nilai tidak pernah berubah, kamu tidak perlu mencari semua tempat yang mungkin mengubahnya. Saat perubahan memang dibutuhkan, `mut` membuat niat itu eksplisit.
+:::
+
+## Konstanta
+
+Konstanta mirip variabel immutable, tetapi ada beberapa perbedaan penting. Konstanta memakai keyword `const`, selalu immutable, dan tipenya wajib ditulis.
+
+<RustPlayground
+  code={`const THREE_HOURS_IN_SECONDS: u32 = 60 * 60 * 3;
+
+fn main() {
+    println!("Tiga jam sama dengan {THREE_HOURS_IN_SECONDS} detik.");
+}`}
+  filename="src/main.rs"
+  label="Mendeklarasikan konstanta"
+/>
+
+Nama konstanta memakai huruf kapital semua dengan garis bawah antar kata. Nilainya harus berupa constant expression, yaitu ekspresi yang bisa dihitung compiler, bukan hasil yang baru diketahui saat program berjalan.
+
+Konstanta bisa dideklarasikan di scope mana pun, termasuk scope global. Nilainya berlaku selama scope itu hidup. Ini berguna untuk angka yang dipakai di banyak tempat, misalnya batas maksimum atau tarif tetap.
+
+:::tip[Tips]
+Beri nama konstanta sesuai maknanya, bukan hanya nilainya. `TARIF_PAJAK` lebih mudah dipahami daripada `ANGKA_11`. Kalau nilainya berubah, kamu hanya perlu mengubah satu tempat.
+:::
+
+## Shadowing
+
+Rust mengizinkan kamu mendeklarasikan variabel baru dengan nama yang sama. Variabel baru menutupi variabel lama. Ini disebut shadowing.
+
+<RustPlayground
+  code={`fn main() {
+    let x = 5;
+
+    let x = x + 1;
+
+    {
+        let x = x * 2;
+        println!("The value of x in the inner scope is: {x}");
+    }
+
+    println!("The value of x is: {x}");
+}`}
+  filename="src/main.rs"
+  label="Shadowing di dalam dan di luar scope"
+/>
+
+Program mencetak 12 di dalam blok, lalu 6 setelah blok selesai. Setiap `let x` membuat variabel baru. Variabel di blok dalam hanya berlaku sampai blok itu berakhir.
+
+Shadowing berbeda dari `mut`. Dengan `mut`, kamu mengubah nilai pada variabel yang sama. Dengan shadowing, kamu membuat variabel baru dan bisa mengganti tipenya.
+
+<RustPlayground
+  code={`fn main() {
+    let spaces = "   ";
+    let spaces = spaces.len();
+
+    println!("Jumlah spasi: {spaces}");
+}`}
+  filename="src/main.rs"
+  label="Shadowing yang mengubah tipe"
+/>
+
+Variabel `spaces` pertama bertipe `&str`, yaitu teks. Variabel kedua bertipe `usize`, yaitu angka hasil `len()`. Nama yang sama dipakai ulang, tetapi tipe dan nilainya berbeda.
+
+Sebaliknya, `mut` tidak mengizinkan perubahan tipe:
+
+<RustPlayground
+  code={`fn main() {
+    let mut spaces = "   ";
+    spaces = spaces.len();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mut tidak bisa mengubah tipe"
+/>
+
+Compiler akan melaporkan `mismatched types`: variabel awalnya `&str`, lalu kamu mencoba mengisinya dengan `usize`.
+
+:::caution[Hati-hati]
+Jangan memakai shadowing hanya untuk menghindari nama yang jelas. Kalau dua nilai punya makna berbeda, nama berbeda biasanya lebih mudah dibaca. Shadowing paling berguna saat kamu mengubah bentuk nilai, misalnya dari teks menjadi angka.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang harus ditambahkan supaya nilai variabel bisa diubah?',
+      options: ['mut setelah let', 'const sebelum let', 'static sebelum nama', 'ref setelah tipe'],
+      answer: 0,
+      optionNotes: [
+        'Benar. let mut x = 5; membuat x mutable.',
+        'Salah. const membuat konstanta, bukan variabel mutable.',
+        'Salah. static punya kegunaan lain dan bukan untuk mutability biasa.',
+        'Salah. ref bukan keyword untuk membuat variabel mutable.',
+      ],
+      explanation:
+        'Variabel immutable secara default. mut memberi izin assignment ulang.',
+    },
+    {
+      question: 'Apa perbedaan utama const dan let?',
+      options: [
+        'const selalu immutable dan tipenya wajib ditulis',
+        'const hanya bisa dipakai di dalam main',
+        'const bisa diubah dengan mut',
+        'const tidak punya nama',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. const tidak menerima mut dan memerlukan anotasi tipe.',
+        'Salah. const bisa dideklarasikan di scope mana pun, termasuk global.',
+        'Salah. const selalu immutable.',
+        'Salah. const selalu punya nama.',
+      ],
+      explanation:
+        'Konstanta cocok untuk nilai tetap yang dipakai di banyak tempat.',
+    },
+    {
+      question: 'Apa yang terjadi pada kode let x = 5; let x = x + 1;?',
+      options: [
+        'Variabel baru x dibuat dan menutupi variabel lama',
+        'Compiler menolak karena x sudah ada',
+        'Nilai variabel lama berubah menjadi 6',
+        'Program panic saat berjalan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini shadowing. Variabel lama tetap ada, tetapi tidak bisa diakses lewat nama x.',
+        'Salah. Rust mengizinkan shadowing dengan let.',
+        'Salah. Variabel lama tidak berubah. Variabel baru yang dibuat.',
+        'Salah. Shadowing valid dan tidak panic.',
+      ],
+      explanation:
+        'Shadowing membuat variabel baru. Karena itu tipenya juga boleh berbeda dari variabel lama.',
+    },
+    {
+      question: 'Mengapa mut tidak bisa dipakai untuk mengubah tipe variabel?',
+      options: [
+        'Karena mut hanya mengizinkan perubahan nilai pada tipe yang sama',
+        'Karena mut hanya berlaku untuk angka',
+        'Karena tipe variabel ditentukan saat runtime',
+        'Karena Rust tidak punya tipe statis',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Variabel tetap punya satu tipe. Shadowing yang membuat variabel baru bisa mengganti tipe.',
+        'Salah. mut berlaku untuk banyak tipe, bukan hanya angka.',
+        'Salah. Rust memeriksa tipe saat kompilasi.',
+        'Salah. Rust adalah bahasa dengan tipe statis.',
+      ],
+      explanation:
+        'Kalau kamu perlu mengganti tipe, deklarasikan variabel baru dengan let. Itu shadowing, bukan mutasi.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

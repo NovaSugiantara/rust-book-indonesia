@@ -1,0 +1,247 @@
+---
+title: '2.5 Loop dan input valid'
+description: 'Mengulang tebakan dengan loop, berhenti saat menang, dan menangani input yang bukan angka.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Sampai sekarang program hanya menerima satu tebakan. Itu belum terasa seperti game. Kita butuh loop supaya pemain bisa menebak berkali-kali.
+
+## Memindahkan input ke dalam loop
+
+Kata kunci `loop` membuat blok di dalamnya dijalankan terus-menerus. Pindahkan bagian yang meminta input, membaca, mengubah ke angka, dan membandingkan ke dalam `loop`.
+
+```rust
+loop {
+    println!("Please input your guess.");
+
+    let mut guess = String::new();
+
+    io::stdin()
+        .read_line(&mut guess)
+        .expect("Failed to read line");
+
+    let guess: u32 = guess.trim().parse().expect("Please type a number!");
+
+    println!("You guessed: {guess}");
+
+    match guess.cmp(&secret_number) {
+        Ordering::Less => println!("Too small!"),
+        Ordering::Greater => println!("Too big!"),
+        Ordering::Equal => {
+            println!("You win!");
+            break;
+        }
+    }
+}
+```
+
+Setelah pemain menang, `break` keluar dari loop. Karena loop adalah bagian terakhir `main`, program juga selesai.
+
+Kalau kamu menjalankan versi ini, pemain tidak bisa keluar dengan tebakan biasa sampai menebak angka yang benar. Menekan Ctrl+C menghentikan program dari terminal. Cara itu bekerja, tetapi bukan cara yang nyaman untuk keluar dari game.
+
+## Menangani input yang bukan angka
+
+Sebelumnya kita memakai `.expect` pada `parse`. Kalau pemain mengetik `quit` atau `abc`, program langsung panic. Kita bisa mengganti `expect` dengan `match` supaya input yang salah diabaikan dan pemain diminta menebak lagi.
+
+```rust
+let guess: u32 = match guess.trim().parse() {
+    Ok(num) => num,
+    Err(_) => continue,
+};
+```
+
+`parse` mengembalikan `Result`. Kalau berhasil, arm `Ok(num)` mengambil angka dari dalam `Ok` dan menjadikannya nilai baru untuk `guess`. Kalau gagal, arm `Err(_)` cocok dengan error apa pun. Tanda `_` adalah catch-all yang berarti kita tidak peduli isi error-nya. Kode di arm itu adalah `continue`, yang melewati sisa iterasi dan kembali ke awal loop.
+
+Dengan perubahan ini, input non-angka tidak menghentikan program. Pemain cukup mengetik tebakan lain.
+
+:::caution[Hati-hati]
+Jangan menaruh `continue` di luar loop. Compiler akan menolak karena tidak ada loop yang bisa dilanjutkan. Keyword `break` dan `continue` hanya berlaku di dalam loop.
+:::
+
+## Versi playground
+
+Playground tidak punya input interaktif. Contoh berikut mensimulasikan tiga input: `abc`, `50`, lalu `42`. Angka rahasianya 42.
+
+<RustPlayground
+  code={`use std::cmp::Ordering;
+
+fn main() {
+    let secret_number: u32 = 42;
+    let mut guess = "abc";
+
+    loop {
+        let angka: u32 = match guess.trim().parse() {
+            Ok(num) => num,
+            Err(_) => {
+                println!("Please type a number!");
+                guess = "50";
+                continue;
+            }
+        };
+
+        println!("You guessed: {angka}");
+
+        match angka.cmp(&secret_number) {
+            Ordering::Less => {
+                println!("Too small!");
+                guess = "42";
+            }
+            Ordering::Greater => {
+                println!("Too big!");
+                guess = "42";
+            }
+            Ordering::Equal => {
+                println!("You win!");
+                break;
+            }
+        }
+    }
+}`}
+  filename="src/main.rs"
+  label="Simulasi beberapa tebakan tanpa stdin"
+/>
+
+Output yang diharapkan:
+
+```text
+Please type a number!
+You guessed: 50
+Too big!
+You guessed: 42
+You win!
+```
+
+Di program lokal, `guess` diisi oleh `read_line`, bukan diubah manual seperti di simulasi ini. Alurnya tetap sama: input salah dilewati, input angka dibandingkan, dan `break` mengakhiri loop saat menang.
+
+## Kode final versi lokal
+
+Versi final menghapus `println!` yang mencetak angka rahasia. Kode lengkapnya seperti ini:
+
+```rust
+use std::cmp::Ordering;
+use std::io;
+
+use rand::prelude::*;
+
+fn main() {
+    println!("Guess the number!");
+
+    let secret_number = rand::rng().random_range(1..=100);
+
+    loop {
+        println!("Please input your guess.");
+
+        let mut guess = String::new();
+
+        io::stdin()
+            .read_line(&mut guess)
+            .expect("Failed to read line");
+
+        let guess: u32 = match guess.trim().parse() {
+            Ok(num) => num,
+            Err(_) => continue,
+        };
+
+        println!("You guessed: {guess}");
+
+        match guess.cmp(&secret_number) {
+            Ordering::Less => println!("Too small!"),
+            Ordering::Greater => println!("Too big!"),
+            Ordering::Equal => {
+                println!("You win!");
+                break;
+            }
+        }
+    }
+}
+```
+
+Jalankan dengan `cargo run`, lalu coba beberapa tebakan. Coba juga mengetik teks yang bukan angka. Program harus tetap meminta input tanpa panic.
+
+:::tip[Tips]
+Simpan versi yang sudah berjalan sebelum mencoba eksperimen. Kalau eksperimen gagal, kamu bisa kembali ke versi yang stabil tanpa menulis ulang semuanya.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa fungsi break di dalam loop game?',
+      options: [
+        'Keluar dari loop saat pemain menebak dengan benar',
+        'Mengulang iterasi dari awal',
+        'Menghentikan program sebelum input dibaca',
+        'Mengubah String menjadi angka',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. break mengakhiri loop, dan karena loop ada di akhir main, program ikut selesai.',
+        'Salah. Itu tugas continue.',
+        'Salah. break dieksekusi setelah tebakan benar.',
+        'Salah. Konversi dilakukan oleh parse.',
+      ],
+      explanation:
+        'break keluar dari loop terdekat. Di game ini, break dipasang di cabang Ordering::Equal.',
+    },
+    {
+      question: 'Apa yang dilakukan continue pada input yang gagal di-parse?',
+      options: [
+        'Melewati sisa iterasi dan kembali meminta input',
+        'Menghentikan seluruh program',
+        'Mengubah input menjadi nol',
+        'Mencetak angka rahasia',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. continue melanjutkan ke iterasi berikutnya.',
+        'Salah. Program tidak berhenti.',
+        'Salah. Input tetap gagal dan tidak menjadi angka.',
+        'Salah. continue tidak mencetak apa pun.',
+      ],
+      explanation:
+        'Dengan continue, pemain bisa mencoba lagi tanpa program panic.',
+    },
+    {
+      question: 'Apa arti pola Err(_) pada match hasil parse?',
+      options: [
+        'Cocok dengan semua jenis error, tanpa memakai isinya',
+        'Cocok hanya jika input kosong',
+        'Cocok dengan angka nol',
+        'Cocok dengan tebakan yang benar',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Garis bawah adalah catch-all yang mengabaikan nilai.',
+        'Salah. Pola ini cocok dengan error apa pun.',
+        'Salah. Nol adalah angka yang berhasil di-parse.',
+        'Salah. Tebakan benar ditangani oleh Ordering::Equal, bukan Err.',
+      ],
+      explanation:
+        'Kita tidak perlu detail error parse di sini. Yang penting, semua kegagalan diperlakukan sama: minta input lagi.',
+    },
+    {
+      question: 'Mengapa println! yang mencetak angka rahasia dihapus di kode final?',
+      options: [
+        'Supaya pemain tidak melihat jawabannya',
+        'Karena println! membuat program gagal dikompilasi',
+        'Karena angka rahasia tidak boleh berupa u32',
+        'Karena loop tidak bisa berjalan setelah println!',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Angka rahasia adalah jawaban yang seharusnya disembunyikan.',
+        'Salah. println! valid dan tidak menggagalkan kompilasi.',
+        'Salah. u32 adalah tipe yang wajar untuk angka 1 sampai 100.',
+        'Salah. println! tidak menghentikan loop.',
+      ],
+      explanation:
+        'Mencetak angka rahasia hanya berguna saat pengembangan. Di versi final, baris itu membocorkan jawaban.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

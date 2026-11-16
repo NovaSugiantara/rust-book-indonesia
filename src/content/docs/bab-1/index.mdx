@@ -1,0 +1,90 @@
+---
+title: 'Bab 1: Memulai'
+description: 'Memasang Rust, menulis program pertama, mengenal Cargo, lalu membuat struk pertama untuk Kasir Warung.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Bab ini menyiapkan perkakas yang akan kamu pakai sepanjang situs. Ada tiga hal yang kita kerjakan: memasang Rust lewat `rustup`, menulis dan menjalankan program pertama dengan `rustc`, lalu membuat proyek dengan Cargo. Di akhir bab, kamu mulai proyek Kasir Warung yang akan kita lanjutkan di bab-bab berikutnya.
+
+Tidak semua orang perlu memasang Rust hari ini. Kalau kamu hanya ingin mencoba, halaman-halaman di bab ini punya playground yang berjalan di browser. Instalasi baru wajib saat kamu ingin memakai `cargo` di komputer sendiri.
+
+## Yang kamu butuhkan
+
+- Terminal. Di macOS dan Linux namanya Terminal, di Windows bisa Command Prompt atau PowerShell.
+- Editor teks. VS Code, Zed, Neovim, atau editor apa pun yang nyaman.
+- Koneksi internet untuk mengunduh Rust dan menjalankan playground.
+
+Tidak perlu akun, server, atau layanan berbayar. Situs ini statis dan semua contoh berjalan di komputer atau playground publik.
+
+## Urutan belajar
+
+1. [Instalasi](instalasi/) menjelaskan `rustup`, linker, dan cara memastikan Rust sudah terpasang.
+2. [Hello, World!](hello-world/) membahas program pertama, fungsi `main`, dan makro `println!`.
+3. [Hello, Cargo!](hello-cargo/) memperkenalkan Cargo, `Cargo.toml`, dan perintah build.
+4. [Studi kasus: Kasir Warung](studi-kasus/) memakai semua bekal itu untuk membuat proyek nyata.
+
+Baca berurutan kalau ini pertama kalinya kamu memakai Rust. Kalau kamu sudah pernah memakai `rustc` dan `cargo`, langsung ke studi kasus tidak masalah.
+
+:::note[Kenapa begini?]
+Bab ini memakai dua alat yang terlihat mirip. `rustc` adalah compiler: ia mengubah satu file `.rs` menjadi program. Cargo adalah alat yang mengatur proyek: ia memanggil `rustc` untukmu, menyimpan konfigurasi, dan mengunduh dependency. Untuk program kecil, `rustc` cukup. Begitu proyek punya banyak file, Cargo jauh lebih rapi.
+:::
+
+:::tip[Tips]
+Saat membaca contoh terminal, tanda `$` hanya penanda awal perintah. Jangan ikut mengetiknya. Baris yang tidak diawali `$` adalah output dari perintah sebelumnya.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Alat apa yang dipakai untuk memasang dan memperbarui Rust?',
+      options: ['rustup', 'cargo', 'rustfmt', 'rustdoc'],
+      answer: 0,
+      optionNotes: [
+        'Benar. rustup mengelola toolchain Rust, termasuk versi stable dan komponen tambahan.',
+        'Salah. Cargo adalah build system dan package manager. Ia ikut terpasang, tetapi bukan alat untuk memasang Rust.',
+        'Salah. rustfmt merapikan format kode, bukan memasang compiler.',
+        'Salah. rustdoc membuat dokumentasi dari komentar kode.',
+      ],
+      explanation:
+        'rustup adalah installer resmi sekaligus pengelola versi. Perintah seperti rustup update dan rustup doc dijalankan lewat alat ini.',
+    },
+    {
+      question:
+        'Kamu punya satu file main.rs dan belum membuat proyek Cargo. Perintah mana yang mengubahnya menjadi program yang bisa dijalankan?',
+      options: ['rustc main.rs', 'cargo new main.rs', 'rustup main.rs', 'cargo check main.rs'],
+      answer: 0,
+      optionNotes: [
+        'Benar. rustc membaca file sumber dan menghasilkan binary di folder yang sama.',
+        'Salah. cargo new membuat proyek baru, bukan mengompilasi file yang sudah ada.',
+        'Salah. rustup mengelola toolchain, bukan mengompilasi kode.',
+        'Salah. cargo check hanya memeriksa tipe dan error, tanpa menghasilkan binary.',
+      ],
+      explanation:
+        'Compiler Rust adalah rustc. Cargo memanggil rustc di belakang layar, tetapi untuk satu file tanpa proyek, rustc langsung adalah pilihan paling sederhana.',
+    },
+    {
+      question: 'Apa isi utama Cargo.toml?',
+      options: [
+        'Konfigurasi package seperti nama, versi, edition, dan daftar dependency',
+        'Kode program utama',
+        'Binary hasil kompilasi',
+        'Riwayat perintah terminal',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Cargo.toml adalah manifest proyek dalam format TOML.',
+        'Salah. Kode program berada di src/main.rs atau file lain di dalam src.',
+        'Salah. Binary hasil kompilasi ada di target/debug atau target/release.',
+        'Salah. Cargo tidak menyimpan riwayat terminal.',
+      ],
+      explanation:
+        'Cargo membaca Cargo.toml untuk tahu package apa yang sedang dibangun dan crate apa saja yang dibutuhkan.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

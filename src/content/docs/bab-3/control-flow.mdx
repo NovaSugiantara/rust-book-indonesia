@@ -1,0 +1,270 @@
+---
+title: '3.5 Control flow'
+description: 'Mengatur alur program dengan if, loop, while, dan for.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Control flow menentukan kode mana yang dijalankan dan berapa kali. Rust punya `if` untuk percabangan, serta `loop`, `while`, dan `for` untuk pengulangan.
+
+## if
+
+`if` mengevaluasi kondisi, lalu menjalankan blok kalau kondisinya `true`.
+
+<RustPlayground
+  code={`fn main() {
+    let number = 3;
+
+    if number < 5 {
+        println!("condition was true");
+    } else {
+        println!("condition was false");
+    }
+}`}
+  filename="src/main.rs"
+  label="Percabangan if dan else"
+/>
+
+Blok `else` opsional. Kalau kondisi `false` dan tidak ada `else`, program melewati blok `if` dan lanjut ke kode berikutnya.
+
+Kondisi `if` harus bertipe `bool`. Rust tidak menganggap angka nol sebagai false seperti beberapa bahasa lain. Kode berikut sengaja salah:
+
+<RustPlayground
+  code={`fn main() {
+    let number = 3;
+
+    if number {
+        println!("number was three");
+    }
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error kondisi if bukan bool"
+/>
+
+Compiler melaporkan `expected bool, found integer`. Kalau ingin memeriksa angka nol, tulis perbandingan eksplisit seperti `number != 0`.
+
+### else if
+
+Untuk beberapa kondisi, gunakan `else if`. Rust menjalankan blok pertama yang kondisinya `true` dan tidak memeriksa sisanya.
+
+<RustPlayground
+  code={`fn main() {
+    let number = 6;
+
+    if number % 4 == 0 {
+        println!("number is divisible by 4");
+    } else if number % 3 == 0 {
+        println!("number is divisible by 3");
+    } else if number % 2 == 0 {
+        println!("number is divisible by 2");
+    } else {
+        println!("number is not divisible by 4, 3, or 2");
+    }
+}`}
+  filename="src/main.rs"
+  label="Rantai else if"
+/>
+
+Angka 6 habis dibagi 2 dan 3, tetapi program hanya mencetak pesan untuk 3 karena cabang itu diperiksa lebih dulu.
+
+### if sebagai expression
+
+Karena `if` adalah expression, hasilnya bisa dipakai di sisi kanan `let`.
+
+<RustPlayground
+  code={`fn main() {
+    let condition = true;
+    let number = if condition { 5 } else { 6 };
+
+    println!("The value of number is: {number}");
+}`}
+  filename="src/main.rs"
+  label="Menyimpan hasil if ke variabel"
+/>
+
+Nilai dari kedua arm harus bertipe sama. Kode berikut sengaja salah karena satu arm menghasilkan integer dan arm lain menghasilkan string:
+
+<RustPlayground
+  code={`fn main() {
+    let condition = true;
+
+    let number = if condition { 5 } else { "six" };
+
+    println!("The value of number is: {number}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error tipe arm if berbeda"
+/>
+
+Compiler menyebut `if and else have incompatible types`. Variabel hanya punya satu tipe, jadi kedua kemungkinan nilai harus cocok.
+
+## loop
+
+`loop` menjalankan blok terus-menerus sampai kamu memakai `break`. Tanpa `break`, loop berjalan selamanya. Kamu bisa menghentikannya dari terminal dengan Ctrl+C.
+
+`break` juga bisa mengembalikan nilai dari loop:
+
+<RustPlayground
+  code={`fn main() {
+    let mut counter = 0;
+
+    let result = loop {
+        counter += 1;
+
+        if counter == 10 {
+            break counter * 2;
+        }
+    };
+
+    println!("The result is {result}");
+}`}
+  filename="src/main.rs"
+  label="Loop yang mengembalikan nilai"
+/>
+
+Nilainya 20 karena loop berhenti saat `counter` bernilai 10, lalu mengembalikan `counter * 2`.
+
+Kalau ada loop di dalam loop, `break` dan `continue` berlaku untuk loop terdekat. Kamu bisa memberi label pada loop untuk menentukan loop mana yang dihentikan.
+
+```rust
+'outer: loop {
+    loop {
+        break 'outer;
+    }
+}
+```
+
+Label diawali tanda kutip tunggal. Ini berguna saat loop bersarang, tetapi jangan dipakai kalau struktur yang lebih sederhana sudah cukup.
+
+## while
+
+`while` menjalankan blok selama kondisinya `true`. Pemeriksaan dilakukan sebelum setiap iterasi.
+
+<RustPlayground
+  code={`fn main() {
+    let mut number = 3;
+
+    while number != 0 {
+        println!("{number}!");
+
+        number -= 1;
+    }
+
+    println!("LIFTOFF!!!");
+}`}
+  filename="src/main.rs"
+  label="Loop while dengan hitung mundur"
+/>
+
+`while` cocok ketika jumlah iterasi tidak diketahui pasti dan bergantung pada kondisi.
+
+## for
+
+`for` menjalankan blok untuk setiap elemen dalam collection. Ini cara yang paling aman untuk menelusuri array atau rentang.
+
+<RustPlayground
+  code={`fn main() {
+    let a = [10, 20, 30, 40, 50];
+
+    for element in a {
+        println!("the value is: {element}");
+    }
+}`}
+  filename="src/main.rs"
+  label="Loop for pada array"
+/>
+
+Kamu juga bisa memakai range. Rentang `1..4` mencakup 1, 2, dan 3, tetapi tidak 4.
+
+<RustPlayground
+  code={`fn main() {
+    for number in (1..4).rev() {
+        println!("{number}!");
+    }
+
+    println!("LIFTOFF!!!");
+}`}
+  filename="src/main.rs"
+  label="Loop for dengan range terbalik"
+/>
+
+Method `rev` membalik urutan range. Hasilnya 3, 2, 1, lalu pesan liftoff.
+
+:::note[Kenapa begini?]
+`for` lebih disarankan daripada `while` dengan indeks untuk menelusuri collection. `for` mengambil elemen langsung, jadi kamu tidak perlu mengurus indeks, batas panjang, atau risiko melewati akhir array.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Tipe apa yang harus dihasilkan kondisi if?',
+      options: ['bool', 'integer', 'String', 'char'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Kondisi if harus bool.',
+        'Salah. Integer tidak otomatis menjadi true atau false.',
+        'Salah. String tidak bisa dipakai sebagai kondisi.',
+        'Salah. char juga bukan bool.',
+      ],
+      explanation:
+        'Rust tidak melakukan konversi implisit ke bool. Gunakan perbandingan seperti number != 0.',
+    },
+    {
+      question: 'Apa arti break counter * 2 di dalam loop?',
+      options: [
+        'Keluar dari loop dan mengembalikan nilai counter * 2',
+        'Mengulang loop dengan nilai baru',
+        'Menghentikan program tanpa nilai balik',
+        'Mengubah tipe counter menjadi i32',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. break dengan nilai membuat loop menghasilkan nilai itu.',
+        'Salah. continue yang melanjutkan iterasi.',
+        'Salah. break hanya keluar dari loop.',
+        'Salah. break tidak mengubah tipe variabel.',
+      ],
+      explanation:
+        'Nilai setelah break menjadi hasil dari expression loop, yang bisa disimpan ke variabel.',
+    },
+    {
+      question: 'Apa perbedaan while dan for?',
+      options: [
+        'while berbasis kondisi, for menelusuri elemen collection atau range',
+        'while hanya untuk angka, for hanya untuk teks',
+        'for selalu berjalan sekali',
+        'while tidak bisa memakai break',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. while memeriksa kondisi, sedangkan for menelusuri elemen.',
+        'Salah. Keduanya bisa dipakai untuk berbagai tipe.',
+        'Salah. for bisa berjalan banyak kali.',
+        'Salah. while bisa memakai break.',
+      ],
+      explanation:
+        'Untuk collection, for lebih ringkas dan menghindari kesalahan indeks.',
+    },
+    {
+      question: 'Angka apa yang dicetak oleh for number in 1..4?',
+      options: ['1, 2, dan 3', '1, 2, 3, dan 4', '0, 1, 2, dan 3', 'Hanya 4'],
+      answer: 0,
+      optionNotes: [
+        'Benar. 1..4 berhenti sebelum 4.',
+        'Salah. Batas atas 4 tidak disertakan.',
+        'Salah. Range dimulai dari 1.',
+        'Salah. Range mencakup 1, 2, dan 3.',
+      ],
+      explanation:
+        'Rentang .. tidak menyertakan batas akhir. Kalau ingin 4 ikut, gunakan 1..=4.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

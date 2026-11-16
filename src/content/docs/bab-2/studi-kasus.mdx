@@ -1,0 +1,238 @@
+---
+title: '2.6 Studi kasus: Kasir Warung'
+description: 'Menambahkan input jumlah barang yang tervalidasi ke proyek Kasir Warung.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Di Bab 1 kita berhenti dengan proyek `kasir_warung` yang mencetak header struk. Sekarang kita tambahkan satu kemampuan baru: kasir dapat memasukkan jumlah barang, dan program hanya menerima angka yang masuk akal. Validasi ini memakai `loop` dan `match`, dua hal yang baru saja kamu pelajari.
+
+## Batas jumlah barang
+
+Untuk sementara, batasi jumlah barang antara 1 dan 3. Batas ini terasa sempit untuk warung sungguhan, tetapi ada alasan teknis: Bab 3 akan memakai array berukuran tetap untuk daftar harga contoh. Array belum bisa bertambah panjang. Bab 8 akan memperkenalkan `Vec` yang bisa menampung jumlah barang bebas.
+
+Batasan ini juga membuat latihan validasi lebih jelas. Kita punya dua jenis input salah:
+
+- teks yang bukan angka, misalnya `dua`;
+- angka di luar rentang, misalnya `0` atau `10`.
+
+Keduanya harus ditolak tanpa membuat program berhenti.
+
+## Kode lokal
+
+Buka proyek `kasir_warung` dari Bab 1, lalu ganti isi `src/main.rs` dengan kode berikut. Kode ini butuh input dari terminal, jadi jalankan dengan `cargo run`, bukan di playground.
+
+```rust
+use std::io;
+
+fn main() {
+    println!("========================================");
+    println!("           KASIR WARUNG BU SRI");
+    println!("        Jl. Melati No. 12, Bandung");
+    println!("========================================");
+
+    let mut jumlah_barang = 0;
+
+    loop {
+        println!("Jumlah barang (1-3):");
+
+        let mut input = String::new();
+
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Gagal membaca input");
+
+        let jumlah: u32 = match input.trim().parse() {
+            Ok(angka) => angka,
+            Err(_) => {
+                println!("Masukkan angka, bukan teks. Coba lagi.");
+                continue;
+            }
+        };
+
+        match jumlah {
+            1..=3 => {
+                jumlah_barang = jumlah;
+                break;
+            }
+            _ => println!("Jumlah harus 1 sampai 3. Coba lagi."),
+        }
+    }
+
+    println!();
+    println!("Jumlah barang: {jumlah_barang}");
+    println!("========================================");
+}
+```
+
+Contoh percakapan di terminal:
+
+```text
+========================================
+           KASIR WARUNG BU SRI
+        Jl. Melati No. 12, Bandung
+========================================
+Jumlah barang (1-3):
+dua
+Masukkan angka, bukan teks. Coba lagi.
+Jumlah barang (1-3):
+10
+Jumlah harus 1 sampai 3. Coba lagi.
+Jumlah barang (1-3):
+2
+
+Jumlah barang: 2
+========================================
+```
+
+Program menolak `dua` karena `parse` gagal. Program menolak `10` karena angkanya di luar rentang. Setelah `2`, program keluar dari loop dan mencetak jumlah barang.
+
+## Versi playground
+
+Playground tidak bisa membaca input, jadi contoh ini mensimulasikan urutan input `abc`, `0`, lalu `2`. Perhatikan bagaimana `continue` dan `break` mengatur alurnya.
+
+<RustPlayground
+  code={`fn main() {
+    println!("========================================");
+    println!("           KASIR WARUNG BU SRI");
+    println!("        Jl. Melati No. 12, Bandung");
+    println!("========================================");
+
+    let mut jumlah_barang = 0;
+    let mut input = "abc";
+
+    loop {
+        let jumlah: u32 = match input.trim().parse() {
+            Ok(angka) => angka,
+            Err(_) => {
+                println!("Masukkan angka, bukan teks. Coba lagi.");
+                input = "0";
+                continue;
+            }
+        };
+
+        match jumlah {
+            1..=3 => {
+                jumlah_barang = jumlah;
+                println!("Jumlah barang: {jumlah_barang}");
+                break;
+            }
+            _ => {
+                println!("Jumlah harus 1 sampai 3. Coba lagi.");
+                input = "2";
+            }
+        }
+    }
+}`}
+  filename="src/main.rs"
+  label="Simulasi validasi jumlah barang"
+/>
+
+Output yang diharapkan:
+
+```text
+========================================
+           KASIR WARUNG BU SRI
+        Jl. Melati No. 12, Bandung
+========================================
+Masukkan angka, bukan teks. Coba lagi.
+Jumlah harus 1 sampai 3. Coba lagi.
+Jumlah barang: 2
+```
+
+## Apa yang berubah dari Bab 1
+
+Bab 1 hanya mencetak header. Sekarang program punya satu input dan satu aturan validasi. Header tetap sama, jadi struk masih bisa dikenali.
+
+Yang belum ada: harga, jumlah per item, subtotal, diskon, dan total. Semua itu ditambahkan di Bab 3. Jangan menambahkan perhitungan sekarang. Fokus dulu pada memastikan input tidak bisa merusak program.
+
+:::note[Kenapa begini?]
+Validasi di batas input mencegah data buruk masuk ke bagian lain program. Kalau jumlah barang sudah dijamin 1 sampai 3, kode perhitungan di Bab 3 tidak perlu menebak-nebak apakah nilainya nol, negatif, atau sangat besar.
+:::
+
+:::tip[Tips]
+Coba masukkan spasi sebelum angka, misalnya `  2`. `trim` membuang spasi itu, jadi program tetap menerima input. Coba juga menekan Enter tanpa mengetik apa pun. `parse` akan gagal dan program meminta input lagi.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa jumlah barang dibatasi 1 sampai 3 untuk sementara?',
+      options: [
+        'Karena Bab 3 akan memakai array berukuran tetap berisi tiga harga contoh',
+        'Karena u32 tidak bisa menyimpan angka di atas 3',
+        'Karena terminal hanya bisa membaca tiga baris',
+        'Karena Rust melarang angka lebih dari 3',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Array di Bab 3 berukuran tetap, jadi latihan ini disiapkan untuk daftar tiga item.',
+        'Salah. u32 bisa menyimpan angka jauh lebih besar.',
+        'Salah. Terminal bisa membaca banyak baris.',
+        'Salah. Rust tidak punya batas seperti itu.',
+      ],
+      explanation:
+        'Batasan ini pilihan desain latihan, bukan batasan bahasa. Bab 8 akan memakai Vec yang ukurannya bisa bertambah.',
+    },
+    {
+      question: 'Apa yang terjadi saat parse gagal pada kode studi kasus?',
+      options: [
+        'Pesan error dicetak, lalu continue meminta input lagi',
+        'Program panic dan berhenti',
+        'Input otomatis diubah menjadi 0',
+        'Program keluar dari loop dan mencetak struk',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Arm Err(_) mencetak pesan dan continue mengulang loop.',
+        'Salah. expect sudah diganti dengan match, jadi tidak panic.',
+        'Salah. parse tidak mengubah teks menjadi nol.',
+        'Salah. break hanya terjadi setelah angka valid diterima.',
+      ],
+      explanation:
+        'Dengan match, kegagalan parse ditangani sebagai input salah, bukan sebagai crash.',
+    },
+    {
+      question: 'Mengapa jumlah_barang dideklarasikan dengan let mut?',
+      options: [
+        'Karena nilainya diisi di dalam loop setelah input valid',
+        'Karena semua variabel di Rust harus mutable',
+        'Karena u32 hanya bisa dibaca jika mutable',
+        'Karena println! membutuhkan variabel mutable',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Nilai awalnya 0, lalu diganti dengan jumlah yang diterima.',
+        'Salah. Variabel Rust immutable secara default.',
+        'Salah. u32 bisa dibaca tanpa mut.',
+        'Salah. println! bisa membaca variabel immutable.',
+      ],
+      explanation:
+        'Kita memberi nilai awal 0, lalu menggantinya di dalam loop. Tanpa mut, assignment itu ditolak compiler.',
+    },
+    {
+      question: 'Apa arti pola 1..=3 pada match jumlah?',
+      options: [
+        'Cocok dengan angka 1, 2, dan 3',
+        'Cocok dengan angka 1 dan 3 saja',
+        'Cocok dengan semua angka di atas 3',
+        'Cocok dengan teks "1..=3"',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rentang inklusif mencakup 1, 2, dan 3.',
+        'Salah. 2 juga termasuk.',
+        'Salah. Rentang ini berhenti di 3.',
+        'Salah. Pattern mencocokkan nilai angka, bukan teks.',
+      ],
+      explanation:
+        'Range pattern pada match mengikuti aturan rentang Rust. 1..=3 mencakup ketiga angka.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

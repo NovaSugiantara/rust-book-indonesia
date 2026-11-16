@@ -1,0 +1,252 @@
+---
+title: '1.4 Studi kasus: Kasir Warung'
+description: 'Membuat proyek Cargo pertama dan mencetak header struk untuk Kasir Warung.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Bab ini belum menyentuh angka, input, atau perhitungan. Kita mulai dari bagian paling dasar dari sebuah program kasir: struk. Di akhir bab, kamu punya proyek Cargo bernama `kasir_warung` yang mencetak header struk dengan rapi.
+
+Proyek ini akan tumbuh di bab-bab berikutnya. Bab 2 menambahkan input dari terminal dan perulangan. Bab 3 menambahkan tipe data, fungsi, dan percabangan untuk menghitung total. Untuk sekarang, fokusnya adalah memastikan proyek bisa dibuat, dijalankan, dan diubah tanpa takut merusaknya.
+
+<StudyCase
+  title="Kasir Warung: struk pertama"
+  intro="Kita membuat proyek baru, menulis header struk, lalu sengaja merusak kode sekali agar kamu terbiasa membaca pesan compiler."
+>
+  <StudyCaseStep
+    title="Buat proyek Cargo"
+    goal="Membuat folder proyek kasir_warung yang berisi Cargo.toml dan src/main.rs."
+  >
+    Buka terminal, masuk ke folder tempat kamu menyimpan proyek, lalu buat proyek baru. Nama proyek memakai huruf kecil dan garis bawah.
+
+    <Fragment slot="hint">
+      Perintah yang kamu butuhkan adalah `cargo new`. Setelah folder dibuat, masuk ke dalamnya dengan `cd`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      ```console
+      $ cd ~/projects
+      $ cargo new kasir_warung
+      $ cd kasir_warung
+      ```
+
+      Cargo membuat `Cargo.toml`, folder `src` dengan `main.rs`, dan `.gitignore`. Kalau kamu menjalankan perintah ini di dalam repositori Git yang sudah ada, Cargo tidak membuat repositori baru.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Tulis header struk"
+    goal="Mengganti isi src/main.rs dengan lima baris yang membentuk header struk."
+  >
+    Buka `src/main.rs` di editor. Hapus isi bawaan Cargo, lalu tulis kode yang mencetak garis pemisah, nama warung, alamat, garis pemisah lagi, dan satu baris kosong.
+
+    Coba dulu di playground. Kode di bawah masih berupa kerangka. Lengkapi sampai bentuknya seperti struk.
+
+    <RustPlayground
+      code={`fn main() {
+    println!("========================================");
+    println!("           KASIR WARUNG BU SRI");
+    println!("        Jl. Melati No. 12, Bandung");
+}`}
+      filename="src/main.rs"
+      label="Kerangka header struk Kasir Warung"
+    />
+
+    <Fragment slot="hint">
+      Setiap baris struk dicetak dengan satu `println!`. Untuk baris kosong, panggil `println!()` tanpa argumen.
+    </Fragment>
+
+    <Fragment slot="solution">
+      ```rust
+      fn main() {
+          println!("========================================");
+          println!("           KASIR WARUNG BU SRI");
+          println!("        Jl. Melati No. 12, Bandung");
+          println!("========================================");
+          println!();
+      }
+      ```
+
+      Spasi di dalam string ikut tercetak. Itu sebabnya nama warung dan alamat bisa terlihat berada di tengah. Penempatan spasi belum sempurna, tetapi cukup untuk struk pertama.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Rusak kode dengan sengaja"
+    goal="Melihat bagaimana compiler merespons kesalahan kecil dan menemukan petunjuk perbaikannya."
+  >
+    Hapus tanda seru setelah `println` pada salah satu baris, lalu jalankan. Kode berikut sudah dalam keadaan salah.
+
+    <RustPlayground
+      code={`fn main() {
+    println!("========================================");
+    println("KASIR WARUNG BU SRI");
+}`}
+      expectError
+      filename="src/main.rs"
+      label="Contoh header struk dengan println tanpa tanda seru"
+    />
+
+    <Fragment slot="hint">
+      Perhatikan kata pertama pada pesan error. Compiler biasanya menyebut nama yang tidak ditemukan, lalu memberi saran di bagian help.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Compiler melaporkan bahwa fungsi `println` tidak ditemukan dan menyarankan makro `println!`. Tambahkan tanda seru, lalu jalankan lagi. Pesan error yang panjang bukan tanda kegagalanmu. Itu justru alat utama saat menulis Rust.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Jalankan dari Cargo"
+    goal="Menjalankan proyek dengan cargo run dan memastikan output struk muncul di terminal."
+  >
+    Dari folder `kasir_warung`, jalankan proyek. Jangan memakai `rustc` langsung karena proyek ini sudah punya Cargo. Perintah Cargo akan mengompilasi kode dan menjalankan binary hasilnya.
+
+    <Fragment slot="hint">
+      Perintahnya terdiri dari dua kata: `cargo` dan `run`. Kamu harus berada di folder yang berisi `Cargo.toml`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      ```console
+      $ cargo run
+         Compiling kasir_warung v0.1.0 (file:///projects/kasir_warung)
+          Finished dev [unoptimized + debuginfo] target(s) in 0.42s
+           Running `target/debug/kasir_warung`
+      ========================================
+                 KASIR WARUNG BU SRI
+              Jl. Melati No. 12, Bandung
+      ========================================
+
+      ```
+
+      Baris kosong terakhir berasal dari `println!()` tanpa argumen.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Ubah nama warung"
+    goal="Mengubah isi struk tanpa mengubah struktur program."
+  >
+    Ganti nama dan alamat dengan warung favoritmu. Jalankan lagi. Perhatikan bahwa kamu hanya mengubah isi string, bukan fungsi `main` atau makro `println!`.
+
+    <Fragment slot="hint">
+      String berada di antara tanda kutip. Jangan hapus tanda kutip atau titik koma di akhir baris.
+    </Fragment>
+
+    <Fragment slot="solution">
+      ```rust
+      fn main() {
+          println!("========================================");
+          println!("             WARUNG PAK BUDI");
+          println!("          Jl. Kenanga No. 8, Solo");
+          println!("========================================");
+          println!();
+      }
+      ```
+
+      Output akan mengikuti teks baru. Struktur programnya tetap sama.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Keadaan proyek setelah Bab 1
+
+Setelah semua langkah selesai, folder `kasir_warung` berisi:
+
+```text
+kasir_warung/
+├── Cargo.toml
+├── Cargo.lock
+├── .gitignore
+├── src/
+│   └── main.rs
+└── target/
+```
+
+`Cargo.lock` dan `target` muncul setelah kamu menjalankan `cargo build` atau `cargo run`. Isi `src/main.rs` masih sangat sederhana: satu fungsi `main` dan beberapa pemanggilan `println!`.
+
+Belum ada variabel, input, perhitungan, atau penyimpanan data. Semua itu datang di bab berikutnya. Yang penting sekarang adalah kamu bisa membuat proyek, mengubah kode, menjalankannya, dan membaca error saat ada yang salah.
+
+:::tip[Tips]
+Commit proyek ini ke Git kalau kamu memakai Git. Titik awal yang bersih akan memudahkanmu membandingkan perubahan di Bab 2 dan Bab 3. Pastikan `target` tidak ikut ter-commit.
+:::
+
+:::note[Kenapa begini?]
+Studi kasus dimulai dari struk, bukan dari perhitungan, karena struk memaksa kita berlatih hal yang paling dasar: menulis program yang menghasilkan output yang bisa diperiksa mata. Saat logika bisnis ditambahkan nanti, kamu sudah punya bentuk output yang jelas sebagai pembanding.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Kenapa proyek kasir_warung dibuat dengan cargo new, bukan dengan rustc langsung?',
+      options: [
+        'Karena proyek akan tumbuh dan Cargo mengatur build serta dependency',
+        'Karena rustc tidak bisa mengompilasi fungsi main',
+        'Karena Cargo membuat kode program otomatis tanpa kita tulis',
+        'Karena file .rs tidak dikenali rustc',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Cargo memberi struktur proyek dan perintah build yang konsisten.',
+        'Salah. rustc justru mengompilasi fungsi main.',
+        'Salah. Cargo hanya membuat template awal. Kode tetap kita tulis.',
+        'Salah. rustc mengenali file .rs.',
+      ],
+      explanation:
+        'Untuk satu file, rustc cukup. Untuk proyek yang akan berkembang, Cargo lebih rapi dan menyiapkan tempat untuk dependency serta test.',
+    },
+    {
+      question: 'Apa output dari println!() tanpa argumen?',
+      code: 'fn main() {\n    println!();\n}',
+      options: ['Satu baris kosong', 'Teks "()"', 'Error kompilasi', 'Tidak ada output sama sekali'],
+      answer: 0,
+      optionNotes: [
+        'Benar. println! dengan string kosong mencetak baris baru.',
+        'Salah. Tanda kurung adalah bagian dari pemanggilan, bukan output.',
+        'Salah. println!() adalah pemanggilan yang valid.',
+        'Salah. Ia tetap mencetak karakter baris baru.',
+      ],
+      explanation:
+        'println! menambahkan baris baru di akhir output. Tanpa argumen, hasilnya hanya baris baru.',
+    },
+    {
+      question: 'Compiler bilang "cannot find function println". Apa perbaikan yang paling mungkin?',
+      options: [
+        'Tambahkan tanda seru sehingga menjadi println!',
+        'Ganti println menjadi print',
+        'Hapus titik koma',
+        'Pindahkan kode ke Cargo.toml',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. println! adalah makro, bukan fungsi.',
+        'Salah. print! juga makro dan tetap membutuhkan tanda seru.',
+        'Salah. Titik koma bukan penyebab error ini.',
+        'Salah. Cargo.toml bukan tempat menulis kode program.',
+      ],
+      explanation:
+        'Pesan itu muncul saat nama makro ditulis seperti fungsi. Compiler biasanya menambahkan saran untuk memakai println!.',
+    },
+    {
+      question: 'File mana yang berisi kode program utama pada proyek Cargo ini?',
+      options: ['src/main.rs', 'Cargo.toml', 'Cargo.lock', 'target/debug/kasir_warung'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Kode sumber berada di src/main.rs.',
+        'Salah. Cargo.toml berisi konfigurasi package.',
+        'Salah. Cargo.lock mencatat versi dependency.',
+        'Salah. Itu binary hasil kompilasi.',
+      ],
+      explanation:
+        'Cargo mengharapkan kode di dalam src. File main.rs menjadi titik masuk program binary.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

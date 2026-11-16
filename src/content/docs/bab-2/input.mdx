@@ -1,0 +1,204 @@
+---
+title: '2.2 Membaca input'
+description: 'Membaca tebakan dari terminal dengan std::io, String, dan Result.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Bagian pertama game adalah meminta tebakan dan mencetaknya kembali. Kode ini memperkenalkan beberapa hal sekaligus: modul input dari standard library, variabel mutable, tipe `String`, dan `Result`.
+
+Ganti isi `src/main.rs` dengan kode berikut:
+
+```rust
+use std::io;
+
+fn main() {
+    println!("Guess the number!");
+
+    println!("Please input your guess.");
+
+    let mut guess = String::new();
+
+    io::stdin()
+        .read_line(&mut guess)
+        .expect("Failed to read line");
+
+    println!("You guessed: {guess}");
+}
+```
+
+## Membawa io ke scope
+
+Baris `use std::io;` membawa modul input/output dari standard library ke dalam scope. Rust secara default membawa sebagian item ke setiap program lewat `prelude`, tetapi `std::io` tidak termasuk di sana. Kalau kamu tidak menulis `use`, fungsi input masih bisa dipanggil dengan nama lengkap `std::io::stdin`.
+
+`std` adalah nama standard library. `io` adalah salah satu module di dalamnya. Tanda `::` menunjukkan bahwa `io` berada di dalam `std`.
+
+## Variabel dan String
+
+Baris `let mut guess = String::new();` membuat variabel bernama `guess` yang berisi `String` kosong.
+
+Variabel Rust immutable secara default. Tanpa `mut`, nilai yang sudah diikat ke nama tidak bisa diubah. Di sini kita butuh `mut` karena `read_line` akan menambahkan teks ke `guess`.
+
+`String` adalah tipe teks yang bisa bertambah panjang dan memakai encoding UTF-8. `String::new()` adalah associated function, yaitu fungsi yang terikat pada sebuah tipe. Tanda `::` pada `String::new` menunjukkan bahwa `new` adalah fungsi milik tipe `String`, bukan method yang dipanggil dari sebuah nilai.
+
+:::note[Kenapa begini?]
+Banyak tipe punya fungsi `new` untuk membuat nilai baru. `String::new()` membuat string kosong. Nanti kamu akan bertemu `Vec::new()`, `HashMap::new()`, dan pola serupa di tipe lain.
+:::
+
+## Membaca satu baris
+
+`io::stdin()` memberi handle ke standard input, yaitu tempat ketikan pengguna masuk. Method `.read_line(&mut guess)` membaca satu baris sampai pengguna menekan Enter, lalu menambahkannya ke `guess`.
+
+Tanda `&` membuat reference. Reference memberi akses ke data tanpa menyalin seluruh isinya. Tanda `&mut` berarti reference yang boleh mengubah data. `read_line` membutuhkan `&mut guess` karena ia menulis ke string tersebut.
+
+`read_line` mengembalikan `Result`. `Result` adalah enum dengan dua kemungkinan: `Ok` kalau operasi berhasil, dan `Err` kalau gagal. Memanggil `.expect("Failed to read line")` berarti: kalau hasilnya `Err`, hentikan program dan tampilkan pesan itu. Kalau hasilnya `Ok`, ambil nilainya dan lanjut.
+
+Method `.expect` bukan penanganan error yang ramah pengguna. Ia sengaja membuat program berhenti saat ada masalah. Untuk game belajar, itu cukup. Bab 9 membahas cara menangani error tanpa menghentikan program.
+
+:::caution[Hati-hati]
+Kalau `read_line` gagal, `.expect` akan membuat program panic. Pesan panic berguna saat pengembangan, tetapi bukan pesan yang cocok untuk pengguna aplikasi sungguhan.
+:::
+
+## Mencetak nilai
+
+Baris `println!("You guessed: {guess}")` mencetak teks dan nilai variabel `guess`. Kurung kurawal `{}` adalah placeholder. Nama variabel di dalamnya diganti dengan nilai saat program berjalan.
+
+Kamu juga bisa memakai `{}` kosong lalu mencantumkan nilainya setelah string, seperti `println!("You guessed: {}", guess)`. Keduanya bekerja. Gaya `{guess}` lebih ringkas dan dipakai di buku versi sekarang.
+
+## Menjalankan versi lokal
+
+Simpan kode tadi, lalu jalankan:
+
+```console
+$ cargo run
+   Compiling guessing_game v0.1.0 (file:///projects/guessing_game)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s
+     Running `target/debug/guessing_game`
+Guess the number!
+Please input your guess.
+6
+You guessed: 6
+```
+
+Angka `6` pada output adalah ketikanmu, bukan bagian dari kode. Setelah menekan Enter, `read_line` menyimpan `6\n` ke `guess`. Karakter `\n` adalah baris baru. Saat dicetak, baris baru itu membuat output pindah baris, jadi terlihat seolah hanya `6` yang tersimpan.
+
+## Versi playground
+
+Playground tidak bisa membaca stdin. Kode berikut menggantikan input dengan string yang sudah diisi, lalu memotong baris baru memakai `trim` supaya hasilnya sama seperti input pengguna.
+
+<RustPlayground
+  code={`fn main() {
+    println!("Guess the number!");
+    println!("Please input your guess.");
+
+    // Playground tidak punya stdin. Input disimulasikan di sini.
+    let mut guess = String::from("6\\n");
+
+    // Di program asli, baris ini yang mengisi guess:
+    // io::stdin().read_line(&mut guess).expect("Failed to read line");
+
+    println!("You guessed: {}", guess.trim());
+}`}
+  filename="src/main.rs"
+  label="Simulasi input tanpa stdin"
+/>
+
+Klik Jalankan. Kamu akan melihat `You guessed: 6`, sama seperti program lokal setelah pengguna mengetik `6`.
+
+## Ketika mut lupa ditulis
+
+Kode berikut sengaja salah. `guess` tidak mutable, tetapi `read_line` mencoba mengubahnya.
+
+<RustPlayground
+  code={`use std::io;
+
+fn main() {
+    let guess = String::new();
+    io::stdin()
+        .read_line(&mut guess)
+        .expect("Failed to read line");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error karena variabel tidak mutable"
+/>
+
+Compiler akan menolak dengan pesan bahwa `guess` tidak bisa dipinjam sebagai mutable. Tambahkan `mut` setelah `let`, lalu error itu hilang. Ini contoh pertama dari banyak pesan compiler yang akan membantumu menemukan masalah.
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa variabel guess perlu ditulis dengan let mut?',
+      options: [
+        'Karena read_line akan menambahkan teks ke string tersebut',
+        'Karena semua variabel String harus mutable',
+        'Karena println! hanya bisa membaca variabel mutable',
+        'Karena String tidak bisa dibuat tanpa mut',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. read_line membutuhkan reference mutable untuk mengubah isi guess.',
+        'Salah. String bisa saja immutable. Di sini kebutuhannya berasal dari read_line.',
+        'Salah. println! bisa membaca variabel immutable.',
+        'Salah. String::new() bisa dipakai tanpa mut kalau nilainya tidak diubah.',
+      ],
+      explanation:
+        'Rust membuat variabel immutable secara default. read_line menulis ke string, jadi string itu harus mutable.',
+    },
+    {
+      question: 'Apa arti &mut guess pada read_line?',
+      options: [
+        'Reference yang boleh mengubah isi guess',
+        'Salinan baru dari guess',
+        'Nilai guess yang tidak boleh dibaca',
+        'Tipe data baru bernama mut',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. & membuat reference, dan mut memberi izin mengubah data lewat reference itu.',
+        'Salah. Reference tidak menyalin seluruh data.',
+        'Salah. Reference tetap bisa dibaca.',
+        'Salah. mut adalah keyword, bukan nama tipe.',
+      ],
+      explanation:
+        'read_line perlu menulis ke string yang kita berikan. Argumen &mut guess memberi izin itu tanpa memindahkan kepemilikan string.',
+    },
+    {
+      question: 'Apa dua kemungkinan nilai yang dikembalikan read_line?',
+      options: ['Ok dan Err', 'True dan False', 'Some dan None', 'Less dan Greater'],
+      answer: 0,
+      optionNotes: [
+        'Benar. read_line mengembalikan Result dengan varian Ok dan Err.',
+        'Salah. Itu nilai bool, bukan Result.',
+        'Salah. Some dan None adalah varian Option.',
+        'Salah. Less dan Greater adalah varian Ordering.',
+      ],
+      explanation:
+        'Result menyimpan hasil yang berhasil di Ok dan informasi error di Err.',
+    },
+    {
+      question: 'Apa yang dilakukan .expect("Failed to read line") kalau read_line gagal?',
+      options: [
+        'Menghentikan program dan menampilkan pesan tersebut',
+        'Mengulang read_line otomatis',
+        'Mengabaikan error dan melanjutkan',
+        'Mengubah input menjadi angka',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. expect akan panic dengan pesan yang diberikan.',
+        'Salah. expect tidak mengulang operasi.',
+        'Salah. Error tidak diabaikan.',
+        'Salah. expect tidak melakukan konversi tipe.',
+      ],
+      explanation:
+        'expect adalah cara singkat untuk menangani Result ketika kamu hanya ingin program berhenti saat terjadi error.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

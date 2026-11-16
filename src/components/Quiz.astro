@@ -1,0 +1,289 @@
+---
+interface QuizQuestion {
+  question: string;
+  code?: string;
+  options: string[];
+  answer: number;
+  explanation?: string;
+  optionNotes?: string[];
+}
+
+interface Props {
+  questions: QuizQuestion[];
+  title?: string;
+}
+
+const { questions, title } = Astro.props;
+const page = Astro.url.pathname;
+const uid = `quiz-${page.replace(/[^a-z0-9]+/gi, '-')}`;
+---
+
+<section class="quiz" data-quiz data-page={page} aria-label={title ?? 'Kuis'} data-question-count={questions.length}>
+  {title && <h2 class="quiz-title">{title}</h2>}
+  {questions.map((item, questionIndex) => (
+    <article class="quiz-question" data-quiz-question data-answer={item.answer}>
+      <p class="quiz-prompt">{item.question}</p>
+      {item.code && (
+        <pre class="quiz-code"><code>{item.code}</code></pre>
+      )}
+      <fieldset class="quiz-options">
+        <legend class="quiz-legend">Pilih satu jawaban</legend>
+        {item.options.map((option, optionIndex) => (
+          <label class="quiz-option">
+            <input
+              type="radio"
+              name={`${uid}-${questionIndex}`}
+              value={optionIndex}
+              data-quiz-input
+            />
+            <span>{option}</span>
+          </label>
+        ))}
+      </fieldset>
+      <p class="quiz-feedback" data-quiz-feedback aria-live="polite" hidden></p>
+      <script type="application/json" data-quiz-notes set:html={JSON.stringify({
+        options: item.options,
+        answer: item.answer,
+        explanation: item.explanation ?? '',
+        optionNotes: item.optionNotes ?? [],
+      })} />
+    </article>
+  ))}
+  <p class="quiz-score" data-quiz-score aria-live="polite">Belum ada jawaban.</p>
+</section>
+
+<style>
+  .quiz {
+    margin: 1.75rem 0;
+    padding: 1rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.6rem;
+    background: var(--sl-color-gray-6);
+  }
+
+  .quiz-title {
+    margin: 0 0 1rem;
+    font-size: var(--sl-text-lg);
+  }
+
+  .quiz-question + .quiz-question {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--sl-color-gray-5);
+  }
+
+  .quiz-prompt {
+    margin: 0 0 0.75rem;
+    font-weight: 600;
+  }
+
+  .quiz-code {
+    margin: 0 0 0.85rem;
+    padding: 0.7rem 0.8rem;
+    overflow-x: auto;
+    border-radius: 0.35rem;
+    border: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-bg);
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-sm);
+    line-height: 1.5;
+  }
+
+  .quiz-options {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .quiz-legend {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .quiz-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    min-height: 2.75rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.4rem;
+    background: var(--sl-color-bg);
+    cursor: pointer;
+  }
+
+  .quiz-option:hover {
+    border-color: var(--sl-color-text-accent);
+  }
+
+  .quiz-option:has(input:focus-visible) {
+    outline: 2px solid var(--sl-color-text-accent);
+    outline-offset: 2px;
+  }
+
+  .quiz-option input {
+    margin-top: 0.2rem;
+    accent-color: var(--sl-color-text-accent);
+    flex: none;
+  }
+
+  .quiz-option span {
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-sm);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .quiz-feedback {
+    margin: 0.75rem 0 0;
+    padding: 0.65rem 0.75rem;
+    border-left: 3px solid var(--sl-color-gray-4);
+    background: var(--sl-color-bg);
+    font-size: var(--sl-text-sm);
+    line-height: 1.6;
+  }
+
+  .quiz-feedback[data-state='correct'] {
+    border-left-color: var(--sl-color-green-high);
+  }
+
+  .quiz-feedback[data-state='wrong'] {
+    border-left-color: var(--sl-color-red-high);
+  }
+
+  .quiz-score {
+    margin: 1.25rem 0 0;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--sl-color-gray-5);
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+  }
+
+  @media (max-width: 40rem) {
+    .quiz {
+      padding: 0.8rem;
+    }
+  }
+</style>
+
+<script>
+  import { pageKey, patchPage, readProgress } from '../scripts/progress';
+
+  interface QuizNotes {
+    options: string[];
+    answer: number;
+    explanation: string;
+    optionNotes: string[];
+  }
+
+  function notesOf(question: Element): QuizNotes | null {
+    const script = question.querySelector('[data-quiz-notes]');
+    if (!script) return null;
+    try {
+      return JSON.parse(script.textContent ?? '') as QuizNotes;
+    } catch {
+      return null;
+    }
+  }
+
+  function feedbackFor(notes: QuizNotes, selected: number): { text: string; state: 'correct' | 'wrong' } {
+    const isCorrect = selected === notes.answer;
+    const note = notes.optionNotes[selected]?.trim() ?? '';
+    const explanation = notes.explanation.trim();
+
+    if (isCorrect) {
+      return { text: note || explanation || 'Jawaban ini benar.', state: 'correct' };
+    }
+
+    const correctOption = notes.options[notes.answer] ?? '';
+    const parts = [note || 'Belum tepat.'];
+    parts.push(`Jawaban yang benar: ${correctOption}.`);
+    if (explanation) parts.push(explanation);
+    return { text: parts.join(' '), state: 'wrong' };
+  }
+
+  function showFeedback(question: Element, selected: number, save: boolean, page: string) {
+    const notes = notesOf(question);
+    const feedback = question.querySelector<HTMLElement>('[data-quiz-feedback]');
+    if (!notes || !feedback) return;
+
+    const result = feedbackFor(notes, selected);
+    feedback.hidden = false;
+    feedback.dataset.state = result.state;
+    feedback.textContent = result.text;
+
+    if (save) saveScore(question.closest('[data-quiz]'), page);
+  }
+
+  function saveScore(quiz: Element | null, page: string) {
+    if (!quiz) return;
+    const questions = Array.from(quiz.querySelectorAll('[data-quiz-question]'));
+    const answers: Record<string, number> = {};
+    let correct = 0;
+
+    questions.forEach((question, index) => {
+      const checked = question.querySelector<HTMLInputElement>('[data-quiz-input]:checked');
+      if (!checked) return;
+      const selected = Number(checked.value);
+      answers[String(index)] = selected;
+      if (selected === Number(question.getAttribute('data-answer'))) correct += 1;
+    });
+
+    const answered = Object.keys(answers).length;
+    const score = quiz.querySelector<HTMLElement>('[data-quiz-score]');
+    if (score) {
+      score.textContent =
+        answered === 0
+          ? 'Belum ada jawaban.'
+          : `${correct} dari ${questions.length} benar. ${answered} soal sudah dijawab.`;
+    }
+
+    patchPage(page, { quiz: { correct, total: questions.length, answers } });
+  }
+
+  for (const quiz of document.querySelectorAll<HTMLElement>('[data-quiz]')) {
+    if (quiz.dataset.ready === 'true') continue;
+    quiz.dataset.ready = 'true';
+
+    const page = pageKey(quiz.getAttribute('data-page') ?? window.location.pathname);
+    const questions = Array.from(quiz.querySelectorAll('[data-quiz-question]'));
+    const stored = readProgress()[page]?.quiz?.answers ?? {};
+
+    questions.forEach((question, index) => {
+      const saved = stored[String(index)];
+      if (typeof saved === 'number') {
+        const input = question.querySelector<HTMLInputElement>(
+          `[data-quiz-input][value="${saved}"]`
+        );
+        if (input) {
+          input.checked = true;
+          showFeedback(question, saved, false, page);
+        }
+      }
+
+      for (const input of question.querySelectorAll<HTMLInputElement>('[data-quiz-input]')) {
+        input.addEventListener('change', () => {
+          showFeedback(question, Number(input.value), true, page);
+        });
+      }
+    });
+
+    const answered = Object.keys(stored).length;
+    if (answered > 0) {
+      const score = quiz.querySelector<HTMLElement>('[data-quiz-score]');
+      const correct = questions.filter((question, index) => {
+        const saved = stored[String(index)];
+        return typeof saved === 'number' && saved === Number(question.getAttribute('data-answer'));
+      }).length;
+      if (score) {
+        score.textContent = `${correct} dari ${questions.length} benar. ${answered} soal sudah dijawab.`;
+      }
+    }
+  }
+</script>

@@ -1,0 +1,298 @@
+---
+title: '3.2 Tipe data'
+description: 'Integer, floating point, boolean, char, tuple, dan array beserta aturan dasarnya.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Rust adalah bahasa yang statically typed. Compiler harus tahu tipe setiap nilai saat kompilasi. Sering kali compiler bisa menyimpulkan tipe dari nilai dan cara nilai itu dipakai. Di kasus lain, terutama saat mengubah teks menjadi angka, kamu perlu menulis tipe secara eksplisit.
+
+Contoh anotasi tipe yang sudah kamu lihat:
+
+```rust
+let guess: u32 = "42".parse().expect("Not a number!");
+```
+
+Tanpa `: u32`, compiler tidak tahu tipe angka apa yang kamu inginkan. `parse` bisa menghasilkan beberapa tipe angka, dan Rust tidak ingin menebak.
+
+## Tipe scalar
+
+Scalar adalah tipe yang mewakili satu nilai. Rust punya empat kelompok scalar utama: integer, floating point, boolean, dan character.
+
+### Integer
+
+Integer adalah angka tanpa pecahan. Tipe integer Rust terdiri dari versi signed dan unsigned dengan ukuran bit yang berbeda.
+
+| Panjang | Signed | Unsigned |
+| --- | --- | --- |
+| 8-bit | `i8` | `u8` |
+| 16-bit | `i16` | `u16` |
+| 32-bit | `i32` | `u32` |
+| 64-bit | `i64` | `u64` |
+| 128-bit | `i128` | `u128` |
+| Mengikuti arsitektur | `isize` | `usize` |
+
+Signed berarti nilainya boleh negatif. Unsigned berarti nilainya hanya nol atau positif. Tipe `isize` dan `usize` mengikuti arsitektur komputer: 64 bit di sistem 64 bit, 32 bit di sistem 32 bit.
+
+Rentang nilai mengikuti jumlah bit. `i8` dapat menyimpan −128 sampai 127. `u8` dapat menyimpan 0 sampai 255. Untuk ukuran lain, polanya sama.
+
+Kalau kamu tidak menentukan tipe, integer default-nya `i32`. Tipe `isize` dan `usize` terutama dipakai untuk indeks collection.
+
+Literal integer bisa ditulis dalam beberapa bentuk:
+
+| Bentuk | Contoh |
+| --- | --- |
+| Desimal | `98_222` |
+| Hex | `0xff` |
+| Octal | `0o77` |
+| Binary | `0b1111_0000` |
+| Byte, hanya `u8` | `b'A'` |
+
+Garis bawah boleh dipakai sebagai pemisah visual. `1_000` sama dengan `1000`.
+
+#### Overflow integer
+
+Setiap tipe integer punya batas. Kalau kamu memberi nilai di luar batas saat kompilasi, compiler menolaknya:
+
+<RustPlayground
+  code={`fn main() {
+    let x: u8 = 256;
+    println!("{x}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error literal di luar rentang u8"
+/>
+
+Pesan errornya menyebut literal out of range untuk `u8`. Nilai 256 tidak muat di tipe yang hanya bisa menyimpan 0 sampai 255.
+
+Overflow juga bisa terjadi saat program berjalan:
+
+```rust
+let mut x: u8 = 255;
+x += 1;
+```
+
+Di build debug, Rust memeriksa overflow dan membuat program panic. Di build release dengan `--release`, pemeriksaan itu tidak aktif dan Rust melakukan two's complement wrapping. Nilai 256 berputar menjadi 0, 257 menjadi 1, dan seterusnya. Perilaku wrapping bukan sesuatu yang sebaiknya diandalkan.
+
+Kalau overflow mungkin terjadi, gunakan method yang eksplisit:
+
+- `wrapping_add` membungkus nilai.
+- `checked_add` mengembalikan `None` kalau overflow.
+- `overflowing_add` mengembalikan nilai dan boolean penanda overflow.
+- `saturating_add` berhenti di nilai maksimum atau minimum.
+
+<RustPlayground
+  code={`fn main() {
+    let batas: u8 = 255;
+
+    println!("saturating_add: {}", batas.saturating_add(1));
+    println!("wrapping_add: {}", batas.wrapping_add(1));
+}`}
+  filename="src/main.rs"
+  label="Menangani overflow secara eksplisit"
+/>
+
+### Floating point
+
+Rust punya `f32` dan `f64` untuk angka pecahan. `f32` berukuran 32 bit, `f64` berukuran 64 bit. Default-nya `f64` karena presisinya lebih tinggi dan di CPU modern kecepatannya biasanya sebanding dengan `f32`.
+
+<RustPlayground
+  code={`fn main() {
+    let x = 2.0; // f64
+    let y: f32 = 3.0; // f32
+
+    println!("x = {x}, y = {y}");
+}`}
+  filename="src/main.rs"
+  label="Floating point f64 dan f32"
+/>
+
+Floating point mengikuti standar IEEE-754. Karena itu, angka pecahan bisa punya pembulatan yang tidak terduga. Untuk uang, integer sering lebih aman daripada floating point.
+
+### Operasi numerik
+
+Rust mendukung penjumlahan, pengurangan, perkalian, pembagian, dan sisa bagi. Pembagian integer memotong ke arah nol.
+
+<RustPlayground
+  code={`fn main() {
+    let sum = 5 + 10;
+    let difference = 95.5 - 4.3;
+    let product = 4 * 30;
+    let quotient = 56.7 / 32.2;
+    let truncated = -5 / 3;
+    let remainder = 43 % 5;
+
+    println!("{sum} {difference} {product} {quotient} {truncated} {remainder}");
+}`}
+  filename="src/main.rs"
+  label="Operasi aritmetika dasar"
+/>
+
+### Boolean dan char
+
+Boolean punya dua nilai: `true` dan `false`. Tipe ini ditulis `bool` dan berukuran satu byte.
+
+`char` adalah satu karakter Unicode. Ukurannya 4 byte. `char` ditulis dengan tanda kutip tunggal, sedangkan string memakai tanda kutip ganda.
+
+<RustPlayground
+  code={`fn main() {
+    let t = true;
+    let f: bool = false;
+    let c = 'z';
+    let z: char = 'ℤ';
+    let e = 'é';
+
+    println!("{t} {f} {c} {z} {e}");
+}`}
+  filename="src/main.rs"
+  label="Nilai boolean dan char"
+/>
+
+`char` dapat menyimpan huruf beraksen, karakter dari aksara lain, dan simbol Unicode. Satu `char` bukan selalu sama dengan satu huruf yang dipahami manusia. Pembahasan lebih dalam ada di Bab 8 saat kita membahas String.
+
+## Tipe compound
+
+Compound type menggabungkan beberapa nilai menjadi satu. Rust punya dua compound type primitif: tuple dan array.
+
+### Tuple
+
+Tuple mengelompokkan nilai dengan tipe yang boleh berbeda. Panjangnya tetap setelah dideklarasikan.
+
+<RustPlayground
+  code={`fn main() {
+    let tup: (i32, f64, u8) = (500, 6.4, 1);
+
+    let (x, y, z) = tup;
+
+    println!("Nilai y adalah {y}");
+    println!("{x} {z}");
+}`}
+  filename="src/main.rs"
+  label="Tuple dan destructuring"
+/>
+
+Untuk mengambil nilai dari tuple, kamu bisa memakai pattern seperti `let (x, y, z) = tup;`. Ini disebut destructuring. Kamu juga bisa mengakses elemen dengan titik dan indeks, misalnya `tup.0`.
+
+Tuple tanpa nilai disebut unit dan ditulis `()`. Ekspresi yang tidak mengembalikan nilai secara implisit mengembalikan unit.
+
+### Array
+
+Array menyimpan banyak nilai dengan tipe yang sama dan panjang tetap. Ukurannya diketahui saat kompilasi.
+
+<RustPlayground
+  code={`fn main() {
+    let a = [1, 2, 3, 4, 5];
+
+    let first = a[0];
+    let second = a[1];
+
+    println!("{first} {second}");
+}`}
+  filename="src/main.rs"
+  label="Membuat array dan mengakses elemen"
+/>
+
+Tipe array ditulis dengan tipe elemen, titik koma, lalu jumlah elemen:
+
+```rust
+let a: [i32; 5] = [1, 2, 3, 4, 5];
+let b = [3; 5];
+```
+
+`[3; 5]` membuat array berisi lima angka 3. Ini sama dengan `[3, 3, 3, 3, 3]`.
+
+Array berbeda dari vector. Vector bisa bertambah dan berkurang panjangnya, sedangkan array tetap. Vector dibahas di Bab 8. Kalau kamu tidak yakin harus memilih yang mana, vector biasanya lebih fleksibel.
+
+#### Indeks di luar batas
+
+Compiler memeriksa tipe dan panjang array, tetapi nilai indeks dari input baru diketahui saat program berjalan. Rust memeriksa indeks saat runtime. Kalau indeks melewati batas, program panic, bukan mengakses memory sembarangan.
+
+```text
+thread 'main' panicked at src/main.rs:19:19:
+index out of bounds: the len is 5 but the index is 10
+```
+
+Pemeriksaan ini adalah salah satu cara Rust menjaga memory safety. Bab 9 membahas error handling, termasuk cara menghindari panic saat input pengguna tidak valid.
+
+:::caution[Hati-hati]
+Array tidak bisa bertambah panjang. Kalau kamu butuh daftar yang ukurannya berubah, jangan memaksa memakai array. Tunggu Bab 8 dan gunakan `Vec`.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa tipe integer default di Rust kalau tidak dianotasi?',
+      options: ['i32', 'u32', 'i64', 'usize'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Integer default-nya i32.',
+        'Salah. u32 dipilih saat kamu butuh unsigned, tetapi bukan default.',
+        'Salah. i64 lebih besar dari default.',
+        'Salah. usize dipakai terutama untuk indeks collection.',
+      ],
+      explanation:
+        'Saat tipe tidak bisa disimpulkan dari konteks, Rust memakai i32 untuk literal integer.',
+    },
+    {
+      question: 'Apa perbedaan utama tuple dan array?',
+      options: [
+        'Tuple boleh berisi tipe berbeda, array harus satu tipe',
+        'Tuple harus satu tipe, array boleh berbeda',
+        'Tuple bisa berubah panjang, array tidak',
+        'Array hanya bisa berisi angka',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Tuple mengelompokkan nilai dengan tipe berbeda. Array menampung elemen bertipe sama.',
+        'Salah. Justru sebaliknya.',
+        'Salah. Keduanya punya panjang tetap.',
+        'Salah. Array bisa berisi tipe apa pun selama semuanya sama.',
+      ],
+      explanation:
+        'Tuple cocok untuk beberapa nilai terkait dengan tipe berbeda. Array cocok untuk banyak nilai dengan tipe sama.',
+    },
+    {
+      question: 'Apa yang terjadi saat mengakses array dengan indeks di luar panjangnya?',
+      options: [
+        'Program panic saat runtime',
+        'Compiler selalu menolak sebelum program berjalan',
+        'Rust mengembalikan nilai 0',
+        'Rust mengakses memory di luar array',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rust memeriksa batas indeks saat runtime dan panic kalau melewati batas.',
+        'Salah. Compiler tidak selalu bisa mengetahui nilai indeks dari input.',
+        'Salah. Tidak ada nilai default 0.',
+        'Salah. Rust mencegah akses memory tidak valid dengan panic.',
+      ],
+      explanation:
+        'Pemeriksaan runtime ini mencegah bug memory yang umum di bahasa low-level.',
+    },
+    {
+      question: 'Apa yang dilakukan build debug saat integer overflow terjadi?',
+      options: [
+        'Membuat program panic',
+        'Membungkus nilai secara diam-diam',
+        'Mengubah tipe integer menjadi lebih besar',
+        'Mengabaikan operasi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Build debug menyertakan pemeriksaan overflow dan panic.',
+        'Salah. Wrapping terjadi di build release tanpa pemeriksaan.',
+        'Salah. Tipe tidak berubah otomatis.',
+        'Salah. Operasi tetap dijalankan, tetapi overflow terdeteksi.',
+      ],
+      explanation:
+        'Perbedaan perilaku debug dan release ini penting. Jangan mengandalkan wrapping untuk logika program.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

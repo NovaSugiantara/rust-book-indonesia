@@ -1,0 +1,78 @@
+export interface ChapterPage {
+  label: string;
+  slug: string;
+}
+
+export interface Chapter {
+  number: number;
+  title: string;
+  slug: string;
+  pages: ChapterPage[];
+}
+
+/**
+ * Satu sumber untuk sidebar dan ringkasan progres.
+ * Bab yang belum ditulis tetap punya satu halaman "Segera hadir".
+ */
+export const chapters: Chapter[] = [
+  {
+    number: 1,
+    title: 'Memulai',
+    slug: 'bab-1',
+    pages: [
+      { label: 'Ringkasan bab', slug: 'bab-1' },
+      { label: '1.1 Instalasi', slug: 'bab-1/instalasi' },
+      { label: '1.2 Hello, World!', slug: 'bab-1/hello-world' },
+      { label: '1.3 Hello, Cargo!', slug: 'bab-1/hello-cargo' },
+      { label: '1.4 Studi kasus: Kasir Warung', slug: 'bab-1/studi-kasus' },
+    ],
+  },
+  {
+    number: 2,
+    title: 'Membuat game tebak angka',
+    slug: 'bab-2',
+    pages: [
+      { label: 'Ringkasan bab', slug: 'bab-2' },
+      { label: '2.1 Menyiapkan proyek', slug: 'bab-2/persiapan' },
+      { label: '2.2 Membaca input', slug: 'bab-2/input' },
+      { label: '2.3 Angka rahasia', slug: 'bab-2/angka-rahasia' },
+      { label: '2.4 Membandingkan tebakan', slug: 'bab-2/membandingkan' },
+      { label: '2.5 Loop dan input valid', slug: 'bab-2/loop' },
+      { label: '2.6 Studi kasus: Kasir Warung', slug: 'bab-2/studi-kasus' },
+    ],
+  },
+  {
+    number: 3,
+    title: 'Konsep dasar pemrograman',
+    slug: 'bab-3',
+    pages: [
+      { label: 'Ringkasan bab', slug: 'bab-3' },
+      { label: '3.1 Variabel dan mutability', slug: 'bab-3/variabel-mutability' },
+      { label: '3.2 Tipe data', slug: 'bab-3/tipe-data' },
+      { label: '3.3 Fungsi', slug: 'bab-3/fungsi' },
+      { label: '3.4 Komentar', slug: 'bab-3/komentar' },
+      { label: '3.5 Control flow', slug: 'bab-3/control-flow' },
+      { label: '3.6 Studi kasus: Kasir Warung', slug: 'bab-3/studi-kasus' },
+    ],
+  },
+  { number: 4, title: 'Memahami ownership', slug: 'bab-4', pages: [{ label: 'Ringkasan bab', slug: 'bab-4' }] },
+  { number: 5, title: 'Menggunakan struct', slug: 'bab-5', pages: [{ label: 'Ringkasan bab', slug: 'bab-5' }] },
+  { number: 6, title: 'Enum dan pattern matching', slug: 'bab-6', pages: [{ label: 'Ringkasan bab', slug: 'bab-6' }] },
+  { number: 7, title: 'Package, crate, dan module', slug: 'bab-7', pages: [{ label: 'Ringkasan bab', slug: 'bab-7' }] },
+  { number: 8, title: 'Collection umum', slug: 'bab-8', pages: [{ label: 'Ringkasan bab', slug: 'bab-8' }] },
+  { number: 9, title: 'Error handling', slug: 'bab-9', pages: [{ label: 'Ringkasan bab', slug: 'bab-9' }] },
+  { number: 10, title: 'Generic, trait, dan lifetime', slug: 'bab-10', pages: [{ label: 'Ringkasan bab', slug: 'bab-10' }] },
+  { number: 11, title: 'Menulis test otomatis', slug: 'bab-11', pages: [{ label: 'Ringkasan bab', slug: 'bab-11' }] },
+  { number: 12, title: 'Proyek I/O: membangun CLI', slug: 'bab-12', pages: [{ label: 'Ringkasan bab', slug: 'bab-12' }] },
+  { number: 13, title: 'Iterator dan closure', slug: 'bab-13', pages: [{ label: 'Ringkasan bab', slug: 'bab-13' }] },
+  { number: 14, title: 'Cargo dan crates.io lebih lanjut', slug: 'bab-14', pages: [{ label: 'Ringkasan bab', slug: 'bab-14' }] },
+  { number: 15, title: 'Smart pointer', slug: 'bab-15', pages: [{ label: 'Ringkasan bab', slug: 'bab-15' }] },
+  { number: 16, title: 'Concurrency tanpa rasa takut', slug: 'bab-16', pages: [{ label: 'Ringkasan bab', slug: 'bab-16' }] },
+  { number: 17, title: 'Dasar pemrograman async', slug: 'bab-17', pages: [{ label: 'Ringkasan bab', slug: 'bab-17' }] },
+  { number: 18, title: 'Fitur berorientasi objek', slug: 'bab-18', pages: [{ label: 'Ringkasan bab', slug: 'bab-18' }] },
+  { number: 19, title: 'Pattern dan matching', slug: 'bab-19', pages: [{ label: 'Ringkasan bab', slug: 'bab-19' }] },
+  { number: 20, title: 'Fitur lanjutan', slug: 'bab-20', pages: [{ label: 'Ringkasan bab', slug: 'bab-20' }] },
+  { number: 21, title: 'Proyek akhir: web server multithread', slug: 'bab-21', pages: [{ label: 'Ringkasan bab', slug: 'bab-21' }] },
+];
+
+export const totalPages = chapters.reduce((total, chapter) => total + chapter.pages.length, 0);

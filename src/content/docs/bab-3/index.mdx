@@ -1,0 +1,76 @@
+---
+title: 'Bab 3: Konsep dasar pemrograman'
+description: 'Variabel, tipe data, fungsi, komentar, dan control flow dalam Rust.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Bab 2 memberi kamu program yang berjalan. Bab 3 membongkar konsep dasar yang membuat program itu bisa ditulis: cara menyimpan nilai, tipe apa saja yang tersedia, cara memecah kode menjadi fungsi, cara memberi catatan, dan cara mengatur alur eksekusi.
+
+Materi ini terasa seperti dasar bahasa pemrograman pada umumnya. Namun Rust punya beberapa aturan yang berbeda, terutama soal mutability, ekspresi, dan tipe yang harus diketahui compiler. Perbedaan itulah yang membuat kode Rust lebih ketat, dan biasanya lebih mudah dilacak saat ada masalah.
+
+## Urutan bab
+
+1. [Variabel dan mutability](variabel-mutability/) membahas `let`, `mut`, `const`, dan shadowing.
+2. [Tipe data](tipe-data/) membahas integer, float, boolean, char, tuple, dan array.
+3. [Fungsi](fungsi/) membahas parameter, nilai balik, statement, dan expression.
+4. [Komentar](komentar/) membahas komentar yang diabaikan compiler.
+5. [Control flow](control-flow/) membahas `if`, `loop`, `while`, dan `for`.
+6. [Studi kasus: Kasir Warung](studi-kasus/) menambahkan subtotal, diskon, dan total.
+
+:::note[Kenapa begini?]
+Rust mengharuskan compiler tahu tipe setiap nilai. Kadang kamu perlu menulis tipe secara eksplisit, misalnya saat mengubah string menjadi angka. Di banyak kasus lain, compiler bisa menyimpulkan tipe dari cara nilai dipakai. Bab ini menunjukkan kapan kamu perlu membantu compiler dan kapan tidak.
+:::
+
+:::tip[Tips]
+Contoh di bab ini pendek. Ketik ulang, jangan hanya membaca. Perbedaan antara `mut` dan shadowing, misalnya, lebih cepat terasa setelah kamu mencoba mengubah nilainya sendiri.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa status mutability variabel Rust secara default?',
+      options: ['Immutable', 'Mutable', 'Selalu konstan', 'Tergantung tipe data'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Variabel immutable secara default, kecuali kamu menambahkan mut.',
+        'Salah. mut harus ditulis eksplisit.',
+        'Salah. const adalah keyword terpisah, bukan default untuk let.',
+        'Salah. Aturan default berlaku untuk semua variabel let.',
+      ],
+      explanation:
+        'Rust memilih immutable sebagai default supaya perubahan nilai menjadi keputusan yang disadari, bukan kebiasaan.',
+    },
+    {
+      question: 'Apa yang wajib ditulis pada parameter fungsi?',
+      options: ['Tipe parameter', 'Nilai default', 'Kata mut', 'Nama module'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Setiap parameter harus punya anotasi tipe di signature.',
+        'Salah. Rust tidak memakai nilai default pada parameter fungsi.',
+        'Salah. mut hanya diperlukan kalau parameter ingin diubah di dalam fungsi.',
+        'Salah. Nama module tidak ditulis di parameter.',
+      ],
+      explanation:
+        'Signature fungsi menjelaskan tipe yang diterima dan dikembalikan. Compiler memakai informasi itu untuk memeriksa pemanggilan.',
+    },
+    {
+      question: 'Apa tipe nilai yang harus dihasilkan kondisi pada if?',
+      options: ['bool', 'integer', 'String', 'Apa saja'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Kondisi if harus bernilai bool.',
+        'Salah. Integer tidak otomatis dianggap benar atau salah.',
+        'Salah. String tidak bisa dipakai sebagai kondisi.',
+        'Salah. Rust tidak mengizinkan konversi implisit ke bool.',
+      ],
+      explanation:
+        'Berbeda dari beberapa bahasa lain, Rust tidak menganggap angka nol sebagai false. Kamu harus menulis perbandingan seperti number != 0.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

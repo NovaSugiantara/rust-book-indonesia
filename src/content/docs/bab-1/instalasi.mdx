@@ -1,0 +1,201 @@
+---
+title: '1.1 Instalasi'
+description: 'Memasang Rust dengan rustup di Linux, macOS, dan Windows, lalu memastikan compiler siap dipakai.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Langkah pertama adalah memasang Rust. Cara resmi yang dipakai buku ini adalah `rustup`, sebuah alat baris perintah untuk mengelola versi Rust dan komponen pendampingnya. Kamu butuh koneksi internet untuk mengunduh toolchain.
+
+Kalau kamu tidak ingin memakai `rustup`, Rust masih bisa dipasang lewat package manager sistem atau installer lain. Buku asli menyediakan daftar di [halaman Other Installation Methods](https://forge.rust-lang.org/infra/other-installation-methods.html). Untuk belajar, ikuti `rustup` saja supaya perintah di situs ini cocok dengan keadaan komputermu.
+
+## Linux dan macOS
+
+Buka terminal, lalu jalankan:
+
+```console
+$ curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
+```
+
+Perintah itu mengunduh skrip dari `sh.rustup.rs` dan menjalankannya. Skrip tersebut memasang `rustup` beserta versi stable Rust terbaru. Kamu mungkin diminta memasukkan kata sandi komputer.
+
+Kalau berhasil, akan muncul baris seperti ini:
+
+```text
+Rust is installed now. Great!
+```
+
+## Windows
+
+Buka [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install), unduh `rustup-init.exe`, lalu jalankan. Di tengah proses, installer biasanya menawarkan pemasangan Visual Studio. Terima tawaran itu karena Rust di Windows membutuhkan linker dan library native dari sana.
+
+Kalau kamu memilih memasang Visual Studio secara manual, pastikan komponen C++ build tools dan Windows SDK ikut terpasang. Tanpa itu, compiler Rust bisa berhasil dipasang tetapi gagal saat menautkan program.
+
+:::caution[Hati-hati]
+Perintah `curl ... | sh` mengunduh skrip lalu langsung menjalankannya. Itu memang cara resmi `rustup`, tetapi tetap periksa alamat domainnya. Jangan menjalankan skrip instalasi dari situs yang tidak kamu percaya.
+:::
+
+## Linker
+
+Rust membutuhkan linker, yaitu program yang menggabungkan hasil kompilasi menjadi satu file yang bisa dijalankan. Di banyak sistem, linker sudah tersedia. Kalau nanti kamu melihat error yang menyebut linker, pasang compiler C.
+
+Di macOS, compiler C bisa dipasang dengan:
+
+```console
+$ xcode-select --install
+```
+
+Di Ubuntu dan Debian, pasang `build-essential`. Di distribusi Linux lain, sesuaikan dengan package manager masing-masing. Compiler C juga berguna karena sebagian crate Rust memakai kode C di dalamnya.
+
+## Memastikan instalasi berhasil
+
+Tutup terminal, buka lagi, lalu jalankan:
+
+```console
+$ rustc --version
+```
+
+Output yang benar memiliki bentuk seperti ini:
+
+```text
+rustc x.y.z (abcabcabc yyyy-mm-dd)
+```
+
+Angka versi, hash commit, dan tanggal akan berbeda di komputermu. Yang penting perintahnya dikenali dan mencetak informasi versi. Kalau muncul pesan `command not found`, tutup dan buka ulang terminal lebih dulu. Kalau masih gagal, periksa apakah folder `~/.cargo/bin` ada di `PATH`.
+
+```console
+$ echo $PATH
+```
+
+Di Windows Command Prompt, perintahnya `echo %PATH%`. Di PowerShell, gunakan `echo $env:Path`.
+
+:::tip[Tips]
+Setelah instalasi, `rustup` menambahkan folder `~/.cargo/bin` ke konfigurasi shell. Terminal yang sudah terbuka sebelum instalasi tidak membaca perubahan itu. Menutup lalu membuka terminal baru biasanya menyelesaikan masalah `command not found`.
+:::
+
+## Memperbarui dan menghapus
+
+Untuk memperbarui ke versi stable terbaru:
+
+```console
+$ rustup update
+```
+
+Untuk menghapus Rust dan `rustup`:
+
+```console
+$ rustup self uninstall
+```
+
+Kalau kamu memakai `rustup`, jangan menghapus folder instalasi secara manual. Perintah `self uninstall` membersihkan toolchain dan konfigurasi dengan rapi.
+
+## Dokumentasi offline
+
+Instalasi Rust menyertakan dokumentasi lokal. Jalankan:
+
+```console
+$ rustup doc
+```
+
+Perintah itu membuka dokumentasi di browser tanpa koneksi internet. Saat kamu menemukan tipe atau fungsi standard library yang belum jelas, dokumentasi API adalah tempat pertama yang sebaiknya kamu buka.
+
+## Editor dan IDE
+
+Rust tidak mewajibkan editor tertentu. Namun banyak editor punya dukungan Rust yang baik lewat `rust-analyzer`, language server resmi dari tim Rust. Dukungan ini memberi completion, lompat ke definisi, dan pesan error saat kamu mengetik.
+
+Daftar editor dan IDE yang mendukung Rust bisa berubah. Buku asli menyimpan daftar terbaru di [halaman tools](https://www.rust-lang.org/tools).
+
+:::note[Kenapa begini?]
+Buku ini memakai channel stable, bukan nightly. Rust menjaga kompatibilitas kode yang sudah stabil, jadi program yang berjalan di versi stable lama seharusnya tetap bisa dikompilasi versi stable berikutnya. Nightly berisi fitur eksperimental dan bisa berubah kapan saja. Untuk belajar, stable selalu menjadi pilihan awal.
+:::
+
+## Coba tanpa memasang apa pun
+
+Playground di bawah berjalan di server Rust publik. Klik Jalankan kalau kamu ingin melihat Rust bekerja sebelum memasang toolchain.
+
+<RustPlayground
+  code={`fn main() {
+    println!("Rust berjalan di browser.");
+}`}
+  filename="main.rs"
+/>
+
+Playground ini berguna untuk mencoba potongan kode. Namun perintah `cargo`, file proyek, dan editor tetap membutuhkan instalasi lokal.
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Perintah mana yang memasang Rust di Linux atau macOS?',
+      options: [
+        "curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh",
+        'npm install -g rust',
+        'apt install rustc cargo',
+        'rustc --install',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Perintah itu mengunduh dan menjalankan installer resmi rustup.',
+        'Salah. Rust bukan package npm.',
+        'Salah. Package manager sistem bisa menyediakan Rust, tetapi buku ini memakai rustup agar versi dan komponennya seragam.',
+        'Salah. rustc tidak punya opsi --install untuk memasang dirinya sendiri.',
+      ],
+      explanation:
+        'Installer resmi Rust adalah rustup. Perintah curl di atas adalah cara yang didokumentasikan di buku asli.',
+    },
+    {
+      question: 'Apa tugas linker?',
+      options: [
+        'Menggabungkan hasil kompilasi menjadi satu file yang bisa dijalankan',
+        'Mengunduh dependency dari crates.io',
+        'Memformat kode agar rapi',
+        'Menjalankan test otomatis',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Linker menyatukan object code dan library menjadi executable.',
+        'Salah. Itu tugas Cargo saat mengunduh crate.',
+        'Salah. Itu tugas rustfmt.',
+        'Salah. Itu tugas cargo test dan test runner.',
+      ],
+      explanation:
+        'Compiler menghasilkan object code, lalu linker menyusunnya bersama library menjadi program akhir. Di Windows, linker biasanya berasal dari Visual Studio Build Tools.',
+    },
+    {
+      question: 'Perintah mana yang memperbarui toolchain Rust?',
+      options: ['rustup update', 'cargo update', 'rustc --update', 'rustup install --latest'],
+      answer: 0,
+      optionNotes: [
+        'Benar. rustup update memperbarui toolchain yang sudah terpasang.',
+        'Salah. cargo update memperbarui versi dependency di proyek, bukan compiler.',
+        'Salah. rustc tidak punya opsi --update.',
+        'Salah. Tidak ada opsi itu. Gunakan rustup update.',
+      ],
+      explanation:
+        'rustup mengelola toolchain. cargo update mengurus lockfile dependency dan tidak menyentuh versi compiler.',
+    },
+    {
+      question: 'Kamu baru memasang Rust, lalu terminal lama bilang rustc tidak ditemukan. Apa langkah paling masuk akal?',
+      options: [
+        'Tutup dan buka terminal baru, lalu coba lagi',
+        'Hapus folder ~/.cargo',
+        'Pasang ulang sistem operasi',
+        'Ganti nama file main.rs',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Terminal lama belum membaca perubahan PATH dari installer.',
+        'Salah. Menghapus folder itu justru membuang toolchain.',
+        'Salah. Masalahnya hanya lingkungan shell yang belum diperbarui.',
+        'Salah. Nama file tidak berhubungan dengan perintah rustc yang tidak ditemukan.',
+      ],
+      explanation:
+        'Installer menambahkan ~/.cargo/bin ke PATH. Shell yang sudah berjalan tidak otomatis memuat ulang konfigurasi tersebut.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

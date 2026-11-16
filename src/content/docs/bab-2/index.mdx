@@ -1,0 +1,94 @@
+---
+title: 'Bab 2: Membuat game tebak angka'
+description: 'Membuat game tebak angka dengan input terminal, crate rand, match, dan loop.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Bab ini langsung dipakai untuk membangun program. Kita akan membuat game tebak angka: program memilih angka acak antara 1 dan 100, kamu mengetik tebakan, lalu program memberi tahu apakah tebakanmu terlalu kecil, terlalu besar, atau tepat. Permainan berhenti saat tebakan benar.
+
+Di sepanjang bab, kamu akan bertemu `let`, `match`, method, associated function, crate eksternal, dan loop. Belum semua detailnya dibahas sekarang. Bab 3 sampai Bab 6 akan kembali ke konsep-konsep itu dengan lebih dalam. Untuk sekarang, fokusnya adalah membuat program yang berjalan.
+
+## Yang akan kamu bangun
+
+- Proyek Cargo baru bernama `guessing_game`.
+- Input dari terminal dengan `std::io`.
+- Angka rahasia acak dari crate `rand`.
+- Perbandingan tebakan dengan `std::cmp::Ordering`.
+- Loop yang terus meminta tebakan sampai pemain menang atau memasukkan input yang tidak valid.
+
+## Urutan bab
+
+1. [Menyiapkan proyek](persiapan/) membuat proyek dan menjalankan program bawaan Cargo.
+2. [Membaca input](input/) memakai `read_line`, `String`, dan `Result`.
+3. [Angka rahasia](angka-rahasia/) menambahkan crate `rand`.
+4. [Membandingkan tebakan](membandingkan/) memakai `Ordering` dan `match`.
+5. [Loop dan input valid](loop/) menutup permainan dan menangani input salah.
+6. [Studi kasus: Kasir Warung](studi-kasus/) memakai loop dan `match` untuk memvalidasi jumlah barang.
+
+:::caution[Playground tidak bisa membaca input]
+Contoh di situs ini bisa dijalankan di playground, tetapi playground tidak punya terminal interaktif. Kode yang memanggil `read_line` akan langsung mendapat akhir input. Karena itu, setiap contoh yang butuh input tampil dalam dua bentuk: versi playground dengan nilai yang sudah di-hardcode, dan versi lengkap untuk dijalankan dengan `cargo run` di komputer sendiri.
+:::
+
+:::tip[Tips]
+Jalankan program setiap kali satu bagian selesai. Game ini tumbuh sedikit demi sedikit. Kesalahan yang muncul setelah perubahan kecil lebih mudah dilacak daripada kesalahan setelah semua kode ditulis sekaligus.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Berapa rentang angka rahasia dalam game ini?',
+      options: ['1 sampai 100', '0 sampai 10', '1 sampai 1000', 'Tergantung input pemain'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Program memilih angka acak antara 1 dan 100, termasuk kedua ujungnya.',
+        'Salah. Rentang 0 sampai 10 terlalu kecil dan tidak dipakai di buku.',
+        'Salah. Rentang 1 sampai 1000 membuat permainan jauh lebih sulit.',
+        'Salah. Angka rahasia dipilih program, bukan ditentukan pemain.',
+      ],
+      explanation:
+        'Rentang 1 sampai 100 dipilih supaya permainan tidak terlalu sulit. Dalam kode, rentang itu ditulis 1..=100.',
+    },
+    {
+      question: 'Apa yang dilakukan program setelah pemain memasukkan tebakan?',
+      options: [
+        'Memberi tahu tebakan terlalu kecil, terlalu besar, atau benar',
+        'Langsung menutup program tanpa pesan',
+        'Mengganti angka rahasia setiap kali pemain menebak',
+        'Menyimpan tebakan ke file',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Program membandingkan tebakan dengan angka rahasia dan memberi umpan balik.',
+        'Salah. Program hanya berhenti setelah pemain menang atau menghentikannya.',
+        'Salah. Angka rahasia tetap sama selama satu permainan.',
+        'Salah. Bab ini belum menyentuh penyimpanan file.',
+      ],
+      explanation:
+        'Umpan balik adalah inti permainan. Tanpa petunjuk terlalu kecil atau terlalu besar, pemain hanya bisa menebak secara acak.',
+    },
+    {
+      question: 'Mengapa bab ini memakai crate rand?',
+      options: [
+        'Karena angka acak belum tersedia di standard library Rust',
+        'Karena rand adalah compiler alternatif',
+        'Karena rand menggantikan Cargo',
+        'Karena rand membuat program berjalan lebih cepat',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rust belum menyertakan pembangkit angka acak di standard library untuk kebutuhan umum.',
+        'Salah. Compiler tetap rustc. rand hanyalah library.',
+        'Salah. Cargo tetap dipakai untuk mengelola proyek dan dependency.',
+        'Salah. rand tidak ditujukan untuk mempercepat program secara umum.',
+      ],
+      explanation:
+        'Tim Rust menyediakan crate rand sebagai library eksternal untuk angka acak. Cargo yang mengunduh dan mengompilasinya untuk proyekmu.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

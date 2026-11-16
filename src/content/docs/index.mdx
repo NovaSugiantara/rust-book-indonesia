@@ -1,0 +1,72 @@
+---
+title: Belajar Rust dari Nol
+description: Panduan Rust berbahasa Indonesia dengan contoh yang bisa dijalankan langsung di browser, kuis, dan studi kasus Kasir Warung.
+template: splash
+hero:
+  title: Rust dari Nol
+  tagline: Belajar Rust dalam bahasa Indonesia, dari instalasi sampai proyek yang benar-benar jalan.
+  actions:
+    - text: Mulai Bab 1
+      link: bab-1/
+      icon: right-arrow
+    - text: Lihat progres
+      link: '#progres-belajarmu'
+      variant: minimal
+---
+
+import Progress from '../../components/Progress.astro';
+
+## Untuk siapa situs ini
+
+Situs ini dibuat untuk kamu yang ingin belajar Rust dengan urutan yang jelas. Kamu tidak perlu sudah menguasai Rust, tetapi kamu perlu nyaman membuka terminal dan mengetik perintah sederhana.
+
+Materi ini cocok kalau kamu:
+
+- baru pertama kali memakai bahasa dengan compiler yang ketat;
+- sudah menulis kode di bahasa lain dan ingin memahami cara Rust mengatur memory;
+- pernah membaca sebagian buku Rust, lalu berhenti karena istilahnya terasa padat.
+
+Kalau kamu sama sekali belum pernah menulis kode, tetap bisa mulai. Halaman awal menjelaskan setiap perintah dan setiap potong kode, bukan hanya hasil akhirnya.
+
+## Cara satu bab disusun
+
+Bab yang sudah ditulis mengikuti pola yang sama. Kamu membaca penjelasan singkat, mencoba kode, menjawab kuis, lalu mengerjakan satu studi kasus yang tumbuh dari bab ke bab.
+
+<ul class="home-cards">
+  <li>
+    <h3>Penjelasan</h3>
+    <p>Konsep dijelaskan dengan kata-kata sendiri. Istilah Rust tetap dalam bahasa Inggris dan diberi penjelasan saat pertama muncul.</p>
+  </li>
+  <li>
+    <h3>Contoh yang bisa dijalankan</h3>
+    <p>Blok kode yang bisa dijalankan langsung dari halaman ini. Kamu boleh mengubah kodenya dan melihat hasilnya.</p>
+  </li>
+  <li>
+    <h3>Kuis</h3>
+    <p>Pertanyaan pilihan ganda dan tebak output, lengkap dengan alasan untuk setiap jawaban.</p>
+  </li>
+  <li>
+    <h3>Studi kasus</h3>
+    <p>Kasir Warung, sebuah CLI (program baris perintah) kecil yang mulai dari struk sederhana lalu bertambah kemampuan di bab berikutnya.</p>
+  </li>
+</ul>
+
+## Progres belajarmu
+
+Tandai halaman yang sudah selesai dan jawab kuisnya. Progres disimpan di browser ini, jadi tidak perlu akun.
+
+<Progress />
+
+## Dari mana materinya
+
+Situs ini adaptasi dari [The Rust Programming Language](https://doc.rust-lang.org/stable/book/) oleh Steve Klabnik, Carol Nichols, dan Chris Krycho, dengan kontribusi dari komunitas Rust. Buku aslinya dilisensikan MIT atau Apache-2.0.
+
+Urutan bab, contoh kode, dan fakta teknis mengikuti buku asli. Yang berubah adalah bahasa dan cara penyampaiannya. Kalau ada penjelasan di sini yang terasa berbeda dari buku asli atau dokumentasi resmi Rust, percayai sumber aslinya.
+
+:::tip[Belum mau memasang Rust?]
+Contoh Rust di Bab 1 bisa dijalankan di playground selama ada koneksi internet. Instalasi baru dibutuhkan saat kamu ingin menjalankan `cargo` dan membuat proyek di komputer sendiri.
+:::
+
+## Mulai dari sini
+
+Buka [Bab 1: Memulai](bab-1/). Bab itu menjelaskan instalasi Rust, program pertama, dan cara membuat proyek dengan Cargo. Setelah itu, kamu akan menulis struk pertama untuk Kasir Warung.

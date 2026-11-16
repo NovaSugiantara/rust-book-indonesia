@@ -1,0 +1,277 @@
+---
+title: '3.6 Studi kasus: Kasir Warung'
+description: 'Menambahkan fungsi subtotal, diskon dengan if, dan total dengan loop ke proyek Kasir Warung.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Di Bab 2, Kasir Warung sudah bisa meminta jumlah barang dan menolak input yang tidak valid. Sekarang kita menambahkan perhitungan: harga per item, subtotal, diskon, dan total.
+
+Program masih memakai harga contoh di dalam kode. Belum ada input harga dari kasir. Tujuannya adalah melatih fungsi, tipe data, `if`, dan `for` sebelum masuk ke struktur data yang lebih besar.
+
+## Fungsi untuk perhitungan
+
+Kita mulai dengan dua fungsi kecil:
+
+```rust
+fn hitung_subtotal(harga: u32, jumlah: u32) -> u32 {
+    harga * jumlah
+}
+
+fn hitung_diskon(subtotal: u32) -> u32 {
+    if subtotal >= 40_000 {
+        subtotal * 10 / 100
+    } else {
+        0
+    }
+}
+```
+
+`hitung_subtotal` menerima harga satuan dan jumlah, lalu mengembalikan hasil perkalian. Tipe `u32` dipilih karena harga dan jumlah tidak pernah negatif.
+
+`hitung_diskon` memakai `if` sebagai expression. Kalau subtotal mencapai 40.000, diskonnya 10 persen. Kalau tidak, diskonnya 0. Kedua arm menghasilkan `u32`, jadi tipenya cocok.
+
+## Kode lokal lengkap
+
+Kode berikut melanjutkan state Bab 2. Bagian validasi jumlah barang tetap ada. Setelah jumlah diterima, program memakai daftar harga contoh dan menghitung total.
+
+```rust
+use std::io;
+
+fn hitung_subtotal(harga: u32, jumlah: u32) -> u32 {
+    harga * jumlah
+}
+
+fn hitung_diskon(subtotal: u32) -> u32 {
+    if subtotal >= 40_000 {
+        subtotal * 10 / 100
+    } else {
+        0
+    }
+}
+
+fn main() {
+    println!("========================================");
+    println!("           KASIR WARUNG BU SRI");
+    println!("        Jl. Melati No. 12, Bandung");
+    println!("========================================");
+
+    let mut jumlah_barang: usize = 0;
+
+    loop {
+        println!("Jumlah barang (1-3):");
+
+        let mut input = String::new();
+
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Gagal membaca input");
+
+        let jumlah: usize = match input.trim().parse() {
+            Ok(angka) => angka,
+            Err(_) => {
+                println!("Masukkan angka, bukan teks. Coba lagi.");
+                continue;
+            }
+        };
+
+        match jumlah {
+            1..=3 => {
+                jumlah_barang = jumlah;
+                break;
+            }
+            _ => println!("Jumlah harus 1 sampai 3. Coba lagi."),
+        }
+    }
+
+    let daftar_harga = [12_000, 8_000, 15_000];
+    let daftar_jumlah = [1, 2, 1];
+
+    let mut subtotal = 0;
+
+    for i in 0..jumlah_barang {
+        let baris = hitung_subtotal(daftar_harga[i], daftar_jumlah[i]);
+        subtotal += baris;
+        println!("Item {}: Rp{baris}", i + 1);
+    }
+
+    let diskon = hitung_diskon(subtotal);
+    let total = subtotal - diskon;
+
+    println!("----------------------------------------");
+    println!("Subtotal: Rp{subtotal}");
+    println!("Diskon:   Rp{diskon}");
+    println!("Total:    Rp{total}");
+    println!("========================================");
+}
+```
+
+Di Bab 2, jumlah barang bertipe `u32`. Di sini tipenya diubah menjadi `usize` karena nilainya dipakai sebagai indeks array. Indeks array di Rust bertipe `usize`, bukan `u32` atau `i32`.
+
+`daftar_harga` dan `daftar_jumlah` adalah array. Keduanya berisi tiga elemen, sesuai batas jumlah barang di Bab 2. Kalau kasir memilih 1 barang, loop hanya membaca indeks 0. Kalau memilih 3, loop membaca indeks 0, 1, dan 2.
+
+## Versi playground
+
+Playground tidak bisa membaca input, jadi jumlah barang di-hardcode menjadi 3. Kode perhitungannya sama.
+
+<RustPlayground
+  code={`fn hitung_subtotal(harga: u32, jumlah: u32) -> u32 {
+    harga * jumlah
+}
+
+fn hitung_diskon(subtotal: u32) -> u32 {
+    if subtotal >= 40_000 {
+        subtotal * 10 / 100
+    } else {
+        0
+    }
+}
+
+fn main() {
+    println!("========================================");
+    println!("           KASIR WARUNG BU SRI");
+    println!("        Jl. Melati No. 12, Bandung");
+    println!("========================================");
+
+    let jumlah_barang: usize = 3;
+    let daftar_harga = [12_000, 8_000, 15_000];
+    let daftar_jumlah = [1, 2, 1];
+
+    let mut subtotal = 0;
+
+    for i in 0..jumlah_barang {
+        let baris = hitung_subtotal(daftar_harga[i], daftar_jumlah[i]);
+        subtotal += baris;
+        println!("Item {}: Rp{baris}", i + 1);
+    }
+
+    let diskon = hitung_diskon(subtotal);
+    let total = subtotal - diskon;
+
+    println!("----------------------------------------");
+    println!("Subtotal: Rp{subtotal}");
+    println!("Diskon:   Rp{diskon}");
+    println!("Total:    Rp{total}");
+    println!("========================================");
+}`}
+  filename="src/main.rs"
+  label="Menghitung subtotal, diskon, dan total Kasir Warung"
+/>
+
+Output yang diharapkan:
+
+```text
+========================================
+           KASIR WARUNG BU SRI
+        Jl. Melati No. 12, Bandung
+========================================
+Item 1: Rp12000
+Item 2: Rp16000
+Item 3: Rp15000
+----------------------------------------
+Subtotal: Rp43000
+Diskon:   Rp4300
+Total:    Rp38700
+========================================
+```
+
+Subtotal 43.000 melewati ambang 40.000, jadi diskon 10 persennya 4.300. Total yang dibayar 38.700.
+
+## Keadaan setelah Bab 3
+
+Program sekarang punya alur lengkap dari header sampai total:
+
+1. Mencetak header warung.
+2. Meminta jumlah barang dan memvalidasinya.
+3. Menghitung setiap baris item dari array harga dan jumlah.
+4. Menjumlahkan subtotal dengan loop.
+5. Menghitung diskon dengan `if`.
+6. Mencetak subtotal, diskon, dan total.
+
+Yang belum ada: input harga dari kasir, nama item, dan daftar barang yang panjangnya bebas. Bab 5 akan memperkenalkan struct untuk mengelompokkan data item. Bab 8 akan memperkenalkan `Vec` untuk daftar yang bisa bertambah.
+
+:::caution[Hati-hati]
+Array `daftar_harga` dan `daftar_jumlah` harus punya panjang yang sama. Kalau salah satu lebih pendek, indeks bisa melewati batas dan program panic. Loop `for i in 0..jumlah_barang` juga bergantung pada `jumlah_barang` yang sudah divalidasi maksimal 3.
+:::
+
+:::tip[Tips]
+Simpan uang dalam satuan rupiah utuh dengan integer, bukan floating point. Penjumlahan integer tidak punya pembulatan pecahan yang bisa membuat total meleset beberapa rupiah.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa tipe nilai balik fungsi hitung_subtotal?',
+      options: ['u32', 'bool', 'String', '()'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Signature-nya -> u32.',
+        'Salah. Fungsi mengembalikan hasil perkalian, bukan boolean.',
+        'Salah. Fungsi tidak mengembalikan teks.',
+        'Salah. Unit () berarti tidak ada nilai balik.',
+      ],
+      explanation:
+        'harga dan jumlah bertipe u32, dan hasil perkaliannya juga u32.',
+    },
+    {
+      question: 'Mengapa jumlah_barang memakai usize?',
+      options: [
+        'Karena nilainya dipakai sebagai indeks array',
+        'Karena usize selalu lebih cepat dari u32',
+        'Karena semua input terminal bertipe usize',
+        'Karena usize bisa menyimpan teks',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Indeks array di Rust bertipe usize.',
+        'Salah. Kecepatan bukan alasan utamanya.',
+        'Salah. parse bisa menghasilkan tipe angka lain sesuai anotasi.',
+        'Salah. usize adalah tipe angka, bukan teks.',
+      ],
+      explanation:
+        'Memakai usize sejak awal menghindari konversi tipe saat mengakses daftar_harga[i].',
+    },
+    {
+      question: 'Kapan diskon 10 persen diberikan?',
+      options: [
+        'Saat subtotal minimal 40.000',
+        'Saat jumlah barang lebih dari 3',
+        'Saat total lebih kecil dari subtotal',
+        'Selalu, berapa pun subtotalnya',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Fungsi hitung_diskon memeriksa subtotal >= 40_000.',
+        'Salah. Jumlah barang dibatasi 1 sampai 3.',
+        'Salah. Total selalu lebih kecil atau sama dengan subtotal saat ada diskon.',
+        'Salah. Ada cabang else yang mengembalikan 0.',
+      ],
+      explanation:
+        'Diskon hanya dihitung kalau kondisi if bernilai true. Kalau tidak, diskonnya 0.',
+    },
+    {
+      question: 'Apa fungsi for i in 0..jumlah_barang pada kode ini?',
+      options: [
+        'Menelusuri indeks array sesuai jumlah barang yang dipilih',
+        'Mengulang validasi input',
+        'Menghitung diskon',
+        'Mengubah usize menjadi u32',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Loop memakai indeks 0 sampai jumlah_barang - 1 untuk membaca array.',
+        'Salah. Validasi sudah selesai sebelum loop.',
+        'Salah. Diskon dihitung setelah loop.',
+        'Salah. Loop tidak melakukan konversi tipe.',
+      ],
+      explanation:
+        'Karena jumlah barang maksimal 3, loop membaca elemen array yang sesuai tanpa melewati batas.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

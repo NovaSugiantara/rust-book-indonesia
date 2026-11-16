@@ -1,0 +1,32 @@
+---
+import Default from '@astrojs/starlight/components/Footer.astro';
+---
+
+<Default />
+
+<p class="book-attribution">
+  Situs ini adaptasi dari <a href="https://doc.rust-lang.org/stable/book/">The Rust Programming Language</a>{' '}
+  oleh Steve Klabnik, Carol Nichols, dan Chris Krycho, dengan kontribusi dari komunitas Rust.
+  Buku aslinya dilisensikan MIT atau Apache-2.0.
+</p>
+
+<style>
+  .book-attribution {
+    margin: 0.5rem auto 2rem;
+    max-width: 70ch;
+    text-align: center;
+    font-size: var(--sl-text-xs);
+    line-height: 1.6;
+    color: var(--sl-color-gray-3);
+  }
+
+  .book-attribution a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+
+  .book-attribution a:hover {
+    color: var(--sl-color-text-accent);
+  }
+</style>

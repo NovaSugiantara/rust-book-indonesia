@@ -1,0 +1,109 @@
+---
+title: '2.1 Menyiapkan proyek'
+description: 'Membuat proyek guessing_game dengan Cargo dan menjalankan program bawaan.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Kita mulai dari proyek kosong. Masuk ke folder tempat kamu menyimpan proyek, lalu buat proyek baru bernama `guessing_game`.
+
+```console
+$ cargo new guessing_game
+$ cd guessing_game
+```
+
+Cargo membuat folder proyek, `Cargo.toml`, folder `src` dengan `main.rs`, dan `.gitignore`. Isi `Cargo.toml` kurang lebih seperti ini:
+
+```toml
+[package]
+name = "guessing_game"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+```
+
+Bagian `[dependencies]` masih kosong karena proyek ini belum memakai crate eksternal. Kita akan menambah satu dependency di halaman angka rahasia.
+
+## Program bawaan Cargo
+
+Buka `src/main.rs`. Cargo sudah mengisi file itu dengan program `Hello, world!`:
+
+<RustPlayground
+  code={`fn main() {
+    println!("Hello, world!");
+}`}
+  filename="src/main.rs"
+/>
+
+Jalankan proyek dari folder `guessing_game`:
+
+```console
+$ cargo run
+   Compiling guessing_game v0.1.0 (file:///projects/guessing_game)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.45s
+     Running `target/debug/guessing_game`
+Hello, world!
+```
+
+Perintah `cargo run` mengompilasi kode lalu menjalankan hasilnya. Selama mengembangkan game, kamu akan memakai perintah ini berkali-kali. Cargo hanya mengompilasi ulang bagian yang berubah, jadi putaran berikutnya biasanya lebih cepat.
+
+:::tip[Tips]
+Kalau kamu hanya ingin memeriksa error tanpa menjalankan program, pakai `cargo check`. Saat sedang mengubah banyak baris, `cargo check` lebih cepat daripada `cargo run`.
+:::
+
+## Satu file untuk sementara
+
+Semua kode game di bab ini ditulis di `src/main.rs`. Untuk proyek kecil, satu file sudah cukup. Bab 7 akan membahas cara memecah proyek menjadi beberapa module ketika ukurannya bertambah.
+
+Ganti isi `src/main.rs` sedikit demi sedikit mengikuti halaman berikutnya. Jangan menyalin seluruh kode final sekaligus. Kamu akan kehilangan kesempatan melihat bagaimana setiap bagian bekerja.
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Perintah mana yang membuat proyek guessing_game?',
+      options: ['cargo new guessing_game', 'cargo run guessing_game', 'rustc guessing_game', 'cargo add guessing_game'],
+      answer: 0,
+      optionNotes: [
+        'Benar. cargo new membuat folder dan file proyek baru.',
+        'Salah. cargo run dipakai setelah proyek ada.',
+        'Salah. rustc mengompilasi file, bukan membuat proyek Cargo.',
+        'Salah. cargo add menambahkan dependency ke proyek yang sudah ada.',
+      ],
+      explanation:
+        'cargo new <nama> membuat proyek baru beserta Cargo.toml dan src/main.rs.',
+    },
+    {
+      question: 'Perintah mana yang mengompilasi sekaligus menjalankan proyek?',
+      options: ['cargo run', 'cargo new', 'cargo init', 'cargo doc'],
+      answer: 0,
+      optionNotes: [
+        'Benar. cargo run menjalankan build lalu mengeksekusi binary hasilnya.',
+        'Salah. cargo new membuat proyek baru.',
+        'Salah. cargo init menambahkan Cargo ke folder yang sudah berisi kode.',
+        'Salah. cargo doc membuat dokumentasi.',
+      ],
+      explanation:
+        'cargo run adalah jalan pintas untuk build dan menjalankan binary dalam satu perintah.',
+    },
+    {
+      question: 'Di mana kode program utama proyek ini berada?',
+      options: ['src/main.rs', 'Cargo.toml', 'target/debug/guessing_game', 'Cargo.lock'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Kode sumber berada di src/main.rs.',
+        'Salah. Cargo.toml berisi konfigurasi package.',
+        'Salah. Itu binary hasil kompilasi.',
+        'Salah. Cargo.lock mencatat versi dependency.',
+      ],
+      explanation:
+        'Cargo mengharapkan kode sumber di dalam src. File main.rs menjadi titik masuk program binary.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

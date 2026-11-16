@@ -1,0 +1,240 @@
+---
+title: '3.3 Fungsi'
+description: 'Mendefinisikan fungsi, parameter, nilai balik, serta membedakan statement dan expression.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Fungsi adalah blok kode yang punya nama dan bisa dipanggil. Kamu sudah memakai satu fungsi penting sejak Bab 1: `main`, titik masuk program. Sekarang kita membuat fungsi sendiri.
+
+Rust memakai snake case untuk nama fungsi dan variabel: huruf kecil semua, dengan garis bawah antar kata. Contohnya `hitung_total`, bukan `HitungTotal`.
+
+## Mendefinisikan dan memanggil fungsi
+
+Fungsi dideklarasikan dengan `fn`, diikuti nama, tanda kurung, dan body di dalam kurung kurawal.
+
+<RustPlayground
+  code={`fn main() {
+    println!("Hello, world!");
+
+    another_function();
+}
+
+fn another_function() {
+    println!("Another function.");
+}`}
+  filename="src/main.rs"
+  label="Mendefinisikan dan memanggil fungsi"
+/>
+
+Urutan definisi tidak penting. `another_function` didefinisikan setelah `main`, tetapi tetap bisa dipanggil karena berada di scope yang sama.
+
+## Parameter
+
+Parameter adalah variabel yang menjadi bagian dari signature fungsi. Tipe setiap parameter wajib ditulis.
+
+<RustPlayground
+  code={`fn main() {
+    another_function(5);
+}
+
+fn another_function(x: i32) {
+    println!("The value of x is: {x}");
+}`}
+  filename="src/main.rs"
+  label="Fungsi dengan satu parameter"
+/>
+
+Kalau ada beberapa parameter, pisahkan dengan koma:
+
+<RustPlayground
+  code={`fn main() {
+    print_labeled_measurement(5, 'h');
+}
+
+fn print_labeled_measurement(value: i32, unit_label: char) {
+    println!("The measurement is: {value}{unit_label}");
+}`}
+  filename="src/main.rs"
+  label="Fungsi dengan dua parameter"
+/>
+
+Anotasi tipe di signature membuat compiler tahu nilai apa yang boleh dikirim. Compiler juga bisa memberi pesan error yang lebih tepat saat pemanggilan salah tipe.
+
+## Statement dan expression
+
+Function body terdiri dari statement, expression, atau keduanya.
+
+- Statement melakukan sesuatu dan tidak menghasilkan nilai.
+- Expression menghasilkan nilai.
+
+`let y = 6;` adalah statement. `5 + 6` adalah expression yang menghasilkan 11. Memanggil fungsi adalah expression. Memanggil makro juga expression.
+
+Blok kurung kurawal juga bisa menjadi expression:
+
+<RustPlayground
+  code={`fn main() {
+    let y = {
+        let x = 3;
+        x + 1
+    };
+
+    println!("The value of y is: {y}");
+}`}
+  filename="src/main.rs"
+  label="Blok sebagai expression"
+/>
+
+Baris `x + 1` tidak diakhiri titik koma. Tanpa titik koma, baris itu menjadi expression yang menghasilkan nilai untuk blok. Kalau ditambah titik koma, nilainya menjadi statement dan blok mengembalikan unit.
+
+Statement tidak bisa dipakai sebagai nilai. Kode berikut sengaja salah:
+
+<RustPlayground
+  code={`fn main() {
+    let x = (let y = 6);
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error statement dipakai sebagai nilai"
+/>
+
+Compiler melaporkan bahwa `let` bukan expression di posisi itu. Di Rust, assignment tidak mengembalikan nilai seperti di beberapa bahasa lain.
+
+## Nilai balik
+
+Fungsi bisa mengembalikan nilai. Tipe nilai balik ditulis setelah `->`. Nilai balik adalah nilai expression terakhir di body fungsi, kecuali kamu memakai `return` lebih awal.
+
+<RustPlayground
+  code={`fn five() -> i32 {
+    5
+}
+
+fn main() {
+    let x = five();
+
+    println!("The value of x is: {x}");
+}`}
+  filename="src/main.rs"
+  label="Fungsi yang mengembalikan nilai"
+/>
+
+Fungsi `five` hanya berisi angka 5 tanpa titik koma. Angka itu adalah expression terakhir, jadi nilainya dikembalikan.
+
+<RustPlayground
+  code={`fn main() {
+    let x = plus_one(5);
+
+    println!("The value of x is: {x}");
+}
+
+fn plus_one(x: i32) -> i32 {
+    x + 1
+}`}
+  filename="src/main.rs"
+  label="Fungsi dengan parameter dan nilai balik"
+/>
+
+Kalau `x + 1` diberi titik koma, fungsi tidak lagi mengembalikan `i32`:
+
+<RustPlayground
+  code={`fn main() {
+    let x = plus_one(5);
+
+    println!("The value of x is: {x}");
+}
+
+fn plus_one(x: i32) -> i32 {
+    x + 1;
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error titik koma mengubah expression menjadi statement"
+/>
+
+Compiler akan menyebut `mismatched types`: fungsi menjanjikan `i32`, tetapi body-nya menghasilkan `()`. Pesan help biasanya menyarankan menghapus titik koma.
+
+:::caution[Hati-hati]
+Titik koma mengubah expression menjadi statement. Di akhir fungsi yang mengembalikan nilai, titik koma yang tidak sengaja bisa menjadi sumber error yang membingungkan.
+:::
+
+:::note[Kenapa begini?]
+Rust berbasis expression. Banyak hal yang di bahasa lain berupa statement, seperti `if` dan blok, di Rust menghasilkan nilai. Aturan ini membuat kode lebih ringkas, tetapi menuntut kamu memperhatikan titik koma.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang wajib ada pada signature parameter fungsi?',
+      options: ['Anotasi tipe', 'Nilai default', 'Kata kunci mut', 'Titik koma'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Setiap parameter harus punya tipe.',
+        'Salah. Rust tidak memakai nilai default pada parameter.',
+        'Salah. mut hanya perlu kalau parameter diubah di dalam fungsi.',
+        'Salah. Titik koma bukan bagian dari signature parameter.',
+      ],
+      explanation:
+        'Signature fungsi mendeklarasikan tipe parameter dan nilai balik. Compiler memakai informasi itu untuk memeriksa pemanggilan.',
+    },
+    {
+      question: 'Apa perbedaan statement dan expression?',
+      options: [
+        'Expression menghasilkan nilai, statement tidak',
+        'Statement selalu lebih cepat',
+        'Expression hanya ada di dalam main',
+        'Statement tidak boleh memakai variabel',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Expression dievaluasi menjadi nilai. Statement melakukan aksi tanpa nilai.',
+        'Salah. Kecepatan bukan pembeda utamanya.',
+        'Salah. Expression bisa muncul di banyak tempat.',
+        'Salah. Statement boleh memakai variabel.',
+      ],
+      explanation:
+        'Blok dan pemanggilan fungsi adalah expression. let adalah statement.',
+    },
+    {
+      question: 'Apa yang terjadi kalau x + 1 di akhir fungsi -> i32 diberi titik koma?',
+      options: [
+        'Fungsi mengembalikan unit dan compiler melaporkan mismatched types',
+        'Nilai tetap dikembalikan seperti biasa',
+        'Compiler mengubah tipe balik menjadi String',
+        'Program berjalan tetapi mencetak 0',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Titik koma membuat baris itu statement, sehingga body tidak menghasilkan i32.',
+        'Salah. Titik koma mengubah expression menjadi statement.',
+        'Salah. Compiler tidak mengganti tipe balik otomatis.',
+        'Salah. Kode gagal dikompilasi.',
+      ],
+      explanation:
+        'Nilai balik fungsi adalah expression terakhir. Menambahkan titik koma menghilangkan nilai itu.',
+    },
+    {
+      question: 'Di mana fungsi harus didefinisikan agar bisa dipanggil?',
+      options: [
+        'Di scope yang bisa dilihat pemanggil, urutan tidak penting',
+        'Selalu sebelum main',
+        'Hanya di dalam main',
+        'Di file terpisah dengan nama yang sama',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rust tidak peduli urutan definisi selama fungsinya berada di scope yang terlihat.',
+        'Salah. Fungsi boleh didefinisikan setelah main.',
+        'Salah. Fungsi bisa berada di luar main.',
+        'Salah. Nama file tidak menentukan visibilitas fungsi.',
+      ],
+      explanation:
+        'Contoh another_function didefinisikan setelah main dan tetap bisa dipanggil.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

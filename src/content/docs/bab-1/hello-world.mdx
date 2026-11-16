@@ -1,0 +1,203 @@
+---
+title: '1.2 Hello, World!'
+description: 'Menulis, mengompilasi, dan menjalankan program Rust pertama, lalu membedah setiap bagiannya.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Setelah Rust terpasang, waktunya menulis program pertama. Tradisi saat belajar bahasa baru adalah mencetak `Hello, world!` ke layar. Kita ikuti tradisi itu, lalu membedah kodenya satu per satu.
+
+## Menyiapkan folder proyek
+
+Rust tidak peduli di mana kode kamu disimpan. Meski begitu, menyimpan semua proyek di satu tempat membuat hidup lebih mudah. Buku asli menyarankan folder `projects` di home directory.
+
+Di Linux, macOS, dan PowerShell:
+
+```console
+$ mkdir ~/projects
+$ cd ~/projects
+$ mkdir hello_world
+$ cd hello_world
+```
+
+Di Windows Command Prompt, perintahnya sedikit berbeda:
+
+```cmd
+> mkdir "%USERPROFILE%\projects"
+> cd /d "%USERPROFILE%\projects"
+> mkdir hello_world
+> cd hello_world
+```
+
+Nama folder memakai huruf kecil dan garis bawah. Itu konvensi, bukan aturan compiler. Folder `hello world` dengan spasi tetap bisa dipakai, tetapi mengetiknya di terminal jadi lebih merepotkan.
+
+## Menulis file pertama
+
+Buat file bernama `main.rs` di dalam folder `hello_world`, lalu isi dengan kode berikut:
+
+<RustPlayground
+  code={`fn main() {
+    println!("Hello, world!");
+}`}
+  filename="main.rs"
+/>
+
+File sumber Rust selalu berakhir dengan `.rs`. Kalau nama file terdiri dari beberapa kata, gunakan garis bawah, misalnya `hello_world.rs`, bukan `helloworld.rs`. Compiler tidak melarang nama tanpa garis bawah, tetapi komunitas Rust memakai garis bawah.
+
+## Mengompilasi dan menjalankan
+
+Dari folder `hello_world`, jalankan:
+
+```console
+$ rustc main.rs
+$ ./main
+Hello, world!
+```
+
+Di Windows, jalankan binary dengan `.\main`. Kalau berhasil, `Hello, world!` muncul di terminal. Kamu baru saja menulis dan menjalankan program Rust pertama.
+
+Kalau program gagal dikompilasi, baca pesan error dari baris pertama. Compiler Rust biasanya menyebut lokasi masalah, penyebabnya, dan kadang memberi saran perbaikan. Pesan itu panjang, tetapi bagian yang paling berguna ada di dekat awal.
+
+## Membedah program
+
+Kita mulai dari kerangka fungsi:
+
+<RustPlayground
+  code={`fn main() {}`}
+  editable={false}
+  filename="main.rs"
+  label="Fungsi main kosong"
+/>
+
+Baris `fn main()` mendeklarasikan fungsi bernama `main`. Fungsi ini istimewa: pada setiap program Rust yang bisa dijalankan, `main` adalah kode pertama yang dipanggil. Tanda `()` menandakan fungsi ini tidak menerima parameter. Kalau ada parameter, isinya ditulis di dalam tanda kurung itu.
+
+Isi fungsi dibungkus kurung kurawal `{}`. Rust mewajibkan kurung kurawal untuk setiap body fungsi. Gaya yang lazim adalah membuka kurung kurawal di baris yang sama dengan deklarasi, dengan satu spasi di antaranya.
+
+Sekarang isi fungsinya:
+
+```rust
+println!("Hello, world!");
+```
+
+Baris ini mencetak teks ke layar. Ada tiga hal yang perlu diperhatikan.
+
+Pertama, `println!` memanggil makro, bukan fungsi biasa. Kalau ini fungsi, namanya akan ditulis `println` tanpa tanda seru. Makro adalah kode yang menghasilkan kode lain, dan aturannya tidak selalu sama dengan fungsi. Kita akan membahas makro lebih dalam di Bab 20. Untuk sekarang, cukup ingat bahwa tanda `!` menandakan pemanggilan makro.
+
+Kedua, `"Hello, world!"` adalah string yang diberikan sebagai argumen. `println!` mencetak isi string itu ke stdout, yaitu aliran output standar di terminal.
+
+Ketiga, baris diakhiri titik koma. Titik koma menandai bahwa satu pernyataan selesai dan pernyataan berikutnya boleh dimulai. Sebagian besar baris Rust berakhir dengan titik koma, meskipun ada pengecualian yang akan kamu temui nanti.
+
+:::tip[Tips]
+Rust menyertakan `rustfmt`, formatter otomatis. Jalankan `rustfmt main.rs` untuk merapikan indentasi dan spasi. Kebanyakan editor juga bisa menjalankan `rustfmt` setiap kali file disimpan.
+:::
+
+## Compile dan run adalah dua langkah
+
+Perintah `rustc main.rs` menjalankan compiler. Kalau berhasil, Rust menghasilkan file binary. Di Linux dan macOS, isi foldernya menjadi:
+
+```console
+$ ls
+main  main.rs
+```
+
+Di Windows, kamu akan melihat `main.exe`, `main.pdb`, dan `main.rs`. File `.pdb` menyimpan informasi debugging.
+
+Binary itu bisa dijalankan dengan `./main` di Linux atau macOS, dan `.\main` di Windows. Setelah dikompilasi, binary tidak membutuhkan Rust lagi. Kamu bisa mengirimnya ke komputer lain yang sistem operasinya sama, dan program tetap jalan.
+
+:::note[Kenapa begini?]
+Rust adalah bahasa yang dikompilasi ahead-of-time. Kode diubah menjadi mesin native sebelum program dijalankan. Ini berbeda dari Ruby, Python, atau JavaScript yang membutuhkan runtime bahasa saat program berjalan. Masing-masing punya trade-off: compile terpisah menambah satu langkah, tetapi menghasilkan program yang bisa berdiri sendiri dan biasanya lebih cepat.
+:::
+
+## Ketika kode salah
+
+Compiler Rust cerewet, dan itu kabar baik. Coba jalankan contoh berikut. Kode ini sengaja salah karena memanggil `println` tanpa tanda seru.
+
+<RustPlayground
+  code={`fn main() {
+    println("Hello, world!");
+}`}
+  expectError
+  filename="main.rs"
+  label="Contoh error karena lupa tanda seru pada makro"
+/>
+
+Klik Jalankan, lalu baca pesan errornya. Compiler akan mengatakan bahwa fungsi `println` tidak ditemukan, dan biasanya memberi petunjuk bahwa ada makro dengan nama mirip. Kesalahan kecil seperti ini adalah cara tercepat untuk memahami perbedaan fungsi dan makro.
+
+## Eksperimen
+
+Ubah isi string pada contoh pertama. Ganti `Hello, world!` dengan kalimatmu sendiri, lalu klik Jalankan lagi. Kamu juga bisa menambah beberapa baris `println!` untuk mencetak lebih dari satu baris.
+
+Kalau kamu mengubah kode di playground, tautan Buka di Playground ikut membawa versi terbaru. Gunakan itu kalau ingin menyimpan atau membagikan kode di luar halaman ini.
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa ekstensi file sumber Rust?',
+      options: ['.rs', '.rust', '.rlib', '.toml'],
+      answer: 0,
+      optionNotes: [
+        'Benar. File sumber Rust memakai ekstensi .rs.',
+        'Salah. .rust bukan ekstensi yang dikenali rustc.',
+        'Salah. .rlib adalah format library hasil kompilasi.',
+        'Salah. .toml dipakai untuk konfigurasi seperti Cargo.toml.',
+      ],
+      explanation:
+        'rustc mengharapkan file sumber dengan ekstensi .rs. Contohnya main.rs atau hello_world.rs.',
+    },
+    {
+      question: 'Fungsi mana yang menjadi titik masuk program Rust yang bisa dijalankan?',
+      options: ['main', 'start', 'run', 'init'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Eksekusi dimulai dari fungsi main.',
+        'Salah. start bukan nama fungsi khusus di Rust.',
+        'Salah. run bukan titik masuk program.',
+        'Salah. init bukan titik masuk program.',
+      ],
+      explanation:
+        'Setiap program executable Rust membutuhkan fungsi main. Di dalamnya kamu memanggil kode lain yang menyusun program.',
+    },
+    {
+      question: 'Apa arti tanda seru pada println!?',
+      options: [
+        'Itu pemanggilan makro, bukan fungsi biasa',
+        'Itu penanda bahwa baris harus diakhiri titik koma',
+        'Itu operator negasi',
+        'Itu cara mengimpor standard library',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Tanda seru menandakan makro.',
+        'Salah. Titik koma tetap ditulis terpisah di akhir pernyataan.',
+        'Salah. Operator negasi memakai ! di depan nilai, bukan di belakang nama.',
+        'Salah. Impor memakai use, bukan tanda seru.',
+      ],
+      explanation:
+        'println! adalah makro. Makro bisa menerima argumen dengan aturan khusus dan menghasilkan kode saat kompilasi.',
+    },
+    {
+      question: 'Setelah rustc main.rs berhasil, apa yang dihasilkan compiler?',
+      options: [
+        'File binary yang bisa dijalankan tanpa Rust terpasang',
+        'File sumber baru dengan ekstensi .rs',
+        'File Cargo.toml',
+        'File dokumentasi HTML',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Hasilnya executable native untuk sistem operasi yang sama.',
+        'Salah. Compiler tidak membuat file sumber baru.',
+        'Salah. Cargo.toml hanya dibuat oleh Cargo, bukan rustc.',
+        'Salah. Dokumentasi HTML dibuat oleh rustdoc.',
+      ],
+      explanation:
+        'rustc menghasilkan binary di folder yang sama untuk program satu file. Karena sudah native, binary tidak membutuhkan runtime Rust.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

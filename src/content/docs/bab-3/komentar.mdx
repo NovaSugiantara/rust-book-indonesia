@@ -1,0 +1,131 @@
+---
+title: '3.4 Komentar'
+description: 'Menulis komentar satu baris dan multi-baris yang diabaikan compiler.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Komentar adalah teks di dalam kode yang diabaikan compiler. Komentar berguna untuk menjelaskan alasan, memberi catatan, atau menandai bagian yang perlu diperhatikan manusia.
+
+Komentar bukan pengganti nama yang jelas. Kalau sebuah fungsi bisa dijelaskan hanya dengan nama dan struktur yang baik, komentar tambahan mungkin tidak perlu.
+
+## Komentar satu baris
+
+Komentar di Rust dimulai dengan dua garis miring dan berlanjut sampai akhir baris.
+
+```rust
+// hello, world
+```
+
+Komentar bisa diletakkan di akhir baris berisi kode:
+
+<RustPlayground
+  code={`fn main() {
+    let lucky_number = 7; // Saya sedang merasa beruntung
+    println!("{lucky_number}");
+}`}
+  filename="src/main.rs"
+  label="Komentar di akhir baris kode"
+/>
+
+Komentar juga sering diletakkan di baris sendiri, tepat di atas kode yang dijelaskan:
+
+<RustPlayground
+  code={`fn main() {
+    // Angka ini hanya contoh, bukan hasil pengukuran.
+    let lucky_number = 7;
+
+    println!("{lucky_number}");
+}`}
+  filename="src/main.rs"
+  label="Komentar di atas baris kode"
+/>
+
+Program tetap berjalan sama. Komentar tidak mengubah nilai atau output.
+
+## Komentar beberapa baris
+
+Rust tidak punya sintaks komentar blok khusus seperti beberapa bahasa lain. Untuk komentar beberapa baris, tulis `//` di setiap baris.
+
+```rust
+// Langkah ini sengaja dipisah supaya mudah dibaca.
+// Nilai awalnya diambil dari contoh, bukan dari input.
+// Ganti nilainya kalau kamu ingin mencoba kasus lain.
+let nilai_awal = 10;
+```
+
+Kalau kamu lupa menulis `//` di salah satu baris, baris itu dianggap kode. Compiler akan mencoba mengompilasinya dan mungkin memberi error.
+
+:::tip[Tips]
+Tulis alasan, bukan mengulang isi kode. `// tambah 1 ke x` tidak menambah informasi. `// x adalah jumlah percobaan, mulai dari 1` menjelaskan maksud.
+:::
+
+## Komentar dokumentasi
+
+Rust juga punya komentar dokumentasi, yang dimulai dengan tiga garis miring `///`. Komentar ini dipakai untuk menghasilkan dokumentasi API dengan `cargo doc`.
+
+Bab ini belum membahas komentar dokumentasi secara detail. Itu dibahas saat kita membahas publikasi crate di Bab 14.
+
+:::note[Kenapa begini?]
+Komentar biasa diabaikan sepenuhnya oleh compiler. Komentar dokumentasi juga diabaikan saat program berjalan, tetapi dibaca oleh `rustdoc` untuk membuat halaman dokumentasi. Keduanya punya tujuan berbeda.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Bagaimana cara memulai komentar satu baris di Rust?',
+      options: ['//', '#', '/*', '--'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Dua garis miring memulai komentar sampai akhir baris.',
+        'Salah. # dipakai untuk atribut, bukan komentar biasa.',
+        'Salah. /* bukan sintaks komentar Rust.',
+        'Salah. -- bukan sintaks komentar Rust.',
+      ],
+      explanation:
+        'Komentar Rust memakai //. Semua teks setelahnya di baris itu diabaikan compiler.',
+    },
+    {
+      question: 'Apa yang dilakukan compiler terhadap komentar?',
+      options: [
+        'Mengabaikannya saat kompilasi',
+        'Mengubahnya menjadi output program',
+        'Menyimpannya sebagai variabel',
+        'Menjalankannya sebagai kode',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Komentar tidak ikut dikompilasi menjadi instruksi program.',
+        'Salah. Komentar tidak dicetak.',
+        'Salah. Komentar bukan data program.',
+        'Salah. Komentar tidak dieksekusi.',
+      ],
+      explanation:
+        'Komentar ditujukan untuk manusia yang membaca kode, bukan untuk compiler.',
+    },
+    {
+      question: 'Bagaimana cara menulis komentar beberapa baris?',
+      options: [
+        'Tulis // di setiap baris',
+        'Tulis /* di awal dan */ di akhir',
+        'Tulis # di setiap baris',
+        'Tulis -- di setiap baris',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rust memakai // per baris, tidak punya komentar blok khusus.',
+        'Salah. /* */ bukan sintaks komentar Rust.',
+        'Salah. # bukan komentar.',
+        'Salah. -- bukan komentar.',
+      ],
+      explanation:
+        'Kalau satu baris tidak diawali //, baris itu dianggap kode dan akan diperiksa compiler.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

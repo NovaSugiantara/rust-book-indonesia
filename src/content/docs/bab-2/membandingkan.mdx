@@ -1,0 +1,220 @@
+---
+title: '2.4 Membandingkan tebakan'
+description: 'Mengubah input menjadi angka dan membandingkannya dengan angka rahasia memakai Ordering dan match.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Sekarang kita punya tebakan dari pemain dan angka rahasia. Langkah berikutnya adalah membandingkan keduanya. Di sinilah `match` mulai bekerja.
+
+## String bukan angka
+
+Tebakan dibaca sebagai `String`, sedangkan angka rahasia adalah angka. Rust tidak mengizinkan perbandingan langsung antara keduanya. Kode berikut sengaja salah:
+
+<RustPlayground
+  code={`use std::cmp::Ordering;
+
+fn main() {
+    let guess = String::from("50");
+    let secret_number = 38;
+
+    match guess.cmp(&secret_number) {
+        Ordering::Less => println!("Too small!"),
+        Ordering::Greater => println!("Too big!"),
+        Ordering::Equal => println!("You win!"),
+    }
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error membandingkan String dengan angka"
+/>
+
+Compiler akan melaporkan tipe yang tidak cocok. `cmp` membutuhkan dua nilai dengan tipe yang sama, dan `String` tidak sama dengan `i32`. Kita harus mengubah tebakan menjadi angka lebih dulu.
+
+## Mengubah String menjadi angka
+
+Tambahkan baris ini setelah `read_line`:
+
+```rust
+let guess: u32 = guess.trim().parse().expect("Please type a number!");
+```
+
+Ada tiga hal yang terjadi di baris itu.
+
+Pertama, `trim()` membuang spasi dan baris baru di awal dan akhir string. Saat pengguna mengetik `50` lalu menekan Enter, string berisi `50\n`. `trim()` mengubahnya menjadi `50`.
+
+Kedua, `parse()` mengubah string menjadi tipe angka. Karena `parse` bisa gagal, ia mengembalikan `Result`. Kita memberi tipe `u32` supaya Rust tahu angka jenis apa yang diinginkan. Tanpa anotasi tipe, compiler tidak bisa menebak apakah kamu ingin `u32`, `i32`, atau tipe angka lain.
+
+Ketiga, kita membuat variabel baru bernama `guess`. Nama itu sama dengan variabel `String` sebelumnya. Rust mengizinkan ini lewat shadowing. Variabel baru menutupi variabel lama, dan tipe keduanya boleh berbeda. Setelah baris ini, `guess` adalah angka, bukan string.
+
+:::note[Kenapa begini?]
+Shadowing berguna saat kamu mengubah nilai dari satu tipe ke tipe lain tanpa perlu nama seperti `guess_string` dan `guess_number`. Variabel lama tetap ada sampai scope-nya selesai, tetapi nama `guess` sekarang merujuk ke variabel baru.
+:::
+
+Kalau input bukan angka, `parse` mengembalikan `Err`, dan `.expect("Please type a number!")` akan menghentikan program. Di halaman loop, kita akan mengganti `expect` dengan `match` supaya program bisa meminta input lagi tanpa crash.
+
+## Ordering dan match
+
+Tambahkan import berikut di bagian atas file:
+
+```rust
+use std::cmp::Ordering;
+```
+
+Lalu bandingkan kedua angka:
+
+```rust
+match guess.cmp(&secret_number) {
+    Ordering::Less => println!("Too small!"),
+    Ordering::Greater => println!("Too big!"),
+    Ordering::Equal => println!("You win!"),
+}
+```
+
+`cmp` membandingkan dua nilai dan mengembalikan `Ordering`. `Ordering` punya tiga varian: `Less`, `Greater`, dan `Equal`. Nama-nama itu cukup jelas: tebakan lebih kecil, lebih besar, atau sama dengan angka rahasia.
+
+`match` memeriksa nilai dari `cmp` dan menjalankan arm pertama yang cocok. Setiap arm terdiri dari pattern dan kode yang dijalankan. Di contoh ini, ketiga kemungkinan `Ordering` ditangani. `match` harus lengkap. Kalau ada varian yang belum ditangani, compiler akan memberi error.
+
+`secret_number` tidak diberi anotasi tipe secara eksplisit di kode game. Karena dibandingkan dengan `guess: u32` lewat `cmp`, Rust menyimpulkan bahwa `secret_number` juga `u32`. Ini contoh type inference yang bekerja saat informasinya cukup.
+
+## Versi playground
+
+Contoh berikut memakai tebakan dan angka rahasia yang sudah diisi. Tidak ada `read_line`, jadi bisa dijalankan di playground. Coba ubah `"50"` menjadi `"38"` untuk melihat cabang `Equal`.
+
+<RustPlayground
+  code={`use std::cmp::Ordering;
+
+fn main() {
+    let guess: u32 = "50".trim().parse().expect("Please type a number!");
+    let secret_number: u32 = 38;
+
+    println!("You guessed: {guess}");
+
+    match guess.cmp(&secret_number) {
+        Ordering::Less => println!("Too small!"),
+        Ordering::Greater => println!("Too big!"),
+        Ordering::Equal => println!("You win!"),
+    }
+}`}
+  filename="src/main.rs"
+  label="Membandingkan tebakan dengan angka rahasia"
+/>
+
+Output untuk tebakan 50 dan angka rahasia 38 adalah `Too big!`.
+
+## Kode lokal sampai tahap ini
+
+Di komputer sendiri, `src/main.rs` sekarang berisi kode seperti ini. Bagian input masih memakai `read_line`, jadi jalankan dengan `cargo run`.
+
+```rust
+use std::cmp::Ordering;
+use std::io;
+
+use rand::prelude::*;
+
+fn main() {
+    println!("Guess the number!");
+
+    let secret_number = rand::rng().random_range(1..=100);
+
+    println!("The secret number is: {secret_number}");
+
+    println!("Please input your guess.");
+
+    let mut guess = String::new();
+
+    io::stdin()
+        .read_line(&mut guess)
+        .expect("Failed to read line");
+
+    let guess: u32 = guess.trim().parse().expect("Please type a number!");
+
+    println!("You guessed: {guess}");
+
+    match guess.cmp(&secret_number) {
+        Ordering::Less => println!("Too small!"),
+        Ordering::Greater => println!("Too big!"),
+        Ordering::Equal => println!("You win!"),
+    }
+}
+```
+
+Program ini masih hanya menerima satu tebakan. Setelah satu tebakan, program selesai. Halaman berikutnya menambahkan loop supaya pemain bisa mencoba lagi.
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dikembalikan oleh cmp?',
+      options: ['Ordering', 'bool', 'Result', 'String'],
+      answer: 0,
+      optionNotes: [
+        'Benar. cmp mengembalikan salah satu varian Ordering: Less, Greater, atau Equal.',
+        'Salah. bool hanya punya true dan false, tidak cukup untuk tiga hasil perbandingan.',
+        'Salah. cmp tidak mengembalikan Result.',
+        'Salah. cmp tidak mengembalikan teks.',
+      ],
+      explanation:
+        'Ordering menyatakan hasil perbandingan: lebih kecil, lebih besar, atau sama.',
+    },
+    {
+      question: 'Mengapa membandingkan String dengan u32 gagal dikompilasi?',
+      options: [
+        'Karena cmp membutuhkan dua nilai dengan tipe yang sama',
+        'Karena String tidak bisa dibaca',
+        'Karena u32 terlalu kecil',
+        'Karena cmp hanya bekerja pada teks',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Rust tidak mengubah String menjadi angka secara otomatis.',
+        'Salah. String bisa dibaca dan dicetak.',
+        'Salah. Ukuran u32 tidak menjadi penyebabnya.',
+        'Salah. cmp bisa dipakai pada banyak tipe, bukan hanya teks.',
+      ],
+      explanation:
+        'Tipe harus cocok. String perlu diubah menjadi angka dengan parse sebelum dibandingkan dengan angka rahasia.',
+    },
+    {
+      question: 'Apa fungsi trim sebelum parse?',
+      options: [
+        'Membuang spasi dan baris baru di awal dan akhir input',
+        'Mengubah huruf menjadi kapital',
+        'Menambahkan baris baru',
+        'Mengubah string menjadi angka',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. trim membersihkan whitespace di kedua ujung string.',
+        'Salah. trim tidak mengubah kapitalisasi.',
+        'Salah. trim justru membuang whitespace.',
+        'Salah. Konversi dilakukan oleh parse.',
+      ],
+      explanation:
+        'read_line menyertakan baris baru saat pengguna menekan Enter. trim membuangnya supaya parse hanya menerima angka.',
+    },
+    {
+      question: 'Apa yang terjadi kalau pengguna mengetik "abc" lalu parse dipanggil dengan expect?',
+      options: [
+        'Program panic dengan pesan dari expect',
+        'parse otomatis mengubah abc menjadi 0',
+        'Program mengulang input tanpa error',
+        'Compiler menolak kode sebelum program dijalankan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. parse mengembalikan Err, lalu expect menghentikan program.',
+        'Salah. parse tidak mengubah teks non-angka menjadi nol.',
+        'Salah. Pengulangan baru ditambahkan di halaman loop.',
+        'Salah. Kode seperti ini valid dan bisa dikompilasi.',
+      ],
+      explanation:
+        'parse bisa gagal saat program berjalan. expect adalah cara singkat untuk membuat program berhenti ketika hasilnya Err.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

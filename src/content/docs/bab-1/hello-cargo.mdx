@@ -1,0 +1,227 @@
+---
+title: '1.3 Hello, Cargo!'
+description: 'Membuat proyek dengan Cargo, mengenal Cargo.toml, dan memakai build, run, check, serta release.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Cargo adalah build system dan package manager Rust. Kalau `rustc` adalah compiler yang mengubah satu file, Cargo adalah alat yang mengatur seluruh proyek: mengompilasi kode, mengunduh library yang dibutuhkan, dan menjalankan test. Hampir semua proyek Rust memakai Cargo, termasuk proyek yang akan kita buat nanti.
+
+Program `Hello, world!` tadi tidak punya dependency. Cargo tetap berguna karena ia menyimpan konfigurasi proyek dan menyederhanakan perintah build. Begitu proyek bertambah besar, perbedaan antara memakai `rustc` langsung dan Cargo akan terasa jelas.
+
+Cargo ikut terpasang saat kamu memakai `rustup`. Pastikan ia tersedia:
+
+```console
+$ cargo --version
+```
+
+Kalau muncul nomor versi, Cargo siap. Kalau muncul `command not found`, kembali ke halaman instalasi dan periksa `PATH`.
+
+## Membuat proyek
+
+Dari folder `projects`, jalankan:
+
+```console
+$ cargo new hello_cargo
+$ cd hello_cargo
+```
+
+Perintah pertama membuat folder `hello_cargo` beserta isi proyeknya. Perintah kedua masuk ke folder itu. Cargo membuat tiga hal:
+
+- `Cargo.toml`, manifest proyek;
+- folder `src` berisi `main.rs`;
+- repositori Git baru beserta `.gitignore`, kecuali kamu menjalankan `cargo new` di dalam repositori Git yang sudah ada.
+
+Kalau kamu tidak ingin Cargo menyentuh Git, gunakan `cargo new --vcs none`. Opsi lain bisa dilihat dengan `cargo new --help`.
+
+## Isi Cargo.toml
+
+Buka `Cargo.toml`. Isinya kurang lebih seperti ini:
+
+```toml
+[package]
+name = "hello_cargo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+```
+
+Format ini bernama TOML, singkatan dari Tom's Obvious, Minimal Language. Cargo memakai TOML untuk konfigurasi.
+
+Bagian `[package]` mendefinisikan package yang sedang dibangun. Tiga baris di bawahnya mengatur nama, versi, dan edition Rust yang dipakai. Edition bukan versi compiler. Edition adalah kumpulan aturan bahasa yang bisa berubah antar generasi, sementara compiler stable tetap bisa mengompilasi edition lama. Kita memakai edition 2024 karena itu yang dihasilkan `cargo new` versi sekarang.
+
+Bagian `[dependencies]` adalah tempat menulis crate yang dibutuhkan proyek. Crate adalah paket kode Rust. Proyek `hello_cargo` belum membutuhkan crate lain, jadi bagian itu kosong.
+
+## Isi src/main.rs
+
+Cargo sudah membuat program `Hello, world!` untukmu:
+
+<RustPlayground
+  code={`fn main() {
+    println!("Hello, world!");
+}`}
+  filename="src/main.rs"
+/>
+
+Isinya sama dengan program yang kita tulis manual. Bedanya, Cargo menaruh kode di dalam `src`. Cargo mengharapkan file sumber berada di sana, sementara folder teratas dipakai untuk README, lisensi, konfigurasi, dan file lain yang bukan kode.
+
+Kalau kamu sudah punya proyek yang dibuat tanpa Cargo, kamu bisa menambahkan Cargo belakangan. Pindahkan kode ke `src`, lalu jalankan `cargo init` di folder proyek untuk membuat `Cargo.toml`.
+
+## Build dan run
+
+Dari folder `hello_cargo`, jalankan:
+
+```console
+$ cargo build
+   Compiling hello_cargo v0.1.0 (file:///projects/hello_cargo)
+    Finished dev [unoptimized + debuginfo] target(s) in 2.85s
+```
+
+Hasil build tidak diletakkan di folder saat ini. Cargo menaruhnya di `target/debug/hello_cargo` di Linux dan macOS, atau `target\debug\hello_cargo.exe` di Windows. Jalankan dengan:
+
+```console
+$ ./target/debug/hello_cargo
+Hello, world!
+```
+
+Build pertama juga membuat `Cargo.lock` di folder teratas. File itu mencatat versi persis setiap dependency. Untuk proyek tanpa dependency, isinya sedikit. Jangan edit `Cargo.lock` manual; Cargo yang mengelola file itu.
+
+Perintah `cargo build` lalu menjalankan binary secara terpisah terasa merepotkan. Cargo menyediakan jalan pintas:
+
+```console
+$ cargo run
+    Finished dev [unoptimized + debuginfo] target(s) in 0.00s
+     Running `target/debug/hello_cargo`
+Hello, world!
+```
+
+Kalau kode berubah, `cargo run` akan mengompilasi ulang lebih dulu. Kalau tidak ada perubahan, Cargo melewati kompilasi dan langsung menjalankan binary yang sudah ada.
+
+:::tip[Tips]
+Saat sedang menulis kode, jalankan `cargo check` lebih sering daripada `cargo build`. Perintah itu memeriksa error tipe dan sintaks tanpa menghasilkan binary, jadi jauh lebih cepat.
+:::
+
+## Memeriksa tanpa build
+
+`cargo check` memastikan kode bisa dikompilasi tanpa membuat executable:
+
+```console
+$ cargo check
+    Checking hello_cargo v0.1.0 (file:///projects/hello_cargo)
+    Finished dev [unoptimized + debuginfo] target(s) in 0.32s
+```
+
+Kenapa tidak selalu build? Karena menghasilkan binary memakan waktu. Saat kamu sedang mengubah kode bolak-balik, yang kamu butuhkan sering kali hanya jawaban apakah kodenya masih valid. Setelah selesai, baru jalankan `cargo build` atau `cargo run`.
+
+## Build untuk release
+
+Build biasa adalah build debug. Ia cepat dikompilasi dan menyimpan informasi debugging, tetapi programnya belum dioptimalkan. Saat proyek siap dibagikan, gunakan:
+
+```console
+$ cargo build --release
+```
+
+Hasilnya ada di `target/release`. Optimasi membuat program berjalan lebih cepat, tetapi proses kompilasinya lebih lama. Karena itu ada dua profil: debug untuk pengembangan sehari-hari, release untuk versi akhir.
+
+Kalau kamu mengukur performa program, ukur binary dari `target/release`, bukan dari `target/debug`.
+
+## Kebiasaan Cargo
+
+Cargo memberi struktur yang sama di semua sistem operasi. Perintah `cargo new`, `cargo build`, `cargo run`, dan `cargo check` bekerja sama di Linux, macOS, dan Windows. Perbedaan path binary tetap ada, tetapi perintahnya tidak berubah.
+
+Untuk proyek yang diambil dari Git, alurnya juga singkat:
+
+```console
+$ git clone example.org/someproject
+$ cd someproject
+$ cargo build
+```
+
+Cargo membaca `Cargo.toml`, mengunduh dependency yang tercatat, lalu membangun proyek. Kamu tidak perlu mengingat urutan compiler atau flag library.
+
+:::caution[Hati-hati]
+Folder `target` bisa sangat besar karena menyimpan hasil build untuk setiap profil. Jangan commit folder itu ke Git. `cargo new` sudah menambahkan `target` ke `.gitignore` supaya tidak ikut terkirim.
+:::
+
+:::note[Kenapa begini?]
+Cargo memisahkan hasil build di `target` agar folder proyek tetap bersih. Kamu bisa menghapus seluruh folder `target` kapan saja, lalu membangun ulang. Yang tidak boleh hilang adalah `Cargo.toml`, `Cargo.lock`, dan folder `src`.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Perintah mana yang membuat proyek Cargo baru bernama kasir_warung?',
+      options: [
+        'cargo new kasir_warung',
+        'cargo add kasir_warung',
+        'rustc new kasir_warung',
+        'cargo build kasir_warung',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. cargo new membuat folder dan proyek baru.',
+        'Salah. cargo add menambahkan dependency ke proyek yang sudah ada, bukan membuat proyek baru.',
+        'Salah. rustc tidak punya subperintah new.',
+        'Salah. cargo build membangun proyek, bukan membuatnya.',
+      ],
+      explanation:
+        'cargo new <nama> membuat folder proyek, Cargo.toml, src/main.rs, dan repositori Git bila memungkinkan.',
+    },
+    {
+      question: 'Di mana binary hasil cargo build versi debug berada?',
+      options: [
+        'target/debug/',
+        'src/debug/',
+        'bin/debug/',
+        'Di folder yang sama dengan Cargo.toml',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Cargo menaruh hasil build debug di target/debug.',
+        'Salah. src hanya untuk kode sumber.',
+        'Salah. Cargo tidak memakai folder bin untuk hasil build.',
+        'Salah. Hasil build tidak diletakkan di folder teratas proyek.',
+      ],
+      explanation:
+        'Cargo memisahkan artefak build di folder target. Profil debug masuk ke target/debug, profil release ke target/release.',
+    },
+    {
+      question: 'Apa keuntungan cargo check dibanding cargo build?',
+      options: [
+        'Lebih cepat karena tidak menghasilkan binary',
+        'Langsung menjalankan program',
+        'Mengunduh semua dependency tanpa kompilasi',
+        'Membuat versi release otomatis',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. cargo check berhenti setelah pemeriksaan tipe dan error.',
+        'Salah. Untuk menjalankan program, pakai cargo run.',
+        'Salah. Dependency tetap diunduh saat dibutuhkan, tetapi cargo check bukan alat khusus untuk itu.',
+        'Salah. Versi release dibuat dengan cargo build --release.',
+      ],
+      explanation:
+        'cargo check memeriksa apakah kode bisa dikompilasi tanpa langkah code generation dan linking. Cocok dipakai saat iterasi cepat.',
+    },
+    {
+      question: 'Flag apa yang dipakai untuk build dengan optimasi?',
+      options: ['--release', '--optimize', '--fast', '--production'],
+      answer: 0,
+      optionNotes: [
+        'Benar. cargo build --release memakai profil release.',
+        'Salah. Tidak ada flag --optimize di Cargo.',
+        'Salah. --fast bukan flag Cargo.',
+        'Salah. --production bukan flag Cargo.',
+      ],
+      explanation:
+        'Profil release mengaktifkan optimasi dan menaruh hasilnya di target/release. Waktu kompilasinya lebih lama daripada profil debug.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

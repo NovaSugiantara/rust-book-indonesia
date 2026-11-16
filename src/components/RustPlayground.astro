@@ -1,0 +1,357 @@
+---
+interface Props {
+  code: string;
+  editable?: boolean;
+  expectError?: boolean;
+  filename?: string;
+  edition?: '2021' | '2024';
+  label?: string;
+}
+
+const {
+  code,
+  editable = true,
+  expectError = false,
+  filename = 'main.rs',
+  edition = '2024',
+  label = 'Contoh kode Rust yang bisa dijalankan',
+} = Astro.props;
+
+const editorId = `playground-${Math.random().toString(36).slice(2, 10)}`;
+const initialUrl = `https://play.rust-lang.org/?version=stable&mode=debug&edition=${edition}&code=${encodeURIComponent(code)}`;
+---
+
+<section
+  class="rust-playground"
+  data-rust-playground
+  data-expect-error={expectError ? 'true' : 'false'}
+  data-edition={edition}
+  aria-label={label}
+>
+  <div class="rp-bar">
+    <span class="rp-file">{filename}</span>
+    <div class="rp-actions">
+      <a class="rp-open" data-rp-open href={initialUrl} target="_blank" rel="noopener noreferrer">
+        Buka di Playground
+      </a>
+      <button class="rp-run" type="button" data-rp-run>Jalankan</button>
+    </div>
+  </div>
+
+  {editable ? (
+    <textarea
+      id={editorId}
+      class="rp-editor"
+      data-rp-code
+      spellcheck="false"
+      autocapitalize="off"
+      autocomplete="off"
+      aria-label={`Kode Rust di ${filename}`}
+    >{code}</textarea>
+  ) : (
+    <pre class="rp-static"><code data-rp-code>{code}</code></pre>
+  )}
+
+  <div class="rp-output" data-rp-output hidden>
+    <p class="rp-status" data-rp-status role="status" aria-live="polite"></p>
+    <div class="rp-stream" data-rp-stdout-wrap hidden>
+      <span class="rp-stream-label">stdout</span>
+      <pre class="rp-stream-body" data-rp-stdout></pre>
+    </div>
+    <div class="rp-stream" data-rp-stderr-wrap hidden>
+      <span class="rp-stream-label">stderr</span>
+      <pre class="rp-stream-body" data-rp-stderr></pre>
+    </div>
+  </div>
+</section>
+
+<style>
+  .rust-playground {
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.6rem;
+    background: var(--sl-color-bg);
+    overflow: hidden;
+    margin: 1.5rem 0;
+  }
+
+  .rp-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--sl-color-gray-6);
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+
+  .rp-file {
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+  }
+
+  .rp-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .rp-open,
+  .rp-run {
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.85rem;
+    border-radius: 0.4rem;
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .rp-open {
+    color: var(--sl-color-text-accent);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+
+  .rp-run {
+    border: 1px solid transparent;
+    background: var(--sl-color-text-accent);
+    color: var(--sl-color-bg);
+    cursor: pointer;
+  }
+
+  .rp-run:disabled {
+    cursor: wait;
+    opacity: 0.7;
+  }
+
+  .rp-open:focus-visible,
+  .rp-run:focus-visible,
+  .rp-editor:focus-visible {
+    outline: 2px solid var(--sl-color-text-accent);
+    outline-offset: 2px;
+  }
+
+  .rp-editor,
+  .rp-static {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 1rem;
+    border: 0;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    font-family: var(--sl-font-mono);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    tab-size: 4;
+  }
+
+  .rp-editor {
+    min-height: 8rem;
+    resize: vertical;
+  }
+
+  .rp-static {
+    overflow-x: auto;
+  }
+
+  .rp-static code {
+    font-family: inherit;
+  }
+
+  .rp-output {
+    border-top: 1px solid var(--sl-color-gray-5);
+    padding: 0.85rem 1rem 1rem;
+    background: var(--sl-color-gray-6);
+  }
+
+  .rp-status {
+    margin: 0 0 0.6rem;
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+    color: var(--sl-color-text);
+  }
+
+  .rp-status[data-state='success'] {
+    color: var(--sl-color-green-high);
+  }
+
+  .rp-status[data-state='expected'] {
+    color: var(--sl-color-green-high);
+  }
+
+  .rp-status[data-state='error'] {
+    color: var(--sl-color-red-high);
+  }
+
+  .rp-stream + .rp-stream {
+    margin-top: 0.75rem;
+  }
+
+  .rp-stream-label {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-xs);
+    letter-spacing: 0.04em;
+    color: var(--sl-color-gray-2);
+  }
+
+  .rp-stream-body {
+    margin: 0;
+    padding: 0.6rem 0.7rem;
+    border-radius: 0.35rem;
+    background: var(--sl-color-bg);
+    border: 1px solid var(--sl-color-gray-5);
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-sm);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 22rem;
+    overflow-y: auto;
+  }
+
+  @media (max-width: 40rem) {
+    .rp-editor,
+    .rp-static {
+      font-size: 16px;
+    }
+
+    .rp-bar {
+      align-items: flex-start;
+    }
+
+    .rp-actions {
+      width: 100%;
+    }
+
+    .rp-open,
+    .rp-run {
+      flex: 1;
+    }
+  }
+</style>
+
+<script>
+  const PLAYGROUND_ENDPOINT = 'https://play.rust-lang.org/execute';
+
+  function codeOf(root: Element): string {
+    const codeElement = root.querySelector<HTMLElement>('[data-rp-code]');
+    if (!codeElement) return '';
+    if (codeElement instanceof HTMLTextAreaElement) return codeElement.value;
+    return codeElement.textContent ?? '';
+  }
+
+  function setText(element: Element | null, value: string) {
+    if (element) element.textContent = value;
+  }
+
+  function showStream(wrapper: Element | null, body: Element | null, value: string | undefined) {
+    if (!wrapper || !body) return;
+    if (value && value.trim().length > 0) {
+      body.textContent = value;
+      wrapper.removeAttribute('hidden');
+    } else {
+      wrapper.setAttribute('hidden', '');
+    }
+  }
+
+  async function runPlayground(root: Element) {
+    const runButton = root.querySelector<HTMLButtonElement>('[data-rp-run]');
+    const output = root.querySelector<HTMLElement>('[data-rp-output]');
+    const status = root.querySelector<HTMLElement>('[data-rp-status]');
+    const stdoutWrap = root.querySelector('[data-rp-stdout-wrap]');
+    const stderrWrap = root.querySelector('[data-rp-stderr-wrap]');
+    const stdoutBody = root.querySelector('[data-rp-stdout]');
+    const stderrBody = root.querySelector('[data-rp-stderr]');
+    if (!runButton || !output || !status) return;
+
+    const expectError = root.getAttribute('data-expect-error') === 'true';
+    const edition = root.getAttribute('data-edition') ?? '2024';
+    const code = codeOf(root);
+
+    output.removeAttribute('hidden');
+    showStream(stdoutWrap, stdoutBody, '');
+    showStream(stderrWrap, stderrBody, '');
+    status.removeAttribute('data-state');
+    status.textContent = 'Mengirim kode ke playground...';
+    runButton.disabled = true;
+    runButton.textContent = 'Menjalankan...';
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const response = await fetch(PLAYGROUND_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel: 'stable',
+          mode: 'debug',
+          edition,
+          crateType: 'bin',
+          tests: false,
+          backtrace: false,
+          code,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const result = await response.json();
+      showStream(stdoutWrap, stdoutBody, result.stdout);
+      showStream(stderrWrap, stderrBody, result.stderr);
+
+      if (expectError) {
+        if (result.success === false) {
+          status.dataset.state = 'expected';
+          status.textContent =
+            'Error muncul sesuai dugaan. Baca pesan compiler di bawah dan cari baris yang ditunjuk.';
+        } else {
+          status.dataset.state = 'error';
+          status.textContent =
+            'Kode ini ternyata berhasil dikompilasi. Bandingkan dengan penjelasan di halaman.';
+        }
+      } else if (result.success === true) {
+        status.dataset.state = 'success';
+        status.textContent = 'Program selesai dijalankan.';
+      } else {
+        status.dataset.state = 'error';
+        status.textContent = 'Kompilasi gagal. Baca pesan error di bawah.';
+      }
+    } catch (error) {
+      status.dataset.state = 'error';
+      status.textContent =
+        error instanceof DOMException && error.name === 'AbortError'
+          ? 'Playground terlalu lama menjawab. Coba lagi sebentar lagi.'
+          : 'Tidak bisa menghubungi playground. Periksa koneksi internetmu, lalu coba lagi.';
+    } finally {
+      window.clearTimeout(timeout);
+      runButton.disabled = false;
+      runButton.textContent = 'Jalankan';
+    }
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-rust-playground]')) {
+    if (root.dataset.ready === 'true') continue;
+    root.dataset.ready = 'true';
+
+    const openLink = root.querySelector<HTMLAnchorElement>('[data-rp-open]');
+    const edition = root.getAttribute('data-edition') ?? '2024';
+    const updateOpenLink = () => {
+      if (!openLink) return;
+      openLink.href = `https://play.rust-lang.org/?version=stable&mode=debug&edition=${edition}&code=${encodeURIComponent(codeOf(root))}`;
+    };
+
+    updateOpenLink();
+    root.querySelector('[data-rp-code]')?.addEventListener('input', updateOpenLink);
+    root.querySelector('[data-rp-run]')?.addEventListener('click', () => runPlayground(root));
+  }
+</script>
