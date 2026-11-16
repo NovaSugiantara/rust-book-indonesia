@@ -1,0 +1,189 @@
+---
+title: '18.1 Karakteristik OOP'
+description: 'Object, encapsulation, inheritance, dan polymorphism dalam model Rust.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Tidak ada definisi tunggal tentang apa itu bahasa berorientasi objek. Buku membahas tiga ciri yang sering dipakai: object yang menggabungkan data dan perilaku, encapsulation, dan inheritance.
+
+## Object: data dan perilaku
+
+Menurut definisi Gang of Four, object mengemas data dan prosedur yang beroperasi pada data itu. Di Rust, struct dan enum menyimpan data, sedangkan `impl` menyediakan method. Secara fungsi, keduanya memenuhi definisi object, meskipun Rust tidak menyebutnya object.
+
+## Encapsulation
+
+Encapsulation menyembunyikan detail implementasi dan hanya membuka API publik. Di Rust, item private secara default dan `pub` menentukan apa yang terekspos.
+
+Contoh `AveragedCollection` menyimpan daftar angka dan rata-rata yang dihitung ulang saat data berubah. Field `list` dan `average` private agar tidak bisa membuat keduanya tidak sinkron.
+
+<RustPlayground
+  code={`mod data {
+    pub struct AveragedCollection {
+        list: Vec<i32>,
+        average: f64,
+    }
+
+    impl AveragedCollection {
+        pub fn new() -> AveragedCollection {
+            AveragedCollection {
+                list: Vec::new(),
+                average: 0.0,
+            }
+        }
+
+        pub fn add(&mut self, value: i32) {
+            self.list.push(value);
+            self.update_average();
+        }
+
+        pub fn remove(&mut self) -> Option<i32> {
+            let result = self.list.pop();
+            match result {
+                Some(value) => {
+                    self.update_average();
+                    Some(value)
+                }
+                None => None,
+            }
+        }
+
+        pub fn average(&self) -> f64 {
+            self.average
+        }
+
+        fn update_average(&mut self) {
+            let total: i32 = self.list.iter().sum();
+            self.average = total as f64 / self.list.len() as f64;
+        }
+    }
+}
+
+fn main() {
+    let mut koleksi = data::AveragedCollection::new();
+
+    koleksi.add(10);
+    koleksi.add(20);
+    println!("Rata-rata: {}", koleksi.average());
+
+    koleksi.remove();
+    println!("Rata-rata setelah remove: {}", koleksi.average());
+}`}
+  filename="src/main.rs"
+  label="Encapsulation dengan field private"
+/>
+
+Pemakai hanya bisa menambah, menghapus, dan membaca rata-rata lewat method. Kalau field `list` bisa diubah langsung, nilai `average` bisa basi. Field private mencegah itu.
+
+Mengakses field private dari luar module ditolak:
+
+<RustPlayground
+  code={`mod data {
+    pub struct Counter {
+        nilai: i32,
+    }
+
+    impl Counter {
+        pub fn new() -> Counter {
+            Counter { nilai: 0 }
+        }
+    }
+}
+
+fn main() {
+    let mut counter = data::Counter::new();
+    counter.nilai += 1;
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error mengakses field private"
+/>
+
+Pesan `field nilai of struct Counter is private` menunjukkan batas module. Kalau field memang bagian dari API, jadikan `pub`; kalau tidak, sediakan method yang menjaga invariant.
+
+## Inheritance dan polymorphism
+
+Rust tidak menyediakan inheritance class. Struct tidak mewarisi field atau implementasi method dari struct lain. Sebagai gantinya:
+
+- Default method trait berbagi implementasi tanpa inheritance.
+- Trait bound memberi polymorphism pada compile time.
+- Trait object memberi polymorphism pada runtime.
+
+Buku menyebut generik dengan trait bound sebagai bounded parametric polymorphism. Satu fungsi bisa bekerja untuk banyak tipe tanpa memilih method saat runtime. Trait object memungkinkan satu collection berisi beberapa tipe konkret, dengan pemilihan method saat runtime.
+
+## Di backend
+
+Encapsulation penting pada layer domain: jangan biarkan handler mengubah field internal transaksi secara langsung. Sediakan method yang memvalidasi transisi state. Polymorphism berguna untuk notifier, payment gateway, atau storage yang implementasinya dipilih saat startup.
+
+:::note[Kalau di bahasa lain]
+TypeScript punya class, interface, dan inheritance; implementasi interface diperiksa secara struktural. PHP punya class, interface, abstract class, dan single inheritance. Go memakai struct dan interface dengan implementasi implisit, serta komposisi alih-alih inheritance. Rust memakai struct, enum, trait, dan komposisi, tanpa inheritance class.
+:::
+
+:::tip[Tips]
+Jangan meniru hierarki class di Rust. Mulai dari data dan perilaku yang dibutuhkan, lalu pilih trait, enum, atau komposisi sesuai batas yang nyata.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Bagaimana Rust menyembunyikan detail implementasi?',
+      options: [
+        'Dengan visibilitas private secara default dan pub untuk API',
+        'Dengan inheritance',
+        'Dengan garbage collector',
+        'Dengan menghapus field',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Module dan pub mengatur akses.',
+        'Salah. Rust tidak punya inheritance class.',
+        'Salah. Visibilitas bukan urusan GC.',
+        'Salah. Field tidak dihapus.',
+      ],
+      explanation:
+        'Encapsulation menjaga invariant dan memungkinkan refactoring internal.',
+    },
+    {
+      question: 'Apa pengganti inheritance untuk code reuse di Rust?',
+      options: [
+        'Default method trait dan komposisi',
+        'Pewarisan struct',
+        'Multiple inheritance',
+        'Macro wajib',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Trait dan komposisi menggantikan pewarisan.',
+        'Salah. Struct tidak mewarisi field.',
+        'Salah. Rust tidak punya multiple inheritance.',
+        'Salah. Macro bukan pengganti utama.',
+      ],
+      explanation:
+        'Buku menyebut default trait method sebagai cara terbatas berbagi implementasi.',
+    },
+    {
+      question: 'Apa itu bounded parametric polymorphism?',
+      options: [
+        'Generik dengan trait bound',
+        'Inheritance antar class',
+        'Dynamic dispatch tanpa trait',
+        'Penggunaan enum saja',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Generik dibatasi trait yang harus dipenuhi.',
+        'Salah. Itu model inheritance.',
+        'Salah. Dynamic dispatch memakai trait object.',
+        'Salah. Enum bukan definisi istilah ini.',
+      ],
+      explanation:
+        'Rust memakai generik dan trait bound untuk polymorphism compile time.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

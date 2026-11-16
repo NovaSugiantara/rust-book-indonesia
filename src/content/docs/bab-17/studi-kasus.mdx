@@ -1,0 +1,257 @@
+---
+title: '17.7 Studi kasus: pembayaran async Kasir Warung'
+description: 'Menjalankan pembayaran dan pemuatan menu bersamaan dengan future, lalu memetakannya ke Tokio.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Setelah worker thread di Bab 16, Kasir Warung menambahkan jalur async untuk operasi yang menunggu I/O: memuat menu dan menghubungi penyedia pembayaran. Keduanya bisa berjalan bersamaan karena tidak saling bergantung.
+
+<StudyCase title="Kasir Warung: pembayaran async" intro="Membuat future pembayaran dan pemuatan menu, menggabungkannya dengan join, lalu memetakan API trpl ke Tokio.">
+  <StudyCaseStep
+    title="Async function pembayaran"
+    goal="Membuat operasi pembayaran yang mengembalikan Result."
+  >
+    ```rust
+    use std::time::Duration;
+
+    pub async fn proses_pembayaran(
+        metode: &str,
+        total: u32,
+    ) -> Result<String, String> {
+        trpl::sleep(Duration::from_millis(10)).await;
+
+        if total == 0 {
+            return Err(String::from("total tidak boleh nol"));
+        }
+
+        Ok(format!("{metode} Rp{total} disetujui"))
+    }
+    ```
+
+    Function async mengembalikan future. Error tetap menjadi `Result`, bukan panic. Di proyek nyata, bagian `sleep` diganti pemanggilan HTTP ke penyedia pembayaran.
+
+    <Fragment slot="hint">
+      Jangan memakai `thread::sleep` di async. Gunakan sleep milik runtime agar thread tidak diblokir.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Future pembayaran bisa di-await atau digabung dengan future lain.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Muat menu dan bayar bersamaan"
+    goal="Menjalankan dua operasi independen dengan join."
+  >
+    ```rust
+    pub async fn muat_menu() -> Vec<(&'static str, u32)> {
+        trpl::sleep(Duration::from_millis(10)).await;
+        vec![("KOPI", 12_000), ("ROTI", 8_000)]
+    }
+
+    let (menu, pembayaran) = trpl::join(
+        muat_menu(),
+        proses_pembayaran("QRIS", 43_000),
+    )
+    .await;
+    ```
+
+    `join` menunggu kedua future dan mengembalikan tuple. Tidak ada ketergantungan antara menu dan pembayaran, sehingga keduanya bisa berjalan bersamaan.
+
+    <Fragment slot="hint">
+      Kalau pembayaran membutuhkan harga dari menu, jangan di-join. Await menu lebih dulu, lalu hitung total, baru panggil pembayaran.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Waktu tunggu total tidak harus menjumlahkan kedua operasi.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Tambahkan timeout"
+    goal="Membatasi waktu menunggu penyedia pembayaran."
+  >
+    ```rust
+    use std::future::Future;
+    use trpl::Either;
+
+    async fn timeout<F>(
+        future: F,
+        batas: Duration,
+    ) -> Result<F::Output, Duration>
+    where
+        F: Future,
+    {
+        match trpl::select(future, trpl::sleep(batas)).await {
+            Either::Left(hasil) => Ok(hasil),
+            Either::Right(_) => Err(batas),
+        }
+    }
+    ```
+
+    Panggil `timeout(proses_pembayaran("QRIS", 43_000), Duration::from_millis(100)).await`. Hasilnya `Result<Result<String, String>, Duration>`: lapisan luar menandakan timeout, lapisan dalam menandakan hasil pembayaran.
+
+    <Fragment slot="hint">
+      Petakan timeout ke error aplikasi sebelum mengirim response. Jangan membiarkan dua lapis Result bocor ke handler.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Handler bisa membedakan penolakan pembayaran dari penyedia yang tidak merespons.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Padanan Tokio di proyek nyata"
+    goal="Memetakan API trpl ke Tokio untuk server."
+  >
+    Di proyek nyata, `trpl` diganti Tokio secara langsung:
+
+    ```rust
+    #[tokio::main]
+    async fn main() {
+        let (menu, pembayaran) = tokio::join!(
+            muat_menu(),
+            proses_pembayaran("QRIS", 43_000),
+        );
+
+        let pembayaran = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            proses_pembayaran("QRIS", 43_000),
+        )
+        .await;
+    }
+    ```
+
+    Pemetaan umum: `trpl::block_on` menjadi runtime Tokio, `trpl::spawn_task` menjadi `tokio::spawn`, `trpl::sleep` menjadi `tokio::time::sleep`, `trpl::join` menjadi `tokio::join!`, dan `trpl::select` menjadi `tokio::select!` atau `tokio::time::timeout`.
+
+    <Fragment slot="hint">
+      Pilih satu runtime untuk aplikasi. Jangan mencampur future dari runtime berbeda tanpa adaptor.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Kode yang ditulis dengan trpl bisa dipindahkan ke Tokio dengan perubahan API yang kecil.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+<RustPlayground
+  code={`use std::time::Duration;
+use trpl::block_on;
+
+async fn muat_menu() -> Vec<(&'static str, u32)> {
+    trpl::sleep(Duration::from_millis(10)).await;
+    vec![("KOPI", 12_000), ("ROTI", 8_000)]
+}
+
+async fn proses_pembayaran(metode: &str, total: u32) -> Result<String, String> {
+    trpl::sleep(Duration::from_millis(10)).await;
+
+    if total == 0 {
+        return Err(String::from("total tidak boleh nol"));
+    }
+
+    Ok(format!("{metode} Rp{total} disetujui"))
+}
+
+fn main() {
+    block_on(async {
+        let (menu, pembayaran) = trpl::join(
+            muat_menu(),
+            proses_pembayaran("QRIS", 43_000),
+        )
+        .await;
+
+        println!("Menu dimuat: {} item", menu.len());
+        match pembayaran {
+            Ok(pesan) => println!("{pesan}"),
+            Err(error) => eprintln!("Pembayaran gagal: {error}"),
+        }
+    });
+}`}
+  filename="src/main.rs"
+  label="Join pemuatan menu dan pembayaran async"
+/>
+
+## Keadaan setelah Bab 17
+
+- Pembayaran punya versi async yang mengembalikan `Result`.
+- Pemuatan menu dan pembayaran dijalankan bersamaan dengan `join`.
+- Timeout membatasi waktu menunggu penyedia pembayaran.
+- Error timeout dan error pembayaran dipisahkan sebelum dipetakan ke response.
+- Di proyek nyata, `trpl` diganti Tokio dan macro runtime.
+- Worker thread dari Bab 16 tetap ada untuk pekerjaan CPU-bound atau blocking.
+- Belum ada retry otomatis atau circuit breaker; itu keputusan desain terpisah.
+- Belum ada integrasi database async; itu masuk Capstone.
+
+:::note[Kalau di bahasa lain]
+Promise JavaScript mulai berjalan saat dibuat, sehingga `Promise.all` menerima promise yang sudah berjalan. Rust `join` menerima future yang baru berjalan saat di-await. Go memakai goroutine dan `context` untuk timeout. Python memakai `asyncio.gather` dan `asyncio.wait_for`. Semua model ini menyelesaikan masalah serupa dengan trade-off berbeda.
+:::
+
+:::tip[Tips]
+Ukur jumlah koneksi dan waktu tunggu sebelum menaikkan konkurensi. Async bukan izin untuk membuat request tanpa batas; batasi pool dan antrean.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa menu dan pembayaran bisa di-join?',
+      options: [
+        'Karena keduanya tidak saling bergantung',
+        'Karena keduanya memakai thread yang sama',
+        'Karena join menghapus error',
+        'Karena menu selalu lebih cepat',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Future independen bisa berjalan bersamaan.',
+        'Salah. Join tidak berarti satu thread.',
+        'Salah. Error tetap harus ditangani.',
+        'Salah. Tidak ada jaminan urutan.',
+      ],
+      explanation:
+        'Kalau ada dependency, await berurutan lebih tepat.',
+    },
+    {
+      question: 'Apa arti Result<Result<String, String>, Duration> pada timeout?',
+      options: [
+        'Luar menandakan timeout, dalam menandakan hasil pembayaran',
+        'Luar adalah pembayaran, dalam adalah timeout',
+        'Keduanya selalu sukses',
+        'Timeout menghapus error pembayaran',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Dua lapisan membedakan penyebab kegagalan.',
+        'Salah. Urutannya terbalik.',
+        'Salah. Keduanya bisa error.',
+        'Salah. Error dalam tetap ada.',
+      ],
+      explanation:
+        'Petakan kedua lapisan sebelum mengirim response ke pengguna.',
+    },
+    {
+      question: 'Apa padanan trpl::spawn_task di Tokio?',
+      options: ['tokio::spawn', 'tokio::join!', 'tokio::time::sleep', 'tokio::select!'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Keduanya menyerahkan future ke runtime sebagai task.',
+        'Salah. join! menunggu beberapa future.',
+        'Salah. Sleep adalah timer.',
+        'Salah. select! memilih future yang selesai dulu.',
+      ],
+      explanation:
+        'Pemetaan API membantu memindahkan contoh buku ke proyek Tokio.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

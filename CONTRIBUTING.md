@@ -53,7 +53,7 @@ Kasir Warung dimulai sebagai CLI di Bab 1 dan tumbuh menjadi layanan backend. Se
 
 Aturan peta:
 
-- Bab 4 sampai 15 sudah ditulis. Jangan menulis bab 16 sampai 21 sebelum ada tugas khusus untuk bab itu.
+- Bab 4 sampai 18 sudah ditulis. Jangan menulis bab 19 sampai 21 sebelum ada tugas khusus untuk bab itu.
 - Setiap bab yang menyentuh Kasir Warung harus meninggalkan kode yang bisa dijalankan dan output contoh yang benar.
 - Jangan memakai fitur dari bab yang belum diajarkan tanpa penjelasan singkat. Kalau terpaksa, jelaskan alasannya di callout.
 - Bab 4 dan 5 mengubah cara data transaksi disimpan. Jangan mempertahankan array harga dari Bab 3 kalau struct sudah tersedia.
@@ -233,6 +233,28 @@ src/
 │   │   ├── interior-mutability.mdx
 │   │   ├── reference-cycles.mdx
 │   │   └── studi-kasus.mdx
+│   ├── bab-16/
+│   │   ├── index.mdx
+│   │   ├── threads.mdx
+│   │   ├── message-passing.mdx
+│   │   ├── shared-state.mdx
+│   │   ├── send-sync.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-17/
+│   │   ├── index.mdx
+│   │   ├── futures-syntax.mdx
+│   │   ├── concurrency-with-async.mdx
+│   │   ├── more-futures.mdx
+│   │   ├── streams.mdx
+│   │   ├── traits-for-async.mdx
+│   │   ├── futures-tasks-threads.mdx
+│   │   └── studi-kasus.mdx
+│   ├── bab-18/
+│   │   ├── index.mdx
+│   │   ├── what-is-oo.mdx
+│   │   ├── trait-objects.mdx
+│   │   ├── design-patterns.mdx
+│   │   └── studi-kasus.mdx
 │   ├── capstone/
 │   │   ├── index.mdx
 │   │   └── framework.mdx
@@ -242,7 +264,7 @@ src/
 │   │   ├── langkah-2.mdx
 │   │   ├── langkah-3.mdx
 │   │   └── langkah-4.mdx
-│   └── bab-16.mdx ... bab-21.mdx
+│   └── bab-19.mdx ... bab-21.mdx
 ├── data/chapters.ts
 ├── scripts/progress.ts
 └── styles/custom.css
@@ -1006,6 +1028,115 @@ Kontrak setelah Bab 15:
 - CLI tetap single-thread.
 - Rencana Bab 16: `Arc<Mutex<T>>` untuk cache dan state bersama lintas worker.
 - Belum ada cache global lintas proses atau TTL; itu di luar cakupan.
+
+### Keadaan setelah Bab 16
+
+Bab 16 menambahkan worker transaksi. CLI mengirim pekerjaan lewat channel, beberapa worker memprosesnya, lalu hasil digabung dalam rekap bersama.
+
+```text
+kasir_warung/
+├── Cargo.toml
+├── Cargo.lock
+├── kasir-core/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── menu.rs
+│       ├── transaksi.rs
+│       ├── laporan.rs
+│       ├── rangkuman.rs
+│       ├── cache.rs
+│       └── worker.rs
+├── kasir-cli/
+│   ├── Cargo.toml
+│   └── src/main.rs
+└── target/
+```
+
+Kontrak setelah Bab 16:
+
+- `Pekerjaan` berisi metode dan total yang akan diproses worker.
+- Antrean memakai `mpsc::channel`.
+- Rekap memakai `Arc<Mutex<HashMap<String, u32>>>`.
+- Empat worker mengambil pekerjaan sampai transmitter ditutup.
+- `drop(tx)` menutup antrean sebelum `join`.
+- Lock pada receiver membuat penerimaan pesan serial, tetapi pemrosesan tetap paralel.
+- Tipe yang dikirim harus `Send`; state bersama harus aman diakses lintas thread.
+- Belum ada backpressure, timeout, atau penanganan worker panic; itu di luar cakupan.
+
+### Keadaan setelah Bab 17
+
+Bab 17 menambahkan jalur async untuk operasi yang menunggu I/O. Pemuatan menu dan pembayaran bisa berjalan bersamaan, dengan timeout dan pemetaan ke Tokio.
+
+```text
+kasir_warung/
+├── Cargo.toml
+├── Cargo.lock
+├── kasir-core/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── menu.rs
+│       ├── transaksi.rs
+│       ├── laporan.rs
+│       ├── rangkuman.rs
+│       ├── cache.rs
+│       ├── worker.rs
+│       └── pembayaran.rs
+├── kasir-cli/
+│   ├── Cargo.toml
+│   └── src/main.rs
+└── target/
+```
+
+Kontrak setelah Bab 17:
+
+- `proses_pembayaran` adalah async function yang mengembalikan `Result<String, String>`.
+- `muat_menu` adalah async function yang mengembalikan data menu.
+- `trpl::join` menjalankan pemuatan menu dan pembayaran bersamaan.
+- `timeout` dibangun dari `trpl::select` dan `trpl::sleep`, mengembalikan `Result<Output, Duration>`.
+- Di proyek nyata, `trpl` dipetakan ke Tokio: `block_on` ke runtime Tokio, `spawn_task` ke `tokio::spawn`, `sleep` ke `tokio::time::sleep`, `join` ke `tokio::join!`.
+- Error timeout dan error pembayaran dipisahkan sebelum dipetakan ke response.
+- Worker thread Bab 16 tetap dipakai untuk pekerjaan CPU-bound atau blocking.
+- Belum ada retry, circuit breaker, atau database async; itu keputusan desain terpisah.
+
+### Keadaan setelah Bab 18
+
+Bab 18 menambahkan registry metode pembayaran berbasis trait object. Kasir Warung tidak lagi memilih pembayaran hanya lewat tipe konkret atau generic; implementasi bisa dipilih saat runtime.
+
+```text
+kasir_warung/
+├── Cargo.toml
+├── Cargo.lock
+├── kasir-core/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── menu.rs
+│       ├── transaksi.rs
+│       ├── laporan.rs
+│       ├── rangkuman.rs
+│       ├── cache.rs
+│       ├── worker.rs
+│       ├── pembayaran.rs
+│       └── registry.rs
+├── kasir-cli/
+│   ├── Cargo.toml
+│   └── src/main.rs
+└── target/
+```
+
+Kontrak setelah Bab 18:
+
+- `PaymentMethod` tetap menjadi trait pembayaran dari Bab 10.
+- `Tunai` dan `Qris` mengimplementasikan trait.
+- `Registry` menyimpan `HashMap<String, Box<dyn PaymentMethod>>`.
+- Metode dipilih saat runtime berdasarkan kunci.
+- Kunci tidak dikenal menjadi `KasirError::MetodeTidakDitemukan`, bukan panic.
+- Trait harus dyn-compatible; method generik atau return `Self` menghalangi trait object.
+- Registry belum thread-safe; untuk state bersama gunakan `Arc<Mutex<Registry>>` atau `Arc<RwLock<Registry>>`.
+- Test registry mencakup metode terdaftar dan kunci yang tidak dikenal.
+- Belum ada plugin loading dari file atau jaringan.
 
 ### Aturan untuk bab berikutnya
 

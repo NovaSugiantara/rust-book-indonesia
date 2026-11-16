@@ -1,0 +1,328 @@
+---
+title: '18.4 Studi kasus: registry pembayaran'
+description: 'Menyimpan beberapa implementasi PaymentMethod dalam Box<dyn PaymentMethod> dan memilih saat runtime.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Trait `PaymentMethod` sudah muncul di Bab 10. Saat itu metode pembayaran dipilih lewat tipe konkret dan fungsi generik. Sekarang beberapa metode didaftarkan dalam satu registry agar bisa dipilih dari kode atau konfigurasi saat runtime.
+
+<StudyCase title="Kasir Warung: registry pembayaran" intro="Mengubah PaymentMethod menjadi trait object di balik Box dan memilih implementasi dari HashMap.">
+  <StudyCaseStep
+    title="Definisikan trait yang object-safe"
+    goal="Memastikan PaymentMethod bisa dipakai sebagai trait object."
+  >
+    ```rust
+    #[derive(Debug)]
+    pub enum KasirError {
+        MetodeTidakDitemukan(String),
+        PembayaranGagal(String),
+    }
+
+    pub trait PaymentMethod {
+        fn label(&self) -> &'static str;
+        fn bayar(&self, total: u32) -> Result<(), KasirError>;
+    }
+    ```
+
+    Kedua method menerima `&self` dan memakai tipe konkret pada parameter serta return. Tidak ada method generik atau return `Self`, sehingga trait ini dyn-compatible.
+
+    <Fragment slot="hint">
+      Kalau trait punya method `fn clone_box(&self) -> Self`, trait tidak bisa langsung dijadikan `dyn PaymentMethod`.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Trait tetap menjadi kontrak perilaku, tetapi sekarang bisa disimpan sebagai trait object.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Implementasikan metode pembayaran"
+    goal="Menyediakan beberapa tipe konkret di balik trait yang sama."
+  >
+    ```rust
+    pub struct Tunai;
+
+    impl PaymentMethod for Tunai {
+        fn label(&self) -> &'static str {
+            "tunai"
+        }
+
+        fn bayar(&self, total: u32) -> Result<(), KasirError> {
+            println!("Menerima tunai Rp{total}");
+            Ok(())
+        }
+    }
+
+    pub struct Qris;
+
+    impl PaymentMethod for Qris {
+        fn label(&self) -> &'static str {
+            "QRIS"
+        }
+
+        fn bayar(&self, total: u32) -> Result<(), KasirError> {
+            println!("Memproses QRIS Rp{total}");
+            Ok(())
+        }
+    }
+    ```
+
+    <Fragment slot="hint">
+      Setiap implementasi boleh punya data tambahan, misalnya kode merchant pada Qris. Trait hanya mengatur perilaku yang sama.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Tunai dan Qris bisa diperlakukan sama oleh kode yang hanya tahu trait.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Registry Box<dyn PaymentMethod>"
+    goal="Menyimpan beberapa implementasi dan memilih berdasarkan kunci."
+  >
+    ```rust
+    use std::collections::HashMap;
+
+    pub struct Registry {
+        metode: HashMap<String, Box<dyn PaymentMethod>>,
+    }
+
+    impl Registry {
+        pub fn new() -> Registry {
+            Registry {
+                metode: HashMap::new(),
+            }
+        }
+
+        pub fn daftar(&mut self, kunci: &str, metode: Box<dyn PaymentMethod>) {
+            self.metode.insert(kunci.to_string(), metode);
+        }
+
+        pub fn bayar(&self, kunci: &str, total: u32) -> Result<(), KasirError> {
+            match self.metode.get(kunci) {
+                Some(metode) => metode.bayar(total),
+                None => Err(KasirError::MetodeTidakDitemukan(kunci.to_string())),
+            }
+        }
+    }
+    ```
+
+    Registry tidak perlu tahu tipe konkret. Ia hanya memanggil `bayar` lewat trait object. Menambah metode baru berarti menambahkan implementasi dan mendaftarkannya, tanpa mengubah `Registry`.
+
+    <Fragment slot="hint">
+      Box diperlukan karena ukuran tipe konkret berbeda dan trait object tidak menyimpan data secara inline.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Pemilihan metode terjadi saat runtime berdasarkan kunci.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Pakai dan tangani metode yang tidak ada"
+    goal="Membedakan pembayaran sukses dari kunci yang tidak terdaftar."
+  >
+    ```rust
+    let mut registry = Registry::new();
+    registry.daftar("tunai", Box::new(Tunai));
+    registry.daftar("qris", Box::new(Qris));
+
+    registry.bayar("qris", 43_000)?;
+
+    match registry.bayar("kartu", 43_000) {
+        Ok(()) => println!("Pembayaran berhasil"),
+        Err(KasirError::MetodeTidakDitemukan(kunci)) => {
+            println!("Metode {kunci} belum terdaftar");
+        }
+        Err(error) => println!("Pembayaran gagal: {error:?}"),
+    }
+    ```
+
+    Error metode tidak ditemukan adalah kesalahan konfigurasi atau input, bukan panic. Di HTTP handler, error ini bisa dipetakan ke response 400 atau 422.
+
+    <Fragment slot="hint">
+      Jangan memakai `unwrap` pada lookup metode yang berasal dari input pengguna.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Registry memberi titik tunggal untuk memilih dan menangani metode pembayaran.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+
+#[derive(Debug)]
+enum KasirError {
+    MetodeTidakDitemukan(String),
+    PembayaranGagal(String),
+}
+
+trait PaymentMethod {
+    fn label(&self) -> &'static str;
+    fn bayar(&self, total: u32) -> Result<(), KasirError>;
+}
+
+struct Tunai;
+
+impl PaymentMethod for Tunai {
+    fn label(&self) -> &'static str {
+        "tunai"
+    }
+
+    fn bayar(&self, total: u32) -> Result<(), KasirError> {
+        println!("Menerima tunai Rp{total}");
+        Ok(())
+    }
+}
+
+struct Qris;
+
+impl PaymentMethod for Qris {
+    fn label(&self) -> &'static str {
+        "QRIS"
+    }
+
+    fn bayar(&self, total: u32) -> Result<(), KasirError> {
+        println!("Memproses QRIS Rp{total}");
+        Ok(())
+    }
+}
+
+struct Registry {
+    metode: HashMap<String, Box<dyn PaymentMethod>>,
+}
+
+impl Registry {
+    fn new() -> Registry {
+        Registry {
+            metode: HashMap::new(),
+        }
+    }
+
+    fn daftar(&mut self, kunci: &str, metode: Box<dyn PaymentMethod>) {
+        self.metode.insert(kunci.to_string(), metode);
+    }
+
+    fn bayar(&self, kunci: &str, total: u32) -> Result<(), KasirError> {
+        match self.metode.get(kunci) {
+            Some(metode) => metode.bayar(total),
+            None => Err(KasirError::MetodeTidakDitemukan(kunci.to_string())),
+        }
+    }
+}
+
+fn main() {
+    let mut registry = Registry::new();
+    registry.daftar("tunai", Box::new(Tunai));
+    registry.daftar("qris", Box::new(Qris));
+
+    registry.bayar("qris", 43_000).unwrap();
+
+    match registry.bayar("kartu", 43_000) {
+        Ok(()) => println!("Pembayaran berhasil"),
+        Err(KasirError::MetodeTidakDitemukan(kunci)) => {
+            println!("Metode {kunci} belum terdaftar");
+        }
+        Err(error) => println!("Pembayaran gagal: {error:?}"),
+    }
+
+    for kunci in ["tunai", "qris"] {
+        if let Some(metode) = registry.metode.get(kunci) {
+            println!("{kunci}: {}", metode.label());
+        }
+    }
+}`}
+  filename="src/main.rs"
+  label="Registry pembayaran dengan Box<dyn PaymentMethod>"
+/>
+
+## Keadaan setelah Bab 18
+
+- `PaymentMethod` tetap menjadi kontrak pembayaran dari Bab 10.
+- `Tunai` dan `Qris` diimplementasikan sebagai tipe konkret.
+- `Registry` menyimpan `HashMap<String, Box<dyn PaymentMethod>>`.
+- Metode dipilih saat runtime berdasarkan kunci.
+- Kunci yang tidak terdaftar menghasilkan `KasirError::MetodeTidakDitemukan`, bukan panic.
+- Trait harus dyn-compatible: tidak ada method generik atau return `Self`.
+- Registry belum thread-safe; untuk state bersama lintas thread, bungkus dengan `Arc<Mutex<Registry>>` atau `Arc<RwLock<Registry>>`.
+- Belum ada plugin loading dari file atau jaringan; itu di luar cakupan.
+
+:::note[Kalau di bahasa lain]
+TypeScript bisa memakai interface dan map berisi object yang mengimplementasikannya. PHP memakai interface dan map berisi object. Go memakai interface dan map berisi nilai yang memenuhi interface. Rust memakai `Box<dyn Trait>` karena ukuran tipe konkret berbeda dan trait object membutuhkan pointer.
+:::
+
+:::tip[Tips]
+Daftarkan semua metode saat startup dan gagal cepat jika konfigurasi tidak lengkap. Jangan membiarkan error registry baru muncul saat transaksi pertama pengguna.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa registry memakai Box<dyn PaymentMethod>?',
+      options: [
+        'Agar bisa menyimpan beberapa tipe konkret dengan ukuran berbeda',
+        'Agar semua metode menjadi fungsi statis',
+        'Agar trait punya field',
+        'Agar pembayaran tidak bisa gagal',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Trait object menyatukan tipe berbeda lewat pointer.',
+        'Salah. Method tetap dipanggil lewat instance.',
+        'Salah. Trait tidak menambah field.',
+        'Salah. Pembayaran tetap mengembalikan Result.',
+      ],
+      explanation:
+        'Box menyimpan nilai di heap dan dyn memilih method saat runtime.',
+    },
+    {
+      question: 'Mengapa method dengan return Self menghalangi trait object?',
+      options: [
+        'Karena ukuran tipe konkret tidak diketahui saat membangun vtable',
+        'Karena Self tidak boleh ada di trait',
+        'Karena method tanpa parameter tidak valid',
+        'Karena Box tidak bisa menyimpan trait',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini aturan dyn compatibility.',
+        'Salah. Self sah, tetapi tidak untuk method dyn-compatible tertentu.',
+        'Salah. Parameter bukan penyebabnya.',
+        'Salah. Box justru dipakai untuk trait object.',
+      ],
+      explanation:
+        'Gunakan tipe konkret atau batasi method dengan where Self: Sized.',
+    },
+    {
+      question: 'Apa yang terjadi jika kunci metode tidak terdaftar?',
+      options: [
+        'Registry mengembalikan error MetodeTidakDitemukan',
+        'Program panic',
+        'Registry membuat metode baru',
+        'Pembayaran memakai tunai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini error yang bisa dipetakan ke response.',
+        'Salah. Contoh tidak memakai unwrap pada lookup itu.',
+        'Salah. Registry tidak membuat implementasi otomatis.',
+        'Salah. Tidak ada fallback otomatis.',
+      ],
+      explanation:
+        'Input pengguna tidak boleh menyebabkan panic yang tidak tertangani.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

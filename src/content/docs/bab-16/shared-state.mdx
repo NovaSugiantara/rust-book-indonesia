@@ -1,0 +1,233 @@
+---
+title: '16.3 Shared state'
+description: 'Mutex untuk akses eksklusif, Arc untuk kepemilikan lintas thread, dan risiko deadlock.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Shared state berarti beberapa thread membaca atau mengubah data yang sama. Rust memakai `Mutex<T>` untuk memberi akses eksklusif dan `Arc<T>` untuk membagi kepemilikan antar thread.
+
+## Mutex
+
+`Mutex<T>` mengizinkan satu thread memegang lock pada satu waktu. `lock` mengembalikan `MutexGuard`, yang mengimplementasikan `Deref` dan `Drop`. Saat guard keluar scope, lock dilepas otomatis.
+
+<RustPlayground
+  code={`use std::sync::Mutex;
+
+fn main() {
+    let nilai = Mutex::new(5);
+
+    {
+        let mut angka = nilai.lock().unwrap();
+        *angka = 6;
+    }
+
+    println!("nilai = {nilai:?}");
+}`}
+  filename="src/main.rs"
+  label="Mutex pada satu thread"
+/>
+
+Guard sengaja diletakkan dalam blok agar lock dilepas sebelum mencetak. Kalau guard masih hidup, `println!` tetap boleh membaca `nilai` lewat Debug, tetapi pemanggilan `lock` lain akan menunggu.
+
+## Mutex tidak bisa dipindahkan ke banyak thread
+
+Mutex hanya melindungi data. Ia tidak membuat kepemilikan bisa dibagi. Memindahkan `counter` ke setiap iterasi loop gagal karena nilai yang sama dipindahkan berkali-kali.
+
+<RustPlayground
+  code={`use std::sync::Mutex;
+use std::thread;
+
+fn main() {
+    let counter = Mutex::new(0);
+    let mut handles = vec![];
+
+    for _ in 0..4 {
+        let handle = thread::spawn(move || {
+            let mut angka = counter.lock().unwrap();
+            *angka += 1;
+        });
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error Mutex dipindahkan di setiap iterasi"
+/>
+
+Pesan `borrow of moved value: counter` muncul karena iterasi pertama sudah memindahkan `counter`. Kepemilikan harus dibagi dengan `Arc`.
+
+## Rc tidak cukup
+
+`Rc<Mutex<T>>` memberi banyak pemilik, tetapi `Rc` tidak aman dikirim antar thread. Reference count-nya tidak atomik.
+
+<RustPlayground
+  code={`use std::rc::Rc;
+use std::sync::Mutex;
+use std::thread;
+
+fn main() {
+    let counter = Rc::new(Mutex::new(0));
+
+    let counter_thread = Rc::clone(&counter);
+
+    thread::spawn(move || {
+        let mut angka = counter_thread.lock().unwrap();
+        *angka += 1;
+    })
+    .join()
+    .unwrap();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error Rc<Mutex<T>> dikirim ke thread"
+/>
+
+Pesan `Rc<Mutex<i32>> cannot be sent between threads safely` dan `the trait Send is not implemented` menjelaskan bahwa `Rc` bukan tipe untuk lintas thread. Gunakan `Arc`.
+
+## Arc dan Mutex
+
+`Arc<T>` adalah atomically reference-counted pointer. API-nya mirip `Rc`, tetapi aman dibagi antar thread.
+
+<RustPlayground
+  code={`use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let counter = Arc::new(Mutex::new(0));
+    let mut handles = vec![];
+
+    for _ in 0..10 {
+        let counter = Arc::clone(&counter);
+        let handle = thread::spawn(move || {
+            let mut angka = counter.lock().unwrap();
+            *angka += 1;
+        });
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    println!("Hasil: {}", *counter.lock().unwrap());
+}`}
+  filename="src/main.rs"
+  label="Sepuluh thread menambah counter dengan Arc<Mutex<T>>"
+/>
+
+Setiap thread mendapat `Arc` sendiri. Lock memastikan penambahan tidak bersamaan. Guard dilepas saat closure selesai, sehingga thread berikutnya bisa masuk.
+
+## Deadlock
+
+`Mutex` tidak mencegah deadlock. Deadlock terjadi saat dua thread memegang lock berbeda dan saling menunggu lock yang dipegang lawan.
+
+```rust
+// Jangan dijalankan: contoh deadlock.
+let a = Arc::new(Mutex::new(1));
+let b = Arc::new(Mutex::new(2));
+
+// Thread 1: lock a lalu b.
+// Thread 2: lock b lalu a.
+```
+
+Urutan lock yang konsisten mencegah pola ini. Cara lain adalah mengurangi jumlah lock atau memakai channel agar data tidak perlu diakses bersamaan.
+
+## Di backend
+
+State bersama seperti metrik, cache, atau koneksi pool perlu dilindungi. `Arc<Mutex<T>>` mudah dipakai, tetapi lock yang dipegang terlalu lama bisa menjadi bottleneck. Untuk counter sederhana, tipe atomik di `std::sync::atomic` lebih ringan daripada Mutex.
+
+:::note[Kalau di bahasa lain]
+Go menyediakan `sync.Mutex` dan `sync/atomic`; goroutine tidak memiliki data bersama secara otomatis, jadi programmer tetap memilih sinkronisasi. Node.js menjalankan JavaScript di satu thread utama, sehingga state biasa tidak diakses paralel; `worker_threads` berkomunikasi lewat pesan atau `SharedArrayBuffer` dengan sinkronisasi manual. Python CPython memiliki GIL, tetapi lock tetap dibutuhkan untuk operasi yang tidak atomik dan untuk implementasi tanpa GIL.
+:::
+
+:::tip[Tips]
+Pegang lock hanya selama operasi data yang perlu eksklusif. Jangan melakukan request jaringan atau menunggu I/O sambil memegang lock.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dilakukan MutexGuard saat drop?',
+      options: [
+        'Melepas lock',
+        'Menghapus data di dalam Mutex',
+        'Membuat clone data',
+        'Mengubah data menjadi immutable',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Drop pada guard melepas lock.',
+        'Salah. Data tetap tersimpan.',
+        'Salah. Guard tidak melakukan clone.',
+        'Salah. Mutabilitas ditentukan akses.',
+      ],
+      explanation:
+        'Karena itu lock tidak perlu dilepas manual.',
+    },
+    {
+      question: 'Mengapa Rc<Mutex<T>> bukan pilihan lintas thread?',
+      options: [
+        'Karena Rc tidak mengimplementasikan Send',
+        'Karena Mutex tidak bisa dipakai di thread',
+        'Karena Rc tidak punya clone',
+        'Karena Mutex menghapus data',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Reference count Rc tidak atomik.',
+        'Salah. Mutex justru untuk sinkronisasi.',
+        'Salah. Rc punya clone.',
+        'Salah. Mutex tidak menghapus data.',
+      ],
+      explanation:
+        'Arc menyediakan reference counting yang aman antar thread.',
+    },
+    {
+      question: 'Apa yang menyebabkan deadlock?',
+      options: [
+        'Dua thread saling menunggu lock yang dipegang lawan',
+        'Terlalu banyak channel',
+        'Menggunakan Arc alih-alih Rc',
+        'Membaca data tanpa lock',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini pola circular wait.',
+        'Salah. Channel bukan penyebab langsung.',
+        'Salah. Arc adalah pilihan yang tepat untuk lintas thread.',
+        'Salah. Membaca tanpa lock adalah data race, bukan deadlock.',
+      ],
+      explanation:
+        'Urutan lock yang konsisten membantu mencegah deadlock.',
+    },
+    {
+      question: 'Kapan tipe atomik lebih tepat daripada Mutex?',
+      options: [
+        'Untuk operasi angka sederhana seperti counter',
+        'Untuk struktur data kompleks dengan banyak field',
+        'Saat perlu menahan lock lama',
+        'Saat data harus diakses dari banyak proses',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Operasi atomik menghindari lock untuk counter.',
+        'Salah. Struktur kompleks biasanya butuh Mutex.',
+        'Salah. Atomik tidak menahan lock.',
+        'Salah. Atomik bukan mekanisme antar proses.',
+      ],
+      explanation:
+        'Buku mencatat tipe atomik lebih sederhana untuk operasi numerik.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

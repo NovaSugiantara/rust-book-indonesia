@@ -1,0 +1,305 @@
+---
+title: '16.5 Studi kasus: worker transaksi Kasir Warung'
+description: 'Memproses transaksi lewat channel dan menggabungkan hasil di Arc<Mutex<HashMap>>.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+import StudyCase from '../../../components/StudyCase.astro';
+import StudyCaseStep from '../../../components/StudyCaseStep.astro';
+
+Cache menu di Bab 15 hanya untuk satu thread. Sekarang transaksi dikirim ke beberapa worker lewat channel, lalu hasilnya digabung dalam state bersama yang dilindungi `Mutex`.
+
+<StudyCase title="Kasir Warung: worker transaksi" intro="Membuat antrean pekerjaan, beberapa worker, dan rekap bersama dengan Arc<Mutex<T>>.">
+  <StudyCaseStep
+    title="Tentukan pekerjaan dan antrean"
+    goal="Mengirim transaksi sebagai pesan ke worker."
+  >
+    ```rust
+    use std::sync::mpsc;
+
+    #[derive(Clone)]
+    pub struct Pekerjaan {
+        pub metode: String,
+        pub total: u32,
+    }
+
+    let (tx, rx) = mpsc::channel::<Pekerjaan>();
+    ```
+
+    Setiap pesan berisi data yang dibutuhkan worker. Setelah dikirim, pengirim tidak lagi memiliki `Pekerjaan` itu.
+
+    <Fragment slot="hint">
+      Gunakan tipe konkret pada `mpsc::channel` agar compiler tahu tipe pesan.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Channel menjadi antrean yang memindahkan kepemilikan pekerjaan ke worker.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Siapkan rekap bersama"
+    goal="Menggabungkan hasil dari beberapa worker dengan aman."
+  >
+    ```rust
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
+    pub type Rekap = Arc<Mutex<HashMap<String, u32>>>;
+
+    let rekap: Rekap = Arc::new(Mutex::new(HashMap::new()));
+    ```
+
+    `Arc` membagi kepemilikan rekap ke semua worker. `Mutex` memastikan hanya satu worker mengubah `HashMap` pada satu waktu.
+
+    <Fragment slot="hint">
+      Jangan memakai `Rc<RefCell<T>>` di sini. Keduanya bukan tipe untuk lintas thread.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Setiap worker mendapat `Arc` sendiri, tetapi semuanya menunjuk rekap yang sama.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Jalankan worker"
+    goal="Setiap worker mengambil pekerjaan sampai channel ditutup."
+  >
+    ```rust
+    use std::sync::mpsc::Receiver;
+    use std::thread;
+
+    let rx = Arc::new(Mutex::new(rx));
+    let mut handles = Vec::new();
+
+    for _ in 0..4 {
+        let rx = Arc::clone(&rx);
+        let rekap = Arc::clone(&rekap);
+
+        handles.push(thread::spawn(move || {
+            loop {
+                let pekerjaan = {
+                    let rx = rx.lock().unwrap();
+                    rx.recv()
+                };
+
+                match pekerjaan {
+                    Ok(p) => {
+                        let mut data = rekap.lock().unwrap();
+                        *data.entry(p.metode).or_insert(0) += p.total;
+                    }
+                    Err(_) => break,
+                }
+            }
+        }));
+    }
+    ```
+
+    Lock pada `rx` hanya dipegang saat menunggu pesan. Setelah pesan diterima, lock dilepas dan worker memproses data.
+
+    <Fragment slot="hint">
+      `recv` memblokir. Karena receiver dibungkus Mutex, hanya satu worker yang menunggu pesan pada satu waktu; pekerjaan tetap diproses paralel setelah pesan diterima.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Semua worker berhenti ketika transmitter ditutup dan `recv` mengembalikan `Err`.
+    </Fragment>
+  </StudyCaseStep>
+
+  <StudyCaseStep
+    title="Kirim pekerjaan dan cetak hasil"
+    goal="Menutup antrean, menunggu worker, lalu membaca rekap."
+  >
+    ```rust
+    for (metode, total) in [
+        ("tunai", 43_000),
+        ("QRIS", 28_000),
+        ("tunai", 15_000),
+        ("QRIS", 52_000),
+    ] {
+        tx.send(Pekerjaan {
+            metode: String::from(metode),
+            total,
+        })
+        .unwrap();
+    }
+
+    drop(tx);
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    let data = rekap.lock().unwrap();
+    println!("tunai: Rp{}", data.get("tunai").copied().unwrap_or(0));
+    println!("QRIS: Rp{}", data.get("QRIS").copied().unwrap_or(0));
+    ```
+
+    `drop(tx)` menutup sisi pengirim. Tanpa itu, worker bisa menunggu selamanya.
+
+    <Fragment slot="hint">
+      Pegang lock rekap hanya saat membaca hasil akhir, bukan selama menunggu worker.
+    </Fragment>
+
+    <Fragment slot="solution">
+      Hasil dari beberapa worker tergabung dalam satu rekap dengan total yang benar.
+    </Fragment>
+  </StudyCaseStep>
+</StudyCase>
+
+## Versi playground
+
+<RustPlayground
+  code={`use std::collections::HashMap;
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
+
+#[derive(Clone)]
+struct Pekerjaan {
+    metode: String,
+    total: u32,
+}
+
+type Rekap = Arc<Mutex<HashMap<String, u32>>>;
+
+fn main() {
+    let (tx, rx) = mpsc::channel::<Pekerjaan>();
+    let rekap: Rekap = Arc::new(Mutex::new(HashMap::new()));
+    let rx = Arc::new(Mutex::new(rx));
+
+    let mut handles = Vec::new();
+
+    for _ in 0..4 {
+        let rx = Arc::clone(&rx);
+        let rekap = Arc::clone(&rekap);
+
+        handles.push(thread::spawn(move || loop {
+            let pekerjaan = {
+                let rx = rx.lock().unwrap();
+                rx.recv()
+            };
+
+            match pekerjaan {
+                Ok(p) => {
+                    let mut data = rekap.lock().unwrap();
+                    *data.entry(p.metode).or_insert(0) += p.total;
+                }
+                Err(_) => break,
+            }
+        }));
+    }
+
+    for (metode, total) in [
+        ("tunai", 43_000),
+        ("QRIS", 28_000),
+        ("tunai", 15_000),
+        ("QRIS", 52_000),
+    ] {
+        tx.send(Pekerjaan {
+            metode: String::from(metode),
+            total,
+        })
+        .unwrap();
+    }
+
+    drop(tx);
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    let data = rekap.lock().unwrap();
+    let mut metode: Vec<&String> = data.keys().collect();
+    metode.sort();
+
+    for nama in metode {
+        println!("{nama}: Rp{}", data[nama]);
+    }
+}`}
+  filename="src/main.rs"
+  label="Worker transaksi dengan channel dan Arc<Mutex<T>>"
+/>
+
+## Keadaan setelah Bab 16
+
+- Pekerjaan transaksi dikirim lewat `mpsc::channel`.
+- Empat worker mengambil pekerjaan dari antrean.
+- Rekap memakai `Arc<Mutex<HashMap<String, u32>>>`.
+- Setiap worker menambah total per metode dengan lock.
+- `drop(tx)` menutup antrean dan membuat worker berhenti.
+- Hasil dijumlahkan tanpa data race; compiler memastikan tipe yang dipakai `Send`.
+- Lock pada receiver membuat penerimaan pesan serial, tetapi pemrosesan setelah pesan diterima berjalan paralel.
+- Belum ada backpressure atau batas antrean; itu bisa dibahas saat merancang sistem produksi.
+
+:::note[Kalau di bahasa lain]
+Pola ini mirip worker pool dengan channel di Go, worker `worker_threads` yang mengambil pesan dari antrean di Node.js, atau thread dan `queue.Queue` di Python. Bedanya, Rust memeriksa kepemilikan pesan dan keamanan state bersama saat kompilasi.
+:::
+
+:::tip[Tips]
+Untuk produksi, pertimbangkan batas antrean, timeout, dan penanganan worker yang panic. `join` mengembalikan `Result`, jadi kegagalan worker bisa dilaporkan, bukan diabaikan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa rekap memakai Arc<Mutex<HashMap>>?',
+      options: [
+        'Agar banyak worker bisa memiliki dan mengubah rekap dengan aman',
+        'Agar HashMap menjadi immutable',
+        'Agar channel bisa ditutup',
+        'Agar worker berjalan di satu thread',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Arc membagi kepemilikan, Mutex mengatur akses.',
+        'Salah. Rekap justru diubah.',
+        'Salah. Penutupan channel memakai drop tx.',
+        'Salah. Worker berjalan paralel.',
+      ],
+      explanation:
+        'State bersama lintas thread membutuhkan kepemilikan dan sinkronisasi yang sesuai.',
+    },
+    {
+      question: 'Mengapa receiver dibungkus Arc<Mutex<Receiver>>?',
+      options: [
+        'Karena Receiver tidak bisa di-clone dan perlu dipakai beberapa worker',
+        'Karena Receiver hanya menerima angka',
+        'Karena Mutex membuat pesan lebih cepat',
+        'Karena Arc menghapus pesan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Mutex membuat satu receiver bisa diakses bergantian.',
+        'Salah. Receiver generik.',
+        'Salah. Tidak ada klaim kecepatan.',
+        'Salah. Arc tidak menghapus pesan.',
+      ],
+      explanation:
+        'Hanya satu worker yang memegang receiver saat menunggu pesan.',
+    },
+    {
+      question: 'Apa fungsi drop(tx) sebelum join?',
+      options: [
+        'Menutup sisi pengirim agar recv mengembalikan Err setelah antrean habis',
+        'Menghapus semua pekerjaan',
+        'Membuat worker baru',
+        'Membuka lock rekap',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Channel tertutup saat semua transmitter di-drop.',
+        'Salah. Pekerjaan yang sudah dikirim tetap diproses.',
+        'Salah. Worker sudah dibuat sebelumnya.',
+        'Salah. Lock rekap terpisah.',
+      ],
+      explanation:
+        'Tanpa drop tx, worker bisa menunggu pesan yang tidak akan datang.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

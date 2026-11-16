@@ -1,0 +1,89 @@
+---
+title: 'Bab 18: Fitur OOP dan trait object'
+description: 'Encapsulation, trait object, dynamic dispatch, object safety, dan state pattern di Rust.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Rust bukan bahasa berorientasi objek klasik, tetapi mendukung sebagian besar idenya dengan cara sendiri. Struct dan enum menyimpan data, `impl` menyediakan method, dan module mengatur enkapsulasi. Untuk polymorphism runtime, Rust memakai trait object seperti `Box<dyn Draw>`, bukan inheritance.
+
+Di backend, trait object berguna saat handler perlu memilih implementasi pembayaran, notifier, atau storage pada runtime tanpa membuat kode bergantung pada tipe konkret.
+
+## Urutan bab
+
+1. [Karakteristik OOP](what-is-oo/) membahas object, encapsulation, inheritance, dan polymorphism.
+2. [Trait object](trait-objects/) membahas `dyn`, `Box<dyn Trait>`, dynamic dispatch, dan dyn compatibility.
+3. [State pattern](design-patterns/) membahas versi objek dan versi type-state.
+4. [Studi kasus: registry pembayaran](studi-kasus/) memakai `Box<dyn PaymentMethod>` untuk Kasir Warung.
+
+:::note[Kenapa begini?]
+Trait object menukar fleksibilitas runtime dengan biaya dynamic dispatch. Generik menukar ukuran kode dan fleksibilitas koleksi dengan dispatch statis. Keduanya sah; pilih berdasarkan apakah tipe diketahui saat kompilasi dan apakah satu collection perlu menampung banyak tipe.
+:::
+
+:::tip[Tips]
+Jangan memakai trait object hanya agar kode terlihat seperti OOP. Kalau semua tipe diketahui saat kompilasi, enum atau generik sering lebih sederhana dan lebih mudah diperiksa compiler.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang bisa dilakukan trait object?',
+      options: [
+        'Menyimpan nilai dari beberapa tipe yang mengimplementasikan trait yang sama',
+        'Menambahkan field ke trait',
+        'Mewarisi field struct lain',
+        'Menghapus kebutuhan method',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Trait object mengabstraksi perilaku bersama.',
+        'Salah. Trait object tidak menambah data ke trait.',
+        'Salah. Rust tidak mewarisi field seperti class.',
+        'Salah. Method tetap dibutuhkan.',
+      ],
+      explanation:
+        'Contohnya Vec<Box<dyn Draw>> yang menampung Button dan SelectBox.',
+    },
+    {
+      question: 'Apa itu dynamic dispatch?',
+      options: [
+        'Method yang dipilih saat runtime melalui pointer trait',
+        'Method yang selalu di-inline compiler',
+        'Method yang hanya ada di trait',
+        'Method yang tidak punya implementation',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Compiler tidak tahu tipe konkret saat kompilasi.',
+        'Salah. Inlining adalah dispatch statis.',
+        'Salah. Method trait tetap punya implementasi pada tipe.',
+        'Salah. Method tanpa body adalah default atau deklarasi.',
+      ],
+      explanation:
+        'Dynamic dispatch memberi fleksibilitas dengan biaya runtime.',
+    },
+    {
+      question: 'Apakah Rust punya inheritance class?',
+      options: [
+        'Tidak, Rust memakai trait dan komposisi',
+        'Ya, semua struct mewarisi struct lain',
+        'Ya, tetapi hanya untuk enum',
+        'Hanya di async',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Buku menegaskan Rust tidak memiliki inheritance.',
+        'Salah. Tidak ada pewarisan field otomatis.',
+        'Salah. Enum bukan inheritance.',
+        'Salah. Async tidak menambah inheritance.',
+      ],
+      explanation:
+        'Reuse dilakukan dengan default method trait dan komposisi.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

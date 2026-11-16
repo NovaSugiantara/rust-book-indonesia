@@ -1,0 +1,224 @@
+---
+title: '17.2 Concurrency dengan async'
+description: 'spawn_task, join, channel async, async move, dan join macro untuk banyak future.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Async memungkinkan beberapa future berjalan bersamaan tanpa thread OS baru. Ada dua cara utama: menyerahkan future ke runtime sebagai task, atau menggabungkan beberapa future dengan `join`.
+
+## Task dengan spawn_task
+
+<RustPlayground
+  code={`use std::time::Duration;
+use trpl::{block_on, spawn_task};
+
+fn main() {
+    block_on(async {
+        let handle = spawn_task(async {
+            for i in 1..4 {
+                println!("task {i}");
+                trpl::sleep(Duration::from_millis(5)).await;
+            }
+        });
+
+        for i in 1..3 {
+            println!("main {i}");
+            trpl::sleep(Duration::from_millis(5)).await;
+        }
+
+        handle.await.unwrap();
+    });
+}`}
+  filename="src/main.rs"
+  label="Task async berjalan bersama main"
+/>
+
+`spawn_task` menyerupai `thread::spawn`, tetapi task dikelola runtime, bukan OS. Handle-nya adalah future, sehingga ditunggu dengan `await`, bukan `join`.
+
+## Join dua future
+
+<RustPlayground
+  code={`use std::time::Duration;
+use trpl::block_on;
+
+fn main() {
+    block_on(async {
+        let a = async {
+            for i in 1..4 {
+                println!("a {i}");
+                trpl::sleep(Duration::from_millis(5)).await;
+            }
+        };
+
+        let b = async {
+            for i in 1..4 {
+                println!("b {i}");
+                trpl::sleep(Duration::from_millis(5)).await;
+            }
+        };
+
+        trpl::join(a, b).await;
+    });
+}`}
+  filename="src/main.rs"
+  label="Dua future dijalankan dengan join"
+/>
+
+`trpl::join` menunggu kedua future selesai dan mengembalikan tuple hasilnya. Buku menyebut `join` bersifat fair: runtime memeriksa kedua future secara bergantian, sehingga urutan hasil lebih konsisten daripada thread yang dijadwalkan OS.
+
+## Channel async
+
+<RustPlayground
+  code={`use std::time::Duration;
+use trpl::block_on;
+
+fn main() {
+    block_on(async {
+        let (tx, mut rx) = trpl::channel();
+
+        let pengirim = async move {
+            for i in 1..4 {
+                tx.send(i).unwrap();
+                trpl::sleep(Duration::from_millis(5)).await;
+            }
+        };
+
+        let penerima = async move {
+            while let Some(pesan) = rx.recv().await {
+                println!("Diterima: {pesan}");
+            }
+        };
+
+        trpl::join(pengirim, penerima).await;
+    });
+}`}
+  filename="src/main.rs"
+  label="Channel async dengan pengirim dan penerima"
+/>
+
+`rx.recv()` mengembalikan future yang di-await. `while let` berhenti ketika channel ditutup. Blok pengirim memakai `async move` agar `tx` dipindahkan dan di-drop saat blok selesai. Tanpa `move`, `tx` bisa hidup lebih lama dan penerima menunggu selamanya.
+
+## join macro
+
+Kalau jumlah future diketahui saat kompilasi, `join!` bisa menangani lebih dari dua future:
+
+<RustPlayground
+  code={`use trpl::block_on;
+
+fn main() {
+    block_on(async {
+        let a = async { 1 };
+        let b = async { 2 };
+        let c = async { 3 };
+
+        let (x, y, z) = trpl::join!(a, b, c);
+        println!("{x} {y} {z}");
+    });
+}`}
+  filename="src/main.rs"
+  label="join macro untuk tiga future"
+/>
+
+Untuk jumlah future yang baru diketahui saat runtime, gunakan `join_all` pada halaman trait async.
+
+## Satu async block berjalan linear
+
+Di dalam satu async block, urutan `await` menentukan urutan eksekusi. Kalau pengiriman dan penerimaan diletakkan dalam satu blok, pengirim menyelesaikan semua delay sebelum penerima mendapat kesempatan berjalan.
+
+Memisahkan pengirim dan penerima ke async block berbeda memungkinkan `join` menjalankan keduanya secara bergantian. Ini perbedaan penting antara concurrency dan paralelisme: future tidak harus berjalan di thread berbeda untuk saling menunggu.
+
+## Di backend
+
+Pola ini mirip menjalankan beberapa query database atau request HTTP secara bersamaan. Daripada menunggu satu per satu, buat future untuk setiap operasi lalu `join` hasilnya. Pastikan error dari setiap future ditangani, misalnya dengan `Result` dan `?`.
+
+:::note[Kalau di bahasa lain]
+Promise JavaScript bisa dijalankan bersamaan dengan `Promise.all`. Rust `join` menggabungkan future yang sudah dibuat, tetapi future tetap lazy sampai di-await. Go menjalankan goroutine dan menunggu dengan `sync.WaitGroup` atau channel. Task async Rust dikelola runtime dan tidak identik dengan thread OS.
+:::
+
+:::tip[Tips]
+Jangan memakai `join` untuk pekerjaan yang harus berurutan karena bergantung pada hasil sebelumnya. `join` hanya cocok saat future independen.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dikembalikan spawn_task?',
+      options: [
+        'Handle yang merupakan future dan bisa di-await',
+        'Thread OS',
+        'Channel',
+        'Nilai langsung',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Handle task ditunggu dengan await.',
+        'Salah. Task bukan thread OS.',
+        'Salah. Channel dibuat terpisah.',
+        'Salah. Hasil baru tersedia setelah await.',
+      ],
+      explanation:
+        'Task dikelola runtime, bukan sistem operasi.',
+    },
+    {
+      question: 'Apa yang dilakukan trpl::join?',
+      options: [
+        'Menunggu semua future selesai dan mengembalikan tuple hasil',
+        'Menggabungkan dua thread',
+        'Membuat channel baru',
+        'Menghentikan future pertama',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. join menunggu seluruh future.',
+        'Salah. join bekerja pada future, bukan thread.',
+        'Salah. Channel dibuat oleh trpl::channel.',
+        'Salah. Kedua future diselesaikan.',
+      ],
+      explanation:
+        'join berguna untuk future independen yang bisa berjalan bersamaan.',
+    },
+    {
+      question: 'Mengapa blok pengirim memakai async move?',
+      options: [
+        'Agar transmitter dipindahkan dan di-drop saat blok selesai',
+        'Agar channel menjadi sinkron',
+        'Agar pesan tidak perlu di-await',
+        'Agar receiver berhenti',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Drop tx menutup channel.',
+        'Salah. Channel tetap async.',
+        'Salah. recv tetap di-await.',
+        'Salah. Receiver berhenti karena channel ditutup.',
+      ],
+      explanation:
+        'Tanpa move, tx bisa hidup sampai blok luar selesai dan receiver menunggu selamanya.',
+    },
+    {
+      question: 'Mengapa join disebut fair?',
+      options: [
+        'Karena runtime memeriksa future secara bergantian',
+        'Karena semua future berjalan di thread berbeda',
+        'Karena join mengabaikan error',
+        'Karena future pertama selalu menang',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Buku menjelaskan pemeriksaan bergantian.',
+        'Salah. Fairness tidak berarti satu thread per future.',
+        'Salah. join tidak mengabaikan error.',
+        'Salah. Justru tidak ada pemenang tunggal.',
+      ],
+      explanation:
+        'Runtimes tidak selalu menjamin fairness, tetapi join di trpl membagi kesempatan.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

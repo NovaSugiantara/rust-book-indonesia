@@ -1,0 +1,90 @@
+---
+title: 'Bab 16: Concurrency tanpa rasa takut'
+description: 'Thread, channel, Mutex, Arc, serta Send dan Sync untuk worker dan state bersama di backend.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Concurrency memungkinkan beberapa bagian program berjalan bersamaan. Di backend, ini muncul saat server menangani banyak request, worker memproses antrean, atau beberapa tugas membaca cache dan database secara paralel.
+
+Rust tidak menghilangkan kompleksitas concurrency. Yang Rust lakukan adalah menolak banyak kesalahan berbahaya saat kompilasi: data yang dipakai setelah dipindahkan, reference yang bisa hidup lebih lama dari pemiliknya, dan state bersama yang tidak aman dikirim antar thread. Setelah kode lolos compiler, kamu masih perlu memikirkan deadlock dan logika bisnis.
+
+## Urutan bab
+
+1. [Thread](threads/) membahas `thread::spawn`, `join`, dan closure `move`.
+2. [Message passing](message-passing/) membahas channel `mpsc`, kepemilikan pesan, dan beberapa producer.
+3. [Shared state](shared-state/) membahas `Mutex`, `Arc`, dan deadlock.
+4. [Send dan Sync](send-sync/) membahas trait marker yang menentukan apa yang boleh menyeberang thread.
+5. [Studi kasus: worker transaksi](studi-kasus/) memakai channel dan state bersama untuk memproses transaksi.
+
+:::note[Kenapa begini?]
+Rust memakai model thread 1:1 di standard library: satu thread bahasa berarti satu thread sistem operasi. Model lain tersedia lewat crate. Async di Bab 17 adalah pendekatan lain untuk concurrency, bukan pengganti otomatis untuk thread.
+:::
+
+:::tip[Tips]
+Mulai dari batas data yang jelas. Kalau data berpindah antrean, pertimbangkan channel. Kalau banyak worker perlu membaca dan mengubah state yang sama, pertimbangkan `Arc<Mutex<T>>` dan ukur contention-nya.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dijamin compiler Rust pada kode concurrent yang lolos?',
+      options: [
+        'Tidak ada data race pada data yang dikelola tipe aman',
+        'Program tidak akan pernah deadlock',
+        'Semua thread selesai dalam urutan yang sama',
+        'Semua operasi menjadi atomik',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Data race dicegah oleh ownership dan trait bound.',
+        'Salah. Deadlock tetap mungkin terjadi.',
+        'Salah. Urutan thread tidak dijamin.',
+        'Salah. Tidak semua operasi otomatis atomik.',
+      ],
+      explanation:
+        'Compiler mencegah data race, tetapi tidak menjamin logika concurrency bebas deadlock.',
+    },
+    {
+      question: 'Apa model thread standard library Rust?',
+      options: [
+        '1:1, satu thread bahasa per thread sistem operasi',
+        'N:1, semua thread bahasa di satu thread OS',
+        'Hanya green thread tanpa OS',
+        'Tidak memakai thread OS sama sekali',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Buku menyebut model 1:1 untuk standard library.',
+        'Salah. Model itu bukan default standard library.',
+        'Salah. Green thread bukan model default.',
+        'Salah. Thread memakai dukungan OS.',
+      ],
+      explanation:
+        'Crate lain bisa menawarkan model berbeda dengan trade-off masing-masing.',
+    },
+    {
+      question: 'Kapan channel lebih tepat daripada state bersama?',
+      options: [
+        'Saat data berpindah dari satu worker ke worker lain sebagai pesan',
+        'Saat semua worker harus mengubah counter yang sama',
+        'Saat data harus dibaca tanpa batas waktu',
+        'Saat ingin menghindari semua error',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Channel memindahkan kepemilikan pesan.',
+        'Salah. Counter bersama biasanya memakai Mutex atau atomik.',
+        'Salah. Channel bukan pengganti semua akses data.',
+        'Salah. Channel tidak menghapus error.',
+      ],
+      explanation:
+        'Pilih channel saat aliran data lebih alami daripada akses memori bersama.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

@@ -1,0 +1,177 @@
+---
+title: '17.5 Trait untuk async'
+description: 'Future, Poll, Pin, Unpin, dan join_all untuk future dalam collection.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Sebagian besar waktu kamu cukup memakai `async` dan `await`. Namun saat membaca error library atau menulis abstraksi, kamu perlu memahami `Future`, `Poll`, `Pin`, dan `Unpin`.
+
+## Trait Future
+
+```rust
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+pub trait Future {
+    type Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>;
+}
+```
+
+`Output` adalah nilai yang dihasilkan future. `poll` memeriksa apakah future sudah selesai. Hasilnya `Poll::Ready(T)` atau `Poll::Pending`.
+
+Saat menemui `await`, compiler menghasilkan kode yang memanggil `poll` lewat runtime. Jika hasilnya `Pending`, runtime menjalankan future lain dan kembali lagi nanti. Jika `Ready`, nilainya dipakai.
+
+`Context` membawa informasi yang dibutuhkan future untuk memberi tahu runtime kapan ia siap diperiksa lagi. Implementasi manual `poll` jarang diperlukan; gunakan `async` dan biarkan compiler membuat state machine.
+
+## Pin
+
+Future hasil async block bisa menyimpan reference ke dirinya sendiri. Kalau future dipindahkan di memori setelah reference internal dibuat, reference itu bisa menunjuk alamat lama yang tidak valid.
+
+`Pin` mencegah nilai yang dipin dipindahkan. `Future::poll` menerima `Pin<&mut Self>` agar future yang self-referential tetap aman.
+
+Saat kamu menulis `future.await`, compiler memin future itu secara implisit. Kamu perlu menulis `Box::pin` saat future disimpan dalam collection atau dikembalikan dari fungsi yang membutuhkan alamat stabil.
+
+`Unpin` adalah marker trait yang menyatakan tipe aman dipindahkan meskipun berada di dalam `Pin`. Sebagian besar tipe biasa adalah `Unpin`. Future hasil async block tidak otomatis `Unpin`.
+
+## join_all dengan future dalam vector
+
+Jumlah future yang diketahui saat runtime bisa dimasukkan ke `Vec`. Karena setiap async block punya tipe anonymous berbeda, future dibungkus trait object dan dipin:
+
+<RustPlayground
+  code={`use std::future::Future;
+use std::pin::Pin;
+use trpl::block_on;
+
+fn main() {
+    block_on(async {
+        let futures: Vec<Pin<Box<dyn Future<Output = i32>>>> = vec![
+            Box::pin(async { 1 }),
+            Box::pin(async { 2 }),
+            Box::pin(async { 3 }),
+        ];
+
+        let hasil = trpl::join_all(futures).await;
+        println!("{hasil:?}");
+    });
+}`}
+  filename="src/main.rs"
+  label="join_all dengan future yang dipin"
+/>
+
+Tanpa `Box::pin`, future di dalam Box tidak memenuhi `Unpin`:
+
+<RustPlayground
+  code={`use std::future::Future;
+use trpl::block_on;
+
+fn main() {
+    block_on(async {
+        let futures: Vec<Box<dyn Future<Output = ()>>> = vec![
+            Box::new(async {}),
+            Box::new(async {}),
+        ];
+
+        trpl::join_all(futures).await;
+    });
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error join_all pada future yang belum dipin"
+/>
+
+Pesan `dyn Future cannot be unpinned` muncul karena `Box<dyn Future>` tidak otomatis `Unpin`. Compiler menyarankan `pin!` atau `Box::pin`, sesuai yang dijelaskan buku.
+
+## Di backend
+
+Kamu jarang mengimplementasikan `Future` manual. Biasanya `Pin` muncul di signature library, extractor, atau tipe yang menyimpan future. Kalau compiler meminta `Unpin`, biasanya future disimpan dalam collection atau dikembalikan lewat trait object.
+
+Jangan menambahkan `Pin` hanya untuk menghilangkan error tanpa memahami kepemilikan future. Pilih `Box::pin` saat future memang perlu dialokasikan dan alamatnya stabil.
+
+:::note[Kalau di bahasa lain]
+Promise JavaScript adalah object yang menyimpan state dan hasil. Future Rust adalah state machine yang dipoll, dengan `Pin` menjaga alamat stabil untuk reference internal. Python coroutine juga merupakan object yang bisa dijeda, tetapi runtime dan aturan pemindahannya berbeda.
+:::
+
+:::tip[Tips]
+Kalau error menyebut `Unpin`, cari future yang disimpan dalam `Vec`, dikembalikan sebagai `Box<dyn Future>`, atau dimasukkan ke struct. `Box::pin` adalah perbaikan yang umum, tetapi periksa juga apakah future benar-benar perlu disimpan.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa hasil Future::poll?',
+      options: ['Poll::Ready atau Poll::Pending', 'Selalu nilai T', 'Result<T, E>', 'Future baru'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Poll menunjukkan siap atau belum.',
+        'Salah. Nilai T ada di dalam Ready.',
+        'Salah. Poll bukan Result.',
+        'Salah. poll tidak membuat future baru.',
+      ],
+      explanation:
+        'Runtime memakai Poll untuk menentukan apakah future perlu dijalankan lagi.',
+    },
+    {
+      question: 'Mengapa future perlu dipin?',
+      options: [
+        'Agar alamatnya tidak berubah saat menyimpan reference internal',
+        'Agar future berjalan di thread lain',
+        'Agar hasilnya menjadi Copy',
+        'Agar runtime tidak perlu poll',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Future bisa self-referential.',
+        'Salah. Pin bukan pemindah thread.',
+        'Salah. Pin tidak mengubah Copy.',
+        'Salah. Runtime tetap poll.',
+      ],
+      explanation:
+        'Memindahkan future yang self-referential bisa membuat pointer internal tidak valid.',
+    },
+    {
+      question: 'Apa arti Unpin?',
+      options: [
+        'Tipe aman dipindahkan meskipun berada di Pin',
+        'Tipe tidak bisa dipin',
+        'Tipe selalu Send',
+        'Tipe tidak punya Drop',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Unpin adalah marker untuk keamanan pemindahan.',
+        'Salah. Unpin justru membuat pemindahan aman.',
+        'Salah. Unpin dan Send berbeda.',
+        'Salah. Unpin tidak mengatur Drop.',
+      ],
+      explanation:
+        'Sebagian besar tipe biasa Unpin; future async block sering tidak.',
+    },
+    {
+      question: 'Kapan Box::pin diperlukan?',
+      options: [
+        'Saat future disimpan dalam collection atau perlu alamat stabil',
+        'Saat future tidak punya Output',
+        'Saat ingin membuat thread',
+        'Saat memakai await pertama kali',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Box::pin mengalokasikan future dan mempinnya.',
+        'Salah. Future selalu punya Output.',
+        'Salah. Thread dibuat oleh thread API.',
+        'Salah. await mempin secara implisit.',
+      ],
+      explanation:
+        'join_all pada collection future sering membutuhkan Box::pin.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

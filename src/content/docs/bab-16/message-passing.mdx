@@ -1,0 +1,202 @@
+---
+title: '16.2 Message passing'
+description: 'Channel mpsc untuk mengirim data antar thread, kepemilikan pesan, dan beberapa producer.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Channel memindahkan data dari satu thread ke thread lain. Pendekatan ini menghindari state bersama: thread berkomunikasi dengan mengirim pesan, bukan membaca dan menulis memori yang sama.
+
+## Channel dasar
+
+`std::sync::mpsc::channel` membuat pasangan transmitter dan receiver. `mpsc` berarti multiple producer, single consumer.
+
+<RustPlayground
+  code={`use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    let handle = thread::spawn(move || {
+        tx.send(String::from("halo dari worker")).unwrap();
+    });
+
+    let pesan = rx.recv().unwrap();
+    println!("Diterima: {pesan}");
+
+    handle.join().unwrap();
+}`}
+  filename="src/main.rs"
+  label="Mengirim satu pesan lewat channel"
+/>
+
+`send` mengembalikan `Result` karena receiver bisa sudah di-drop. `recv` memblokir sampai ada pesan atau semua transmitter ditutup. `try_recv` tidak memblokir dan langsung mengembalikan hasil.
+
+## Kepemilikan pesan
+
+`send` mengambil kepemilikan nilai. Setelah dikirim, pengirim tidak boleh memakai nilai itu lagi.
+
+<RustPlayground
+  code={`use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    let handle = thread::spawn(move || {
+        let pesan = String::from("data");
+        tx.send(pesan).unwrap();
+        println!("Masih bisa dipakai: {pesan}");
+    });
+
+    println!("{:?}", rx.recv());
+    handle.join().unwrap();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error memakai nilai setelah dikirim"
+/>
+
+Pesan `borrow of moved value: pesan` muncul karena ownership sudah berpindah ke channel dan kemudian ke receiver. Ini mencegah pengirim mengubah data yang mungkin sedang dipakai thread lain.
+
+## Banyak pesan
+
+Receiver bisa diperlakukan sebagai iterator. Iterasi berhenti saat semua transmitter ditutup.
+
+<RustPlayground
+  code={`use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    let handle = thread::spawn(move || {
+        for pesan in ["satu", "dua", "tiga"] {
+            tx.send(String::from(pesan)).unwrap();
+            thread::sleep(Duration::from_millis(5));
+        }
+    });
+
+    for diterima in rx {
+        println!("Diterima: {diterima}");
+    }
+
+    handle.join().unwrap();
+}`}
+  filename="src/main.rs"
+  label="Mengirim beberapa pesan"
+/>
+
+Transmitter `tx` dipindahkan ke thread dan di-drop saat closure selesai. Setelah itu receiver tahu tidak akan ada pesan lagi.
+
+## Beberapa producer
+
+Transmitter bisa di-clone. Setiap clone bisa dikirim ke thread berbeda, tetapi receiver tetap satu.
+
+<RustPlayground
+  code={`use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    let tx1 = tx.clone();
+
+    thread::spawn(move || {
+        tx1.send(String::from("dari worker 1")).unwrap();
+    });
+
+    thread::spawn(move || {
+        tx.send(String::from("dari worker 2")).unwrap();
+    });
+
+    for pesan in rx {
+        println!("{pesan}");
+    }
+}`}
+  filename="src/main.rs"
+  label="Dua producer, satu receiver"
+/>
+
+Urutan pesan tidak dijamin karena kedua thread berjalan bersamaan. Kalau urutan penting, sertakan nomor urut di dalam pesan dan urutkan di penerima.
+
+## Di backend
+
+Channel cocok untuk antrean pekerjaan: handler mengirim job ke worker, worker mengirim hasil atau status kembali. Keuntungannya, kepemilikan job berpindah dengan jelas dan tidak ada data yang diubah bersamaan tanpa sinkronisasi.
+
+Channel bukan obat semua masalah. Kalau banyak worker perlu membaca state yang sama, channel bisa membuat kode lebih rumit. Pilih model yang sesuai dengan aliran data.
+
+:::note[Kalau di bahasa lain]
+Go menggunakan channel sebagai bagian inti model concurrency dan mendukung banyak receiver. Node.js worker saling mengirim pesan dan tidak berbagi heap JavaScript. Python memiliki `queue.Queue` untuk komunikasi antar thread, dengan lock internal. Rust `mpsc` hanya satu receiver, tetapi transmitter bisa di-clone dan kepemilikan pesan diperiksa compiler.
+:::
+
+:::tip[Tips]
+Tutup transmitter saat tidak ada pesan lagi. Kalau transmitter asli tetap hidup di main, loop receiver bisa menunggu selamanya.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa arti mpsc?',
+      options: [
+        'Multiple producer, single consumer',
+        'Multi process, single channel',
+        'Mutable pointer, shared cell',
+        'Message passing, safe copy',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Banyak pengirim, satu penerima.',
+        'Salah. Bukan proses.',
+        'Salah. Bukan pointer.',
+        'Salah. Bukan kepanjangan itu.',
+      ],
+      explanation:
+        'Transmitter bisa di-clone, sedangkan receiver hanya satu.',
+    },
+    {
+      question: 'Mengapa nilai tidak bisa dipakai setelah send?',
+      options: [
+        'Karena send memindahkan kepemilikan ke channel',
+        'Karena nilai menjadi immutable',
+        'Karena channel menghapus nilai',
+        'Karena receiver menyalin nilai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Kepemilikan berpindah ke penerima.',
+        'Salah. Masalahnya kepemilikan, bukan mutabilitas.',
+        'Salah. Nilai tidak dihapus saat send.',
+        'Salah. Tidak ada penyalinan otomatis.',
+      ],
+      explanation:
+        'Aturan ownership mencegah data dipakai oleh dua pihak sekaligus.',
+    },
+    {
+      question: 'Kapan loop for pada receiver berhenti?',
+      options: [
+        'Saat semua transmitter ditutup',
+        'Saat satu pesan diterima',
+        'Saat receiver di-clone',
+        'Saat thread main tidur',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Channel tertutup ketika semua pengirim di-drop.',
+        'Salah. Loop terus membaca pesan berikutnya.',
+        'Salah. Receiver tidak di-clone.',
+        'Salah. Tidur tidak menutup channel.',
+      ],
+      explanation:
+        'Pastikan transmitter asli ikut di-drop agar iterasi selesai.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

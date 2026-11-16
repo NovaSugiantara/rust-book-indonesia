@@ -1,0 +1,133 @@
+---
+title: '16.4 Send dan Sync'
+description: 'Trait marker yang menentukan kepemilikan dan reference aman dikirim antar thread.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+`Send` dan `Sync` adalah trait marker di `std::marker`. Keduanya tidak punya method. Fungsinya memberi tahu compiler apakah sebuah tipe aman dipindahkan atau dirujuk antar thread.
+
+## Send
+
+`Send` berarti kepemilikan nilai bertipe itu boleh dipindahkan ke thread lain. Hampir semua tipe Rust mengimplementasikan `Send`, kecuali beberapa seperti `Rc<T>`.
+
+`Rc<T>` tidak `Send` karena clone dan drop mengubah reference count tanpa sinkronisasi. Kalau dua thread mengubah count bersamaan, nilainya bisa salah.
+
+## Sync
+
+`Sync` berarti reference immutable ke tipe itu boleh dikirim ke thread lain. Secara definisi, `T` adalah `Sync` jika `&T` adalah `Send`.
+
+Tipe yang tersusun seluruhnya dari bagian `Send` otomatis `Send`. Hal yang sama berlaku untuk `Sync`. Kamu tidak perlu mengimplementasikannya manual untuk tipe biasa.
+
+## Yang tidak Send atau Sync
+
+- `Rc<T>` tidak `Send` dan tidak `Sync`.
+- `RefCell<T>` dan `Cell<T>` tidak `Sync` karena pengecekan borrow-nya tidak thread-safe.
+- `Mutex<T>` adalah `Sync` jika `T: Send` dan bisa dipakai untuk akses bersama.
+- `Arc<T>` adalah `Send` dan `Sync` jika `T` memenuhi syarat yang sesuai.
+
+Mengirim `Rc<RefCell<T>>` ke thread ditolak compiler:
+
+<RustPlayground
+  code={`use std::cell::RefCell;
+use std::rc::Rc;
+use std::thread;
+
+fn main() {
+    let state = Rc::new(RefCell::new(0));
+
+    thread::spawn(move || {
+        *state.borrow_mut() += 1;
+    })
+    .join()
+    .unwrap();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error Rc<RefCell<T>> dikirim ke thread"
+/>
+
+Pesan `Rc<RefCell<i32>> cannot be sent between threads safely` muncul karena `Rc` bukan `Send` dan `RefCell` bukan `Sync`. Gantinya adalah `Arc<Mutex<T>>`.
+
+## Implementasi manual
+
+Tipe yang seluruh bagiannya aman otomatis mendapat `Send` dan `Sync`. Kalau kamu membuat tipe concurrency baru dari bagian yang tidak aman, implementasi manual membutuhkan `unsafe` dan tanggung jawab membuktikan invariant. Bab ini tidak membahasnya lebih jauh; buku merujuk ke Rustonomicon.
+
+## Di backend
+
+State aplikasi yang dibagi ke handler biasanya harus `Send + Sync + 'static` agar bisa dipakai lintas thread. Itu sebabnya `Rc<RefCell<T>>` tidak cocok untuk state server, sedangkan `Arc<Mutex<T>>` atau `Arc<RwLock<T>>` bisa.
+
+Trait bound ini juga muncul di error framework. Kalau compiler mengeluh state tidak `Send` atau `Sync`, biasanya ada `Rc`, `RefCell`, atau reference dengan umur yang salah di dalamnya.
+
+:::note[Kalau di bahasa lain]
+Go tidak memakai trait marker seperti `Send` dan `Sync`; compiler tidak memeriksa apakah struct berisi pointer yang tidak aman untuk goroutine. Node.js worker tidak berbagi heap JavaScript, sehingga state harus dikirim lewat pesan atau `SharedArrayBuffer`. Python tidak memeriksa keamanan thread pada level tipe; programmer memakai lock dan dokumentasi. Rust memindahkan sebagian pemeriksaan itu ke sistem tipe.
+:::
+
+:::tip[Tips]
+Saat error menyebut `Send` atau `Sync`, cari tipe yang tidak memenuhi di dalam struct. Biasanya `Rc`, `RefCell`, atau `*const T`. Ganti dengan primitif yang sesuai, jangan menambahkan `unsafe impl` tanpa alasan kuat.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa arti T: Send?',
+      options: [
+        'Kepemilikan T boleh dipindahkan ke thread lain',
+        'Reference ke T boleh diubah dari banyak thread',
+        'T selalu Copy',
+        'T tidak bisa dipakai di main',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Send berkaitan dengan transfer kepemilikan.',
+        'Salah. Itu lebih dekat ke Sync dan mutabilitas.',
+        'Salah. Send tidak berarti Copy.',
+        'Salah. Send tidak melarang pemakaian di main.',
+      ],
+      explanation:
+        'Send adalah marker untuk kepemilikan yang aman dipindahkan antar thread.',
+    },
+    {
+      question: 'Mengapa RefCell tidak Sync?',
+      options: [
+        'Karena pengecekan borrow runtime-nya tidak thread-safe',
+        'Karena RefCell tidak punya Deref',
+        'Karena RefCell hanya untuk String',
+        'Karena RefCell tidak bisa di-drop',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Borrow counter-nya tidak disinkronkan antar thread.',
+        'Salah. RefCell punya Deref.',
+        'Salah. RefCell generik.',
+        'Salah. RefCell punya Drop.',
+      ],
+      explanation:
+        'Untuk mutasi lintas thread, gunakan Mutex atau RwLock.',
+    },
+    {
+      question: 'Tipe seperti apa yang otomatis Send dan Sync?',
+      options: [
+        'Tipe yang seluruh bagiannya Send dan Sync',
+        'Semua tipe yang punya method',
+        'Semua tipe yang memakai heap',
+        'Semua tipe yang diimplementasikan manual',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Sifat ini komposisional.',
+        'Salah. Method tidak menentukan.',
+        'Salah. Alokasi heap tidak menentukan.',
+        'Salah. Implementasi manual justru membutuhkan unsafe.',
+      ],
+      explanation:
+        'Tipe baru mewarisi jaminan dari field-fieldnya.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

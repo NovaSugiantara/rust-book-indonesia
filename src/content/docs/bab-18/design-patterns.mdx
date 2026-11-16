@@ -1,0 +1,307 @@
+---
+title: '18.3 State pattern'
+description: 'Workflow draft, review, dan published dengan trait object serta versi type-state.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+State pattern memisahkan perilaku berdasarkan state internal sebuah nilai. Buku memakai contoh blog post dengan tiga state: draft, pending review, dan published. Hanya post published yang boleh mengembalikan konten.
+
+## Versi trait object
+
+`Post` menyimpan `Option<Box<dyn State>>`. Setiap state bertanggung jawab atas transisinya sendiri.
+
+<RustPlayground
+  code={`pub struct Post {
+    state: Option<Box<dyn State>>,
+    content: String,
+}
+
+impl Post {
+    pub fn new() -> Post {
+        Post {
+            state: Some(Box::new(Draft {})),
+            content: String::new(),
+        }
+    }
+
+    pub fn add_text(&mut self, text: &str) {
+        self.content.push_str(text);
+    }
+
+    pub fn content(&self) -> &str {
+        self.state.as_ref().unwrap().content(self)
+    }
+
+    pub fn request_review(&mut self) {
+        if let Some(s) = self.state.take() {
+            self.state = Some(s.request_review());
+        }
+    }
+
+    pub fn approve(&mut self) {
+        if let Some(s) = self.state.take() {
+            self.state = Some(s.approve());
+        }
+    }
+}
+
+trait State {
+    fn request_review(self: Box<Self>) -> Box<dyn State>;
+    fn approve(self: Box<Self>) -> Box<dyn State>;
+
+    fn content<'a>(&self, post: &'a Post) -> &'a str {
+        ""
+    }
+}
+
+struct Draft {}
+
+impl State for Draft {
+    fn request_review(self: Box<Self>) -> Box<dyn State> {
+        Box::new(PendingReview {})
+    }
+
+    fn approve(self: Box<Self>) -> Box<dyn State> {
+        self
+    }
+}
+
+struct PendingReview {}
+
+impl State for PendingReview {
+    fn request_review(self: Box<Self>) -> Box<dyn State> {
+        self
+    }
+
+    fn approve(self: Box<Self>) -> Box<dyn State> {
+        Box::new(Published {})
+    }
+}
+
+struct Published {}
+
+impl State for Published {
+    fn request_review(self: Box<Self>) -> Box<dyn State> {
+        self
+    }
+
+    fn approve(self: Box<Self>) -> Box<dyn State> {
+        self
+    }
+
+    fn content<'a>(&self, post: &'a Post) -> &'a str {
+        &post.content
+    }
+}
+
+fn main() {
+    let mut post = Post::new();
+
+    post.add_text("Hari ini saya makan salad.");
+    assert_eq!("", post.content());
+
+    post.request_review();
+    assert_eq!("", post.content());
+
+    post.approve();
+    assert_eq!("Hari ini saya makan salad.", post.content());
+
+    println!("{}", post.content());
+}`}
+  filename="src/lib.rs"
+  label="State pattern dengan Box<dyn State>"
+/>
+
+`Option::take` memindahkan state lama keluar dari `Post` dan menyisakan `None` sementara. State baru dipasang dari hasil method state lama. Pola ini memungkinkan transisi yang mengonsumsi state sebelumnya.
+
+`content` pada trait punya default string kosong. `Published` meng-override dan mengembalikan konten post. Draft dan pending review memakai default, sehingga konten tidak bocor sebelum publikasi.
+
+## Keterbatasan versi objek
+
+State saling mengetahui transisi berikutnya. Menambah state di antara pending review dan published berarti mengubah `PendingReview`. Selain itu, beberapa method di `Post` hampir sama dan hanya berbeda pada pemanggilan state.
+
+Default method pada trait juga tidak bisa mengembalikan `Self` di trait object karena ukuran konkretnya tidak diketahui. Ini alasan method transisi harus mengembalikan `Box<dyn State>`.
+
+## Versi type-state
+
+Rust bisa mengubah state menjadi tipe berbeda. `DraftPost` tidak punya method `content`, sehingga membaca konten draft menjadi error kompilasi.
+
+<RustPlayground
+  code={`pub struct Post {
+    content: String,
+}
+
+pub struct DraftPost {
+    content: String,
+}
+
+pub struct PendingReviewPost {
+    content: String,
+}
+
+impl Post {
+    pub fn new() -> DraftPost {
+        DraftPost {
+            content: String::new(),
+        }
+    }
+
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+}
+
+impl DraftPost {
+    pub fn add_text(&mut self, text: &str) {
+        self.content.push_str(text);
+    }
+
+    pub fn request_review(self) -> PendingReviewPost {
+        PendingReviewPost {
+            content: self.content,
+        }
+    }
+}
+
+impl PendingReviewPost {
+    pub fn approve(self) -> Post {
+        Post {
+            content: self.content,
+        }
+    }
+}
+
+fn main() {
+    let mut post = Post::new();
+
+    post.add_text("Hari ini saya makan salad.");
+    let post = post.request_review();
+    let post = post.approve();
+
+    assert_eq!("Hari ini saya makan salad.", post.content());
+    println!("{}", post.content());
+}`}
+  filename="src/lib.rs"
+  label="Workflow sebagai transisi tipe"
+/>
+
+Setiap method transisi mengambil `self`, sehingga instance lama tidak bisa dipakai lagi. Satu-satunya cara mendapatkan `Post` yang punya `content` adalah melewati review dan approval.
+
+Memanggil `content` pada draft ditolak:
+
+<RustPlayground
+  code={`struct DraftPost {
+    content: String,
+}
+
+fn main() {
+    let draft = DraftPost {
+        content: String::from("belum siap"),
+    };
+
+    println!("{}", draft.content());
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error memanggil content pada draft"
+/>
+
+Pesan `no method named content found for struct DraftPost` menunjukkan bahwa aturan bisnis sudah menjadi aturan tipe. Kesalahan tidak menunggu runtime.
+
+## Trade-off
+
+Versi trait object menjaga API `Post` tetap sama dan menyembunyikan transisi. Versi type-state memindahkan transisi ke pemanggil, tetapi membuat state tidak valid mustahil dikompilasi.
+
+Di backend, type-state cocok untuk workflow yang urutannya ketat, misalnya `DraftOrder -> PaidOrder -> ShippedOrder`. Trait object cocok saat state atau implementasi harus dipilih dari konfigurasi pada runtime.
+
+:::note[Kalau di bahasa lain]
+Di TypeScript, PHP, atau Java, state pattern biasanya memakai object state dan method yang mengubah referensi state internal. Rust bisa melakukan itu dengan `Box<dyn State>`, tetapi juga bisa mengangkat state ke tipe terpisah agar kesalahan transisi tertangkap compiler.
+:::
+
+:::tip[Tips]
+Pilih type-state saat urutan transisi adalah aturan bisnis penting. Pilih trait object saat state perlu diperluas dari luar atau dipilih saat runtime.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Mengapa Post menyimpan Option<Box<dyn State>>?',
+      options: [
+        'Agar state lama bisa diambil dan diganti saat transisi',
+        'Agar state bisa dihapus permanen',
+        'Agar Post tidak punya konten',
+        'Agar trait menjadi dyn-compatible',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. take memindahkan state lama keluar sementara.',
+        'Salah. State baru dipasang setelahnya.',
+        'Salah. Konten tetap disimpan.',
+        'Salah. Option bukan penyebab dyn compatibility.',
+      ],
+      explanation:
+        'Transisi mengonsumsi state lama dan mengembalikan state baru.',
+    },
+    {
+      question: 'Bagaimana draft mencegah kontennya dibaca pada versi type-state?',
+      options: [
+        'DraftPost tidak memiliki method content',
+        'Content disimpan sebagai private',
+        'Content selalu kosong',
+        'Content dihapus saat request_review',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Method yang tidak ada menghasilkan error kompilasi.',
+        'Salah. Field private saja tidak cukup.',
+        'Salah. Konten tetap disimpan.',
+        'Salah. Konten dipindahkan ke tipe berikutnya.',
+      ],
+      explanation:
+        'State yang tidak valid dicegah oleh tipe, bukan hanya oleh pengecekan runtime.',
+    },
+    {
+      question: 'Apa kelemahan versi trait object?',
+      options: [
+        'State saling terkait dan beberapa logika terduplikasi',
+        'Tidak bisa memakai method',
+        'Tidak bisa menyimpan String',
+        'Tidak bisa dikompilasi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Menambah state bisa memaksa perubahan state lain.',
+        'Salah. Method tetap tersedia.',
+        'Salah. String bisa disimpan.',
+        'Salah. Kode ini valid.',
+      ],
+      explanation:
+        'Buku mencatat coupling antar state dan duplikasi method sebagai trade-off.',
+    },
+    {
+      question: 'Kapan type-state lebih tepat?',
+      options: [
+        'Saat urutan transisi harus dipaksakan compiler',
+        'Saat state dipilih dari plugin eksternal',
+        'Saat semua state harus satu tipe',
+        'Saat konten harus selalu kosong',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Tipe mencegah transisi yang tidak valid.',
+        'Salah. Plugin runtime lebih cocok trait object.',
+        'Salah. Type-state justru memakai tipe berbeda.',
+        'Salah. Konten menjadi tersedia setelah published.',
+      ],
+      explanation:
+        'Type-state mengubah aturan workflow menjadi aturan tipe.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

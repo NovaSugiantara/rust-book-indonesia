@@ -1,0 +1,134 @@
+---
+title: '17.6 Future, task, dan thread'
+description: 'Perbedaan future, task, dan thread serta aturan memilih async atau thread di server.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Thread, task, dan future adalah tiga tingkat concurrency yang berbeda. Thread adalah unit yang dikelola sistem operasi. Task adalah unit yang dikelola runtime async. Future adalah unit paling kecil yang bisa dijeda dan dilanjutkan.
+
+## Tiga tingkat
+
+- Thread menjalankan kode sinkron. Concurrency terjadi antar thread.
+- Task membungkus satu atau lebih future. Concurrency bisa terjadi antar task dan di dalam task.
+- Future adalah langkah asynchronous yang bisa dipoll.
+
+Satu task bisa berisi beberapa future yang di-join. Runtime menjalankan banyak task, dan task bisa dipindahkan antar thread oleh runtime.
+
+## Memilih async atau thread
+
+Buku memberi dua aturan praktis:
+
+- Pekerjaan yang sangat parallelizable dan CPU-bound, seperti memproses banyak data secara terpisah, lebih cocok memakai thread.
+- Pekerjaan yang sangat concurrent dan I/O-bound, seperti menangani banyak koneksi yang datang dan menunggu, lebih cocok memakai async.
+
+Keduanya bisa digabung. Contoh umum: thread mengerjakan kompresi video atau hashing, lalu mengirim hasil ke bagian async yang menangani response jaringan.
+
+## Thread mengirim ke channel async
+
+<RustPlayground
+  code={`use std::thread;
+use std::time::Duration;
+use trpl::block_on;
+
+fn main() {
+    let (tx, mut rx) = trpl::channel();
+
+    thread::spawn(move || {
+        for i in 1..4 {
+            tx.send(i).unwrap();
+            thread::sleep(Duration::from_millis(5));
+        }
+    });
+
+    block_on(async {
+        while let Some(nilai) = rx.recv().await {
+            println!("Diterima: {nilai}");
+        }
+    });
+}`}
+  filename="src/main.rs"
+  label="Thread sinkron mengirim ke channel async"
+/>
+
+Thread memakai API sinkron dan tidur dengan `thread::sleep`. Penerima berjalan di runtime async dan menunggu dengan `await`. Channel menjadi batas antara dua dunia.
+
+## Blocking di dalam async
+
+Memanggil operasi blocking di dalam async akan menahan thread runtime. Kalau banyak task melakukan itu, task lain bisa kekurangan kesempatan berjalan. Untuk pekerjaan blocking yang tidak bisa diubah menjadi async, runtime biasanya menyediakan fungsi seperti `spawn_blocking` agar pekerjaan dipindahkan ke thread terpisah.
+
+Pilihan ini bukan detail kosmetik. Server dengan runtime async tetap bisa kehabisan kapasitas kalau handler melakukan blocking tanpa batas.
+
+## Work stealing
+
+Buku menyebut banyak runtime memakai work stealing: task dipindahkan antar thread berdasarkan beban. Ini menjelaskan mengapa model async bisa memakai beberapa thread di bawahnya tanpa membuat satu thread per task.
+
+Work stealing tidak menghapus kebutuhan sinkronisasi. Data yang dibagi antar task tetap harus aman, dan operasi blocking tetap harus dihindari di thread runtime.
+
+:::note[Kalau di bahasa lain]
+Go menyembunyikan thread di balik goroutine dan scheduler runtime. Node.js menjalankan JavaScript di satu event loop dan memakai `worker_threads` untuk pekerjaan CPU-bound. Python punya thread dengan GIL pada CPython dan `asyncio` untuk I/O. Rust memisahkan pilihan runtime dari bahasa, sehingga async dan thread bisa dipakai bersama secara eksplisit.
+:::
+
+:::tip[Tips]
+Profil beban kerja sebelum memilih. Kalau waktu banyak dihabiskan menunggu I/O, async membantu. Kalau CPU bekerja penuh, tambah paralelisme CPU dengan thread atau proses.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa perbedaan task dan thread?',
+      options: [
+        'Task dikelola runtime async, thread dikelola sistem operasi',
+        'Task selalu lebih cepat',
+        'Thread tidak bisa menjalankan kode',
+        'Task hanya untuk CPU-bound',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini perbedaan unit pengelolaannya.',
+        'Salah. Tidak ada klaim selalu lebih cepat.',
+        'Salah. Thread menjalankan kode.',
+        'Salah. Task umumnya untuk I/O-bound.',
+      ],
+      explanation:
+        'Task adalah unit runtime; thread adalah unit OS.',
+    },
+    {
+      question: 'Pekerjaan CPU-bound lebih cocok dengan apa?',
+      options: ['Thread atau proses paralel', 'Async tanpa await', 'Channel saja', 'Mutex saja'],
+      answer: 0,
+      optionNotes: [
+        'Benar. Paralelisme CPU membutuhkan thread atau proses.',
+        'Salah. Async tanpa await justru memblokir.',
+        'Salah. Channel adalah alat komunikasi.',
+        'Salah. Mutex adalah sinkronisasi, bukan paralelisme.',
+      ],
+      explanation:
+        'Buku menyarankan thread untuk pekerjaan yang sangat parallelizable.',
+    },
+    {
+      question: 'Mengapa operasi blocking berbahaya di async?',
+      options: [
+        'Karena menahan thread runtime dan menghambat task lain',
+        'Karena menyebabkan memory leak',
+        'Karena membuat future menjadi Promise',
+        'Karena menghapus channel',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Runtime tidak bisa menjalankan task lain di thread itu.',
+        'Salah. Bukan penyebab memory leak.',
+        'Salah. Future tetap future.',
+        'Salah. Channel tidak terhapus.',
+      ],
+      explanation:
+        'Gunakan versi async atau pindahkan blocking work ke thread terpisah.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

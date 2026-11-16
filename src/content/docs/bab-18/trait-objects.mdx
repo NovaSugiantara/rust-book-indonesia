@@ -1,0 +1,243 @@
+---
+title: '18.2 Trait object'
+description: 'Box<dyn Trait>, dynamic dispatch, object safety, dan perbandingan dengan interface.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Trait object memungkinkan satu collection menyimpan nilai dari beberapa tipe yang mengimplementasikan trait yang sama. Tipe konkretnya tidak perlu diketahui saat library ditulis.
+
+## Draw dan Screen
+
+<RustPlayground
+  code={`trait Draw {
+    fn draw(&self);
+}
+
+struct Screen {
+    components: Vec<Box<dyn Draw>>,
+}
+
+impl Screen {
+    fn run(&self) {
+        for component in &self.components {
+            component.draw();
+        }
+    }
+}
+
+struct Button {
+    label: String,
+}
+
+impl Draw for Button {
+    fn draw(&self) {
+        println!("Tombol: {}", self.label);
+    }
+}
+
+struct SelectBox {
+    options: Vec<String>,
+}
+
+impl Draw for SelectBox {
+    fn draw(&self) {
+        println!("Pilihan: {:?}", self.options);
+    }
+}
+
+fn main() {
+    let screen = Screen {
+        components: vec![
+            Box::new(Button {
+                label: String::from("OK"),
+            }),
+            Box::new(SelectBox {
+                options: vec![String::from("Ya"), String::from("Tidak")],
+            }),
+        ],
+    };
+
+    screen.run();
+}`}
+  filename="src/main.rs"
+  label="Vec<Box<dyn Draw>> berisi tipe berbeda"
+/>
+
+`Box<dyn Draw>` adalah trait object. Box menyimpan nilai di heap, sedangkan `dyn Draw` menunjukkan bahwa method `draw` dipanggil lewat trait. `Screen` tidak tahu tipe konkret setiap komponen.
+
+## Generik versus trait object
+
+Alternatif generik membatasi satu instance `Screen` pada satu tipe:
+
+```rust
+struct Screen<T: Draw> {
+    components: Vec<T>,
+}
+
+impl<T: Draw> Screen<T> {
+    fn run(&self) {
+        for component in &self.components {
+            component.draw();
+        }
+    }
+}
+```
+
+Dengan bentuk ini, `Screen<Button>` hanya bisa berisi `Button`. Untuk mencampur `Button` dan `SelectBox`, gunakan trait object. Generik cocok saat collection homogen dan tipe diketahui saat kompilasi.
+
+## Tipe yang tidak implement trait
+
+Trait object tetap diperiksa compiler. Memasukkan `String` ke `Box<dyn Draw>` ditolak karena `String` tidak mengimplementasikan `Draw`:
+
+<RustPlayground
+  code={`trait Draw {
+    fn draw(&self);
+}
+
+struct Screen {
+    components: Vec<Box<dyn Draw>>,
+}
+
+fn main() {
+    let screen = Screen {
+        components: vec![Box::new(String::from("Hi"))],
+    };
+
+    for component in &screen.components {
+        component.draw();
+    }
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error tipe yang tidak mengimplementasikan Draw"
+/>
+
+Pesan `the trait bound String: Draw is not satisfied` muncul saat cast ke `Box<dyn Draw>`. Tambahkan `impl Draw for String` atau gunakan tipe yang memang komponen UI.
+
+## Dynamic dispatch
+
+Dengan trait object, method dipilih saat runtime melalui vtable. Ini disebut dynamic dispatch. Compiler tidak bisa meng-inline method karena tipe konkretnya baru diketahui saat runtime.
+
+Dengan generik, compiler melakukan monomorphization dan memilih method saat kompilasi. Ini disebut static dispatch. Perbedaannya adalah trade-off antara fleksibilitas koleksi dan biaya dispatch, bukan jaminan performa absolut.
+
+## Object safety
+
+Trait hanya bisa dijadikan trait object jika dyn-compatible atau object-safe. Aturan utamanya:
+
+- Method tidak boleh mengembalikan `Self` secara langsung.
+- Method tidak boleh memiliki parameter generik.
+- Method tidak boleh memakai `Self` di posisi yang membuat ukuran tidak diketahui.
+- Method dengan `where Self: Sized` dikecualikan dari vtable.
+
+Trait yang melanggar aturan ini tidak bisa dibuat menjadi `Box<dyn Trait>`:
+
+<RustPlayground
+  code={`trait Duplicable {
+    fn duplicate(&self) -> Self;
+}
+
+fn main() {
+    let _obj: Box<dyn Duplicable>;
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error trait tidak dyn-compatible"
+/>
+
+Pesan `the trait Duplicable is not dyn compatible` muncul karena `duplicate` mengembalikan `Self`. Ukuran tipe konkret tidak diketahui, sehingga vtable tidak bisa dibangun. Ubah return type menjadi tipe konkret atau tambahkan `where Self: Sized` jika method tidak perlu dipanggil lewat trait object.
+
+## Di backend
+
+Registry payment gateway, notifier, atau storage bisa memakai `Box<dyn Trait>` saat implementasi dipilih dari konfigurasi. Kalau implementasi sudah diketahui saat kompilasi, generik lebih sederhana dan menghindari dispatch runtime.
+
+:::note[Kalau di bahasa lain]
+TypeScript interface hilang saat runtime dan implementasi diperiksa secara struktural. PHP memakai interface dan abstract class dengan inheritance single. Go memakai interface yang dipenuhi secara implisit dan biasanya kecil. Rust memakai `dyn Trait` eksplisit, dengan aturan object safety yang diperiksa compiler.
+:::
+
+:::tip[Tips]
+Buat trait object untuk perilaku yang benar-benar dipilih saat runtime. Kalau hanya ada dua atau tiga varian yang diketahui, enum sering lebih mudah dilacak dan tidak membutuhkan alokasi Box.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa arti Box<dyn Draw>?',
+      options: [
+        'Pointer heap ke nilai apa pun yang mengimplementasikan Draw',
+        'Struct Draw yang memiliki Box',
+        'Enum dengan varian Draw',
+        'Reference ke trait tanpa alokasi',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Box menyimpan nilai, dyn menunjukkan trait object.',
+        'Salah. Draw adalah trait, bukan struct.',
+        'Salah. Ini bukan enum.',
+        'Salah. Box melakukan alokasi heap.',
+      ],
+      explanation:
+        'Trait object memungkinkan tipe berbeda diperlakukan sama lewat trait.',
+    },
+    {
+      question: 'Apa perbedaan utama generik dan trait object?',
+      options: [
+        'Generik memilih tipe saat kompilasi, trait object saat runtime',
+        'Generik selalu lebih lambat',
+        'Trait object tidak bisa menyimpan data',
+        'Generik tidak memeriksa trait',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini perbedaan static dan dynamic dispatch.',
+        'Salah. Tidak ada klaim selalu lebih lambat.',
+        'Salah. Trait object menunjuk nilai yang punya data.',
+        'Salah. Generik memakai trait bound.',
+      ],
+      explanation:
+        'Trait object mengorbankan sebagian pemeriksaan statis untuk fleksibilitas koleksi.',
+    },
+    {
+      question: 'Mengapa trait dengan method returning Self tidak dyn-compatible?',
+      options: [
+        'Karena ukuran tipe konkret tidak diketahui saat membangun vtable',
+        'Karena Self tidak boleh dipakai di trait',
+        'Karena method tanpa parameter tidak valid',
+        'Karena trait object tidak punya method',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Return type Self membuat ukuran tidak pasti.',
+        'Salah. Self sah di trait, tetapi bermasalah untuk dyn.',
+        'Salah. Method tanpa parameter valid.',
+        'Salah. Trait object punya method.',
+      ],
+      explanation:
+        'Gunakan tipe konkret atau batasi method dengan where Self: Sized.',
+    },
+    {
+      question: 'Kapan enum lebih tepat daripada trait object?',
+      options: [
+        'Saat varian tipe diketahui dan jumlahnya terbatas',
+        'Saat library harus menerima tipe baru dari pengguna',
+        'Saat butuh dynamic dispatch',
+        'Saat semua tipe harus disimpan di heap',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Enum cocok untuk himpunan varian tertutup.',
+        'Salah. Trait object lebih fleksibel untuk tipe eksternal.',
+        'Salah. Enum memakai match statis.',
+        'Salah. Enum tidak harus di heap.',
+      ],
+      explanation:
+        'Trait object berguna saat himpunan tipe terbuka dan dipilih saat runtime.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

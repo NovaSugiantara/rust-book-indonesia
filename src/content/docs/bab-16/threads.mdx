@@ -1,0 +1,198 @@
+---
+title: '16.1 Thread'
+description: 'Membuat thread dengan spawn, menunggu dengan join, dan memindahkan data lewat closure move.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Thread memungkinkan beberapa bagian program berjalan bersamaan. Di server, satu thread bisa menangani request sementara thread lain menunggu database atau memproses antrean. Urutan eksekusi antar thread tidak dijamin.
+
+## Membuat thread
+
+<RustPlayground
+  code={`use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let handle = thread::spawn(|| {
+        for i in 1..4 {
+            println!("worker {i}");
+            thread::sleep(Duration::from_millis(5));
+        }
+    });
+
+    for i in 1..3 {
+        println!("main {i}");
+        thread::sleep(Duration::from_millis(5));
+    }
+
+    handle.join().unwrap();
+}`}
+  filename="src/main.rs"
+  label="Thread baru dan main thread berjalan bersamaan"
+/>
+
+`thread::spawn` menerima closure dan mengembalikan `JoinHandle<T>`. Tanpa `join`, main bisa selesai lebih dulu dan mematikan thread yang masih berjalan. `join` memblokir thread pemanggil sampai thread target selesai.
+
+Memindahkan `handle.join().unwrap()` sebelum loop main akan membuat main menunggu lebih dulu, sehingga output tidak lagi berselang-seling. Posisi `join` memengaruhi perilaku program.
+
+## Meminjam data dari main thread
+
+Closure yang membaca variabel dari main thread mencoba meminjamnya. Compiler menolak karena thread bisa hidup lebih lama dari data yang dipinjam.
+
+<RustPlayground
+  code={`use std::thread;
+
+fn main() {
+    let data = vec![1, 2, 3];
+
+    let handle = thread::spawn(|| {
+        println!("Data: {data:?}");
+    });
+
+    handle.join().unwrap();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error closure thread meminjam data main"
+/>
+
+Pesan `closure may outlive the current function, but it borrows data` muncul karena `thread::spawn` membutuhkan closure dengan umur `'static`. Compiler menyarankan `move`.
+
+## move untuk memindahkan kepemilikan
+
+<RustPlayground
+  code={`use std::thread;
+
+fn main() {
+    let data = vec![1, 2, 3];
+
+    let handle = thread::spawn(move || {
+        println!("Data: {data:?}");
+    });
+
+    handle.join().unwrap();
+}`}
+  filename="src/main.rs"
+  label="Closure move memindahkan data ke thread"
+/>
+
+Dengan `move`, thread memiliki `data`. Setelah itu, data tidak boleh dipakai lagi di main. Kalau tetap dipakai, compiler menolak:
+
+<RustPlayground
+  code={`use std::thread;
+
+fn main() {
+    let data = vec![1, 2, 3];
+
+    let handle = thread::spawn(move || {
+        println!("Data: {data:?}");
+    });
+
+    drop(data);
+
+    handle.join().unwrap();
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error memakai data setelah dipindahkan ke thread"
+/>
+
+Pesan `use of moved value: data` menunjukkan bahwa kepemilikan sudah berpindah. `move` tidak melanggar aturan ownership; ia hanya memindahkan data sehingga main tidak lagi berhak memakainya.
+
+## Di backend
+
+Pola thread per request mudah dipahami, tetapi setiap thread sistem operasi punya biaya. Server produksi biasanya memakai thread pool atau runtime async agar jumlah pekerjaan yang menunggu I/O tidak menghabiskan thread.
+
+Thread tetap berguna untuk pekerjaan CPU-bound yang benar-benar paralel, misalnya kompresi, hashing, atau pemrosesan gambar. Untuk pekerjaan yang didominasi menunggu jaringan dan database, async sering lebih sesuai. Bab 17 membahas pilihan ini lebih lanjut.
+
+:::note[Kalau di bahasa lain]
+Go memakai goroutine yang dikelola runtime, bukan thread OS 1:1, dan channel sebagai alat komunikasi utama. Node.js memakai `worker_threads` untuk pekerjaan paralel; setiap worker punya isolate JavaScript sendiri dan berkomunikasi lewat pesan. Python memakai `threading`, tetapi pada CPython global interpreter lock membatasi eksekusi bytecode Python paralel dalam satu proses. Rust standard library memakai thread OS 1:1 dan memeriksa kepemilikan data antar thread saat kompilasi.
+:::
+
+:::tip[Tips]
+Jangan menganggap menambah thread selalu mempercepat. Ukur beban kerja dan ingat biaya pembuatan thread. Untuk pekerjaan singkat dan sering, thread pool atau async task lebih masuk akal.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa fungsi JoinHandle::join?',
+      options: [
+        'Menunggu thread selesai',
+        'Membuat thread baru',
+        'Menghentikan semua thread',
+        'Memindahkan data ke heap',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. join memblokir sampai thread target selesai.',
+        'Salah. Thread dibuat oleh spawn.',
+        'Salah. join tidak menghentikan thread lain.',
+        'Salah. join bukan operasi alokasi.',
+      ],
+      explanation:
+        'Tanpa join, main bisa selesai dan mematikan thread yang belum selesai.',
+    },
+    {
+      question: 'Mengapa closure thread tanpa move ditolak?',
+      options: [
+        'Karena thread bisa hidup lebih lama dari data yang dipinjam',
+        'Karena closure tidak boleh membaca variabel',
+        'Karena Vec tidak bisa dipakai di thread',
+        'Karena thread hanya menerima angka',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. spawn membutuhkan closure dengan umur static.',
+        'Salah. Closure boleh membaca jika kepemilikannya aman.',
+        'Salah. Vec bisa dipindahkan ke thread.',
+        'Salah. Thread menerima banyak tipe.',
+      ],
+      explanation:
+        'move memindahkan kepemilikan sehingga data tetap valid selama thread berjalan.',
+    },
+    {
+      question: 'Apa yang terjadi jika data dipakai setelah move ke thread?',
+      options: [
+        'Compiler menolak dengan use of moved value',
+        'Data otomatis di-clone',
+        'Thread kedua dibuat',
+        'Program selalu panic saat runtime',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Kepemilikan sudah berpindah.',
+        'Salah. Tidak ada clone otomatis.',
+        'Salah. Tidak ada thread baru.',
+        'Salah. Ini error kompilasi.',
+      ],
+      explanation:
+        'Setelah dipindahkan, main tidak lagi memiliki data tersebut.',
+    },
+    {
+      question: 'Kapan thread lebih tepat daripada async?',
+      options: [
+        'Untuk pekerjaan CPU-bound yang bisa diparalelkan',
+        'Untuk menunggu database tanpa batas',
+        'Untuk semua request jaringan',
+        'Saat tidak ada pekerjaan',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Thread memberi paralelisme CPU yang nyata.',
+        'Salah. Menunggu I/O lebih cocok dengan async.',
+        'Salah. Request jaringan biasanya I/O-bound.',
+        'Salah. Tanpa pekerjaan, keduanya tidak relevan.',
+      ],
+      explanation:
+        'Buku menyarankan thread untuk pekerjaan yang sangat parallelizable dan async untuk pekerjaan yang sangat concurrent.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

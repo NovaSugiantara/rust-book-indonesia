@@ -1,0 +1,160 @@
+---
+title: '17.3 Banyak future dan timeout'
+description: 'yield_now, select, Either, dan membangun timeout dari future yang lebih kecil.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Async hanya memberi kesempatan future lain berjalan di await point. Kalau satu future melakukan pekerjaan panjang tanpa await, future lain bisa tertahan. Halaman ini membahas cara menyerahkan kontrol dan membangun timeout.
+
+## Menyerahkan kontrol
+
+<RustPlayground
+  code={`use trpl::block_on;
+
+fn main() {
+    block_on(async {
+        let a = async {
+            println!("a mulai");
+            trpl::yield_now().await;
+            println!("a selesai");
+        };
+
+        let b = async {
+            println!("b mulai");
+            trpl::yield_now().await;
+            println!("b selesai");
+        };
+
+        trpl::join(a, b).await;
+    });
+}`}
+  filename="src/main.rs"
+  label="yield_now memberi kesempatan future lain"
+/>
+
+`yield_now` menyerahkan kontrol ke runtime tanpa menunggu timer. Ini berguna saat pekerjaan panjang bisa dipecah menjadi beberapa bagian. Tanpa await point, future pertama bisa menyelesaikan seluruh pekerjaannya sebelum future kedua mulai.
+
+Buku memakai `std::thread::sleep` untuk mensimulasikan pekerjaan blocking. Panggilan itu memblokir thread, sehingga future lain tidak mendapat kesempatan sampai sleep selesai. Di kode async, gunakan `trpl::sleep`, bukan `thread::sleep`.
+
+## Timeout dengan select
+
+`trpl::select` menjalankan dua future dan mengembalikan hasil future yang selesai lebih dulu. Hasilnya `Either::Left` atau `Either::Right`.
+
+<RustPlayground
+  code={`use std::future::Future;
+use std::time::Duration;
+use trpl::{block_on, Either};
+
+async fn timeout<F>(future_to_try: F, max_time: Duration) -> Result<F::Output, Duration>
+where
+    F: Future,
+{
+    match trpl::select(future_to_try, trpl::sleep(max_time)).await {
+        Either::Left(output) => Ok(output),
+        Either::Right(_) => Err(max_time),
+    }
+}
+
+fn main() {
+    block_on(async {
+        let cepat = async {
+            trpl::sleep(Duration::from_millis(10)).await;
+            "selesai"
+        };
+
+        let lambat = async {
+            trpl::sleep(Duration::from_millis(100)).await;
+            "terlambat"
+        };
+
+        println!("{:?}", timeout(cepat, Duration::from_millis(50)).await);
+        println!("{:?}", timeout(lambat, Duration::from_millis(50)).await);
+    });
+}`}
+  filename="src/main.rs"
+  label="Timeout dari select dan sleep"
+/>
+
+`timeout` menerima future apa pun dengan output `T`, lalu mengembalikan `Result<T, Duration>`. Kalau future selesai lebih dulu, hasilnya `Ok`. Kalau timer selesai lebih dulu, hasilnya `Err` berisi durasi timeout.
+
+`select` di `trpl` tidak fair: ia memeriksa argumen sesuai urutan. Karena itu future utama diletakkan pertama agar tetap mendapat kesempatan walaupun timeout sangat pendek.
+
+## Di backend
+
+Timeout penting saat memanggil database atau layanan HTTP. Tanpa timeout, request bisa menunggu terlalu lama dan menghabiskan koneksi atau task. Bungkus future dengan timeout, lalu petakan error timeout ke response yang sesuai.
+
+Timeout bukan pengganti pembatalan pekerjaan di sisi server tujuan. Ia hanya membatasi berapa lama pemanggil menunggu. Operasi yang sudah berjalan di sisi lain bisa tetap berlangsung.
+
+:::note[Kalau di bahasa lain]
+JavaScript memakai `Promise.race` untuk mengambil hasil tercepat. Go memakai `context.WithTimeout` dan select pada channel. Python memakai `asyncio.wait_for`. Rust tidak membawa `timeout` di standard library; buku membangunnya dari `select` dan timer runtime.
+:::
+
+:::tip[Tips]
+Bedakan timeout, retry, dan cancellation. Timeout membatasi waktu tunggu, retry mengulang operasi, dan cancellation meminta pekerjaan berhenti. Ketiganya punya konsekuensi berbeda.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa fungsi yield_now?',
+      options: [
+        'Menyerahkan kontrol ke runtime agar future lain bisa berjalan',
+        'Menghentikan program',
+        'Membuat thread baru',
+        'Menutup channel',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini await point tanpa menunggu timer.',
+        'Salah. Program tidak berhenti.',
+        'Salah. Tidak membuat thread.',
+        'Salah. Channel terpisah.',
+      ],
+      explanation:
+        'Future hanya bisa dijeda di await point.',
+    },
+    {
+      question: 'Apa hasil trpl::select saat future pertama selesai lebih dulu?',
+      options: [
+        'Either::Left berisi output future pertama',
+        'Either::Right berisi output future kedua',
+        'Err berisi durasi',
+        'Tuple kedua output',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Urutan argumen menentukan Left dan Right.',
+        'Salah. Right untuk future kedua.',
+        'Salah. select tidak memakai Err.',
+        'Salah. Tuple adalah hasil join.',
+      ],
+      explanation:
+        'Either menunjukkan future mana yang menang, tanpa makna sukses atau gagal.',
+    },
+    {
+      question: 'Mengapa timeout memakai sleep sebagai pembanding?',
+      options: [
+        'Karena sleep menghasilkan future timer yang bisa di-select',
+        'Karena sleep memblokir thread',
+        'Karena sleep menutup channel',
+        'Karena sleep membuat thread baru',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Timer adalah future yang selesai setelah durasi.',
+        'Salah. trpl::sleep tidak memblokir thread.',
+        'Salah. Sleep bukan channel.',
+        'Salah. Sleep tidak membuat thread.',
+      ],
+      explanation:
+        'Future utama dan timer dijalankan bersamaan; yang selesai dulu menentukan hasil.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

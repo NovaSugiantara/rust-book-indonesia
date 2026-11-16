@@ -1,0 +1,211 @@
+---
+title: '17.1 Future dan sintaks async'
+description: 'Async function, await, Future trait, runtime, dan perbedaan future lazy dengan Promise.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+`async` menandai blok atau fungsi yang bisa dijeda dan dilanjutkan. `await` menunggu future selesai. Future adalah nilai yang mungkin belum siap sekarang tetapi akan menghasilkan nilai di masa depan.
+
+## Async function
+
+<RustPlayground
+  code={`use trpl::block_on;
+
+async fn tambah(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn main() {
+    let hasil = block_on(tambah(2, 3));
+    println!("Hasil: {hasil}");
+}`}
+  filename="src/main.rs"
+  label="Async function dijalankan dengan block_on"
+/>
+
+Memanggil `tambah(2, 3)` tidak langsung menjalankan body. Ia menghasilkan future. `block_on` menyiapkan runtime dan menjalankan future itu sampai selesai. Di dalam async function, `await` menandai titik ketika future lain boleh dijalankan.
+
+## Async block
+
+Async block menghasilkan future tanpa nama fungsi:
+
+<RustPlayground
+  code={`use trpl::block_on;
+
+fn main() {
+    let hasil = block_on(async {
+        let a = async { 10 };
+        let b = async { 20 };
+        a.await + b.await
+    });
+
+    println!("Hasil: {hasil}");
+}`}
+  filename="src/main.rs"
+  label="Async block dan await berurutan"
+/>
+
+Dua async block di atas dieksekusi berurutan karena di-await satu per satu. Concurrency muncul saat beberapa future dijalankan bersama dengan `join` atau `spawn_task`, yang dibahas di halaman berikutnya.
+
+## Future sebagai return type
+
+Async function kira-kira setara dengan fungsi yang mengembalikan `impl Future`:
+
+<RustPlayground
+  code={`use std::future::Future;
+use trpl::block_on;
+
+fn tambah(a: i32, b: i32) -> impl Future<Output = i32> {
+    async move { a + b }
+}
+
+fn main() {
+    println!("{}", block_on(tambah(1, 2)));
+}`}
+  filename="src/main.rs"
+  label="Fungsi yang mengembalikan impl Future"
+/>
+
+Compiler mengubah async block menjadi tipe anonymous yang mengimplementasikan `Future`. Tipe `Output` adalah nilai yang dihasilkan setelah future selesai.
+
+## Await hanya di async
+
+`await` hanya boleh dipakai di dalam async function atau async block. Di fungsi biasa, compiler menolak:
+
+<RustPlayground
+  code={`fn main() {
+    let future = async { 1 };
+    let nilai = future.await;
+    println!("{nilai}");
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error await di fungsi biasa"
+/>
+
+Pesan `await is only allowed inside async functions and blocks` muncul karena fungsi biasa tidak memiliki state machine async yang dikelola runtime. Bungkus dengan async block atau jalankan future lewat runtime.
+
+`main` juga tidak boleh ditandai `async`. Runtime perlu dijalankan dari fungsi biasa, misalnya dengan `trpl::block_on`, atau lewat macro runtime seperti `#[tokio::main]`.
+
+## Contoh buku: judul halaman
+
+Buku membangun pencari judul halaman web. Kode ini membutuhkan akses jaringan, jadi jalankan secara lokal, bukan di Playground:
+
+```rust
+use trpl::Html;
+
+async fn page_title(url: &str) -> Option<String> {
+    let response = trpl::get(url).await;
+    let text = response.text().await;
+
+    Html::parse(&text)
+        .select_first("title")
+        .map(|title| title.inner_html())
+}
+
+fn main() {
+    let url = "https://www.rust-lang.org";
+    let title = trpl::block_on(page_title(url));
+    println!("{title:?}");
+}
+```
+
+`trpl::get` dan `text` adalah operasi async. Keduanya harus di-await. `Html::parse` dan `select_first` berjalan sinkron setelah teks tersedia.
+
+## Future lazy dan Promise
+
+Promise JavaScript mulai menjalankan executor saat Promise dibuat. Future Rust tidak melakukan apa pun sampai di-await atau dipoll runtime. Karena itu, membuat future tanpa menjalankannya hanya menghasilkan warning `unused implementer of Future that must be used`.
+
+Laziness memberi kontrol kapan pekerjaan dimulai dan memungkinkan future disusun sebelum dijalankan. Konsekuensinya, kamu harus benar-benar menunggu future atau menyerahkannya ke runtime.
+
+:::note[Kalau di bahasa lain]
+Promise JavaScript langsung memulai pekerjaan asinkron dan menyimpan hasilnya. Di Rust, future adalah nilai lazy yang perlu runtime. C# dan JavaScript memakai `async`/`await`, tetapi runtime dan model eksekusinya berbeda. Rust tidak membawa runtime di standard library, sehingga memilih runtime adalah keputusan eksplisit.
+:::
+
+:::tip[Tips]
+Kalau future tidak dipakai, cari warning `must be used`. Ini biasanya tanda `await` atau `spawn` terlupakan. Jangan mengabaikan warning itu di kode server.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa yang dihasilkan pemanggilan async function?',
+      options: [
+        'Future yang belum tentu selesai',
+        'Nilai langsung',
+        'Thread baru',
+        'Promise JavaScript',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Body async function dibungkus future.',
+        'Salah. Nilai baru tersedia setelah future dijalankan.',
+        'Salah. Async tidak otomatis membuat thread.',
+        'Salah. Future Rust berbeda dari Promise.',
+      ],
+      explanation:
+        'Future harus di-await atau dijalankan runtime untuk menghasilkan nilai.',
+    },
+    {
+      question: 'Mengapa await tidak boleh di fungsi biasa?',
+      options: [
+        'Karena fungsi biasa tidak memiliki konteks async untuk dijeda dan dilanjutkan',
+        'Karena await hanya untuk angka',
+        'Karena fungsi biasa tidak punya return type',
+        'Karena future tidak bisa dibuat di fungsi biasa',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. await membutuhkan async context.',
+        'Salah. await berlaku untuk banyak Output.',
+        'Salah. Fungsi biasa punya return type.',
+        'Salah. Future bisa dibuat, tetapi belum dijalankan.',
+      ],
+      explanation:
+        'Gunakan async block atau jalankan future lewat runtime seperti block_on.',
+    },
+    {
+      question: 'Apa perbedaan utama future Rust dan Promise JavaScript?',
+      options: [
+        'Future lazy, Promise mulai mengeksekusi saat dibuat',
+        'Future selalu lebih cepat',
+        'Promise tidak bisa di-await',
+        'Future tidak punya nilai hasil',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Ini perbedaan model eksekusi, bukan klaim performa.',
+        'Salah. Tidak ada klaim selalu lebih cepat.',
+        'Salah. Promise bisa di-await.',
+        'Salah. Future punya Output.',
+      ],
+      explanation:
+        'Future perlu dipoll runtime; Promise memulai executor saat dibuat.',
+    },
+    {
+      question: 'Apa fungsi block_on?',
+      options: [
+        'Menjalankan future sampai selesai dengan memblokir thread saat ini',
+        'Membuat future baru',
+        'Mengubah future menjadi thread',
+        'Menghentikan runtime',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. block_on menjadi batas antara kode sinkron dan async.',
+        'Salah. Future dibuat oleh async block.',
+        'Salah. block_on tidak membuat thread.',
+        'Salah. block_on menunggu, bukan menghentikan runtime.',
+      ],
+      explanation:
+        'block_on berguna di main atau test yang belum memakai macro runtime.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

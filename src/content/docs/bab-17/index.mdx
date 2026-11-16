@@ -1,0 +1,96 @@
+---
+title: 'Bab 17: Async dan await'
+description: 'Future, async/await, task, stream, dan pemilihan antara async dengan thread di server.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+
+Async memungkinkan satu thread menangani banyak pekerjaan yang menunggu tanpa memblokir. Di server, ini berguna saat request menunggu database, layanan HTTP lain, atau antrean pesan. Selama satu future menunggu, runtime bisa menjalankan future lain.
+
+Future di Rust bersifat lazy. Future tidak berjalan sampai di-await atau diserahkan ke runtime. Ini berbeda dari Promise JavaScript yang sudah mulai mengeksekusi pekerjaan saat dibuat.
+
+## trpl di playground
+
+Buku memakai crate `trpl` yang membungkus `futures` dan `tokio`. Rust Playground menyediakan `trpl` versi 0.3.0, jadi contoh di bab ini memakai API yang sama dengan buku. Kode `trpl` dipetakan ke Tokio di proyek nyata: `block_on` menjalankan future, `spawn_task` menyerupai `tokio::spawn`, dan `sleep` menyerupai `tokio::time::sleep`.
+
+## Urutan bab
+
+1. [Future dan sintaks async](futures-syntax/) membahas `async`, `await`, `Future`, dan runtime.
+2. [Concurrency dengan async](concurrency-with-async/) membahas `spawn_task`, `join`, channel async, dan `join!`.
+3. [Banyak future dan timeout](more-futures/) membahas `yield_now`, `select`, dan timeout.
+4. [Stream](streams/) membahas urutan nilai asynchronous dan `StreamExt`.
+5. [Trait async](traits-for-async/) membahas `Future`, `Poll`, `Pin`, dan `Unpin`.
+6. [Future, task, dan thread](futures-tasks-threads/) membahas kapan memakai async dan kapan memakai thread.
+7. [Studi kasus: pembayaran async](studi-kasus/) menjalankan pembayaran dan pemuatan data secara bersamaan.
+
+:::note[Kenapa begini?]
+Async bukan thread. Task async dikelola runtime dan bisa berjalan di sejumlah thread terbatas. Keuntungannya muncul saat pekerjaan banyak menunggu, bukan saat pekerjaan menghabiskan CPU. Untuk CPU-bound, thread atau proses terpisah lebih tepat.
+:::
+
+:::tip[Tips]
+Jangan menahan lock, melakukan `thread::sleep`, atau menjalankan komputasi panjang di dalam async tanpa await point. Semua itu bisa menghambat future lain di thread yang sama.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Kapan future Rust mulai berjalan?',
+      options: [
+        'Saat di-await atau dijalankan runtime',
+        'Saat future dibuat',
+        'Saat program dimulai',
+        'Saat variabel keluar scope',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Future lazy sampai dipoll oleh runtime.',
+        'Salah. Pembuatan future belum menjalankan body.',
+        'Salah. Tidak otomatis saat startup.',
+        'Salah. Drop bukan eksekusi future.',
+      ],
+      explanation:
+        'Berbeda dari Promise JavaScript yang langsung mengeksekusi executor.',
+    },
+    {
+      question: 'Apa fungsi runtime async?',
+      options: [
+        'Menjalankan dan menjadwalkan future',
+        'Mengubah future menjadi thread OS',
+        'Menghapus kebutuhan await',
+        'Membuat semua kode menjadi sinkron',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Runtime melakukan polling dan penjadwalan.',
+        'Salah. Future tidak otomatis menjadi thread.',
+        'Salah. await tetap dibutuhkan.',
+        'Salah. Runtime justru menjalankan kode async.',
+      ],
+      explanation:
+        'Rust tidak membawa runtime di bahasa; runtime disediakan crate.',
+    },
+    {
+      question: 'Pekerjaan seperti apa yang paling cocok untuk async?',
+      options: [
+        'I/O-bound yang banyak menunggu',
+        'Komputasi CPU-bound murni',
+        'Pekerjaan tanpa I/O',
+        'Semua pekerjaan selalu',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Async memberi manfaat saat task sering menunggu.',
+        'Salah. CPU-bound lebih cocok dengan thread atau proses.',
+        'Salah. Tanpa menunggu, async tidak memberi banyak ruang.',
+        'Salah. Pilihan bergantung beban kerja.',
+      ],
+      explanation:
+        'Buku menyarankan async untuk pekerjaan yang sangat concurrent dan thread untuk yang sangat parallelizable.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />

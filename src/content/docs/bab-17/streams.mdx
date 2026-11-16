@@ -1,0 +1,161 @@
+---
+title: '17.4 Stream'
+description: 'Urutan nilai asynchronous dengan Stream, StreamExt, dan stream dari iterator.'
+---
+
+import ChapterCompletion from '../../../components/ChapterCompletion.astro';
+import Quiz from '../../../components/Quiz.astro';
+import RustPlayground from '../../../components/RustPlayground.astro';
+
+Stream adalah bentuk asynchronous dari iterator. Ia menghasilkan nilai satu per satu seiring waktu, bukan sekaligus. Stream berguna untuk data yang datang bertahap: pesan antrean, potongan file, event, atau baris respons jaringan.
+
+## Stream dari iterator
+
+<RustPlayground
+  code={`use trpl::{block_on, StreamExt};
+
+fn main() {
+    block_on(async {
+        let mut stream = trpl::stream_from_iter(
+            (1..=3).map(|nilai| nilai * 2),
+        );
+
+        while let Some(nilai) = stream.next().await {
+            println!("Nilai: {nilai}");
+        }
+    });
+}`}
+  filename="src/main.rs"
+  label="Stream dari iterator dengan StreamExt"
+/>
+
+`stream_from_iter` mengubah iterator menjadi stream. `next().await` mengambil nilai berikutnya. Ketika stream habis, hasilnya `None`.
+
+## Trait yang harus diimpor
+
+Method `next` berasal dari `StreamExt`, bukan `Stream`. Tanpa import itu, compiler tidak menemukan method:
+
+<RustPlayground
+  code={`use trpl::block_on;
+
+fn main() {
+    block_on(async {
+        let mut stream = trpl::stream_from_iter(vec![1, 2, 3].into_iter());
+
+        while let Some(nilai) = stream.next().await {
+            println!("{nilai}");
+        }
+    });
+}`}
+  expectError
+  filename="src/main.rs"
+  label="Contoh error lupa mengimpor StreamExt"
+/>
+
+Pesan `no method named next found` disertai saran `use trpl::StreamExt` muncul karena trait extension belum ada di scope. `Stream` mendefinisikan antarmuka dasar, sedangkan `StreamExt` menyediakan method utilitas seperti `next`, `map`, dan `filter`.
+
+## Stream dari channel
+
+Receiver channel async juga menghasilkan urutan nilai. Pola `while let Some(...) = rx.recv().await` mirip dengan stream:
+
+<RustPlayground
+  code={`use std::time::Duration;
+use trpl::block_on;
+
+fn main() {
+    block_on(async {
+        let (tx, mut rx) = trpl::channel();
+
+        let pengirim = async move {
+            for i in 1..4 {
+                tx.send(i).unwrap();
+                trpl::sleep(Duration::from_millis(5)).await;
+            }
+        };
+
+        let penerima = async move {
+            while let Some(nilai) = rx.recv().await {
+                println!("Nilai: {nilai}");
+            }
+        };
+
+        trpl::join(pengirim, penerima).await;
+    });
+}`}
+  filename="src/main.rs"
+  label="Receiver channel sebagai urutan nilai async"
+/>
+
+Perbedaannya dengan stream umum terletak pada API: receiver memakai `recv`, stream memakai `next`. Keduanya sama-sama menghasilkan nilai secara bertahap dan berhenti ketika sumbernya selesai.
+
+## Di backend
+
+Stream cocok untuk respons yang dikirim bertahap, membaca file besar per potongan, atau memproses event dari antrean. Kalau handler mengumpulkan seluruh stream menjadi `Vec` sebelum mengirim response, manfaat streaming hilang.
+
+Backpressure perlu dipikirkan. Kalau produsen lebih cepat dari konsumen, buffer bisa membengkak. Runtime dan channel tertentu menyediakan batas antrean; jangan menganggap stream otomatis mengatur laju.
+
+:::note[Kalau di bahasa lain]
+JavaScript memakai async iterator dengan `for await...of`. Python memakai async generator dan `async for`. Rust memakai trait `Stream` dan extension `StreamExt`; `Stream` belum ada di standard library, tetapi pola dan method-nya mirip iterator.
+:::
+
+:::tip[Tips]
+Kalau hanya butuh satu nilai, future lebih sederhana. Gunakan stream saat jumlah item tidak diketahui atau datang bertahap.
+:::
+
+## Cek pemahaman
+
+<Quiz
+  questions={[
+    {
+      question: 'Apa perbedaan stream dan iterator?',
+      options: [
+        'Stream menghasilkan nilai secara asynchronous',
+        'Iterator selalu lebih cepat',
+        'Stream tidak bisa habis',
+        'Iterator tidak punya nilai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. Stream adalah bentuk async dari urutan nilai.',
+        'Salah. Tidak ada klaim kecepatan.',
+        'Salah. Stream bisa selesai dengan None.',
+        'Salah. Iterator menghasilkan nilai.',
+      ],
+      explanation:
+        'Stream cocok untuk nilai yang datang seiring waktu.',
+    },
+    {
+      question: 'Dari trait mana method next berasal?',
+      options: ['StreamExt', 'Future', 'Iterator', 'Send'],
+      answer: 0,
+      optionNotes: [
+        'Benar. StreamExt menyediakan method utilitas.',
+        'Salah. Future tidak menyediakan next.',
+        'Salah. Iterator next sinkron dan berbeda.',
+        'Salah. Send adalah marker trait.',
+      ],
+      explanation:
+        'Tanpa StreamExt di scope, method next tidak ditemukan.',
+    },
+    {
+      question: 'Kapan while let pada stream berhenti?',
+      options: [
+        'Saat next menghasilkan None',
+        'Saat nilai pertama diterima',
+        'Saat stream di-clone',
+        'Saat runtime dimulai',
+      ],
+      answer: 0,
+      optionNotes: [
+        'Benar. None menandakan stream selesai.',
+        'Salah. Loop melanjutkan nilai berikutnya.',
+        'Salah. Stream tidak di-clone di contoh.',
+        'Salah. Runtime tidak mengakhiri loop.',
+      ],
+      explanation:
+        'Pola while let berhenti ketika pattern tidak cocok lagi.',
+    },
+  ]}
+/>
+
+<ChapterCompletion />
